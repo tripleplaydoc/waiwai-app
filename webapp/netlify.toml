@@ -1,0 +1,10 @@
+# Netlify's Next.js Runtime auto-detects Next.js and handles the adapter —
+# this file just pins the build command (so `prisma generate` always runs
+# before `next build`, even if postinstall is ever skipped by the platform)
+# and the Node version.
+
+[build]
+  command = "npx prisma generate && npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"

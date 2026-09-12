@@ -1,0 +1,892 @@
+// ============================================================================
+// ZERO-BASED FINANCIAL TRACKER — PRISMA SCHEMA
+// ============================================================================
+// Architecture notes (read before extending this file):
+//
+// MONEY: every monetary value is a signed Int representing total cents.
+//   Never store money as Float/Decimal. Convert to display strings only in
+//   the UI layer via /lib/utils/currency.ts.
+//
+// ENVELOPE ENGINE: "Ready to Assign" is NOT a stored balance. It is computed
+//   in the service layer as:
+//     RTA = SUM(inflow to on-budget accounts, categorized as INCOME)
+//         − SUM(all BudgetAssignment.amountCents across all categories/months)
+//   A category's rolling "available" balance is likewise computed
+//   (cumulative assignments − cumulative activity, rolled forward month over
+//   month) rather than cached here, to avoid drift between a stored number
+//   and the ledger that produced it. If query performance later demands a
+//   cache, add it behind a service function with an explicit reconciliation
+//   job — don't just bolt a balance column onto Category.
+//
+// AUDIT TRAIL: money entering/leaving an envelope's assigned pool is always
+//   a new BudgetAssignment row, tagged with a `source` — including the
+//   automatic 30% tax holdback (AUTO_TAX_RESERVE) and the tax-savings
+//   rebalance release (REBALANCE_TAX_RELEASE) triggered by logging a
+//   deductible expense. Never mutate an "assigned" number in place; append,
+//   so the full history of who/what moved money is reconstructable.
+//
+// SOFT DELETE: Account, Payee, Category, and CategoryGroup are archived
+//   (`isArchived`), never hard-deleted — Transaction rows reference them
+//   permanently for financial and tax history. FK `onDelete` behavior below
+//   is a safety net for the rare hard-delete attempt, not the primary
+//   deletion path the app should expose in the UI.
+//
+// AUTH: `User` is intentionally minimal (email + password hash). If/when
+//   NextAuth is wired in, its OAuth model is also literally called "Account"
+//   — that collides with our financial Account model below. Introduce
+//   NextAuth's models at that point as `AuthAccount`, `AuthSession`, and
+//   `VerificationToken`; do not rename our financial Account model to make
+//   room for it.
+//
+// TRANSFERS: modeled as two linked Transaction rows (one per account),
+//   joined by a shared `transferGroupId`. Transfers between two on-budget
+//   accounts leave `categoryId` null (moving money between your own accounts
+//   isn't spending). A transfer touching an off-budget account (e.g. paying
+//   a credit card from checking, or moving money to an investment account)
+//   DOES need a category on the off-budget leg — that's a service-layer rule
+//   to enforce when the transfer feature is built, not a schema constraint.
+//
+// SPLIT TRANSACTIONS: Transaction.categoryId stays the fast path for the
+//   common single-category case. TransactionSplit rows are the source of
+//   truth once a transaction is split across categories (e.g. one Target run
+//   covering groceries + household). When split rows exist, the service
+//   layer must treat them as authoritative for category activity/reporting
+//   and ignore Transaction.categoryId. SUM(TransactionSplit.amountCents) for
+//   a transaction must equal that Transaction's amountCents — Postgres can't
+//   express that as a declarative constraint across child rows without a
+//   trigger, so this is an app-layer invariant to enforce on every write.
+//
+// RECEIPTS: scanning/OCR is an external capability (Claude API vision, or a
+//   dedicated receipt API like Veryfi/Mindee/Textract) — the schema is
+//   provider-agnostic and just stores the extracted result. A Receipt can
+//   exist standalone (not yet matched to a Transaction) or be linked 1:1 to
+//   one. Line items carry an AI-suggested category; approving a processed
+//   receipt is what actually commits TransactionSplit rows, mirroring the
+//   CSV import "review before commit" pattern already used elsewhere here.
+//
+// SAVINGS / CASHFLOW INSIGHTS: SavingsOpportunity ("we found this cheaper
+//   elsewhere") and BudgetRecommendation ("cut/add/reallocate") are both
+//   *results* of an external analysis step (a web-search-capable agent or a
+//   shopping-price API), not something Postgres computes. They're modeled as
+//   typed, auditable, dismissible records so the app has a persistent inbox
+//   of advice instead of regenerating the same suggestion every session.
+//
+// PRIORITY WATERFALL: Category.priorityRank + funding-target fields drive an
+//   auto-assign algorithm (service layer, see below) that fills envelopes in
+//   priority order — each bucket funded to its target before the next one
+//   gets anything. WaterfallRun groups the BudgetAssignment rows one
+//   auto-assign pass produced, so "what did auto-assign just do, and where
+//   did it run out" is fully reconstructable and visualizable.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Runtime queries go through Supabase's connection pooler (port 6543) —
+  // required for serverless functions, which open many short-lived
+  // connections. `prisma migrate` needs a direct, non-pooled connection
+  // (port 5432) instead, hence the separate directUrl. See .env.example.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ----------------------------------------------------------------------------
+// ENUMS
+// ----------------------------------------------------------------------------
+
+enum WorkspaceType {
+  PERSONAL
+  BUSINESS
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  CREDIT_CARD
+  CASH
+  INVESTMENT
+  LOAN
+  PROPERTY
+  OTHER_ASSET
+  OTHER_LIABILITY
+}
+
+/// How an Account's current balance is derived.
+enum BalanceMode {
+  /// Balance = running sum of Transaction.amountCents for this account
+  /// (checking, savings, credit cards, cash).
+  TRANSACTION_DERIVED
+  /// Balance = latest ManualBalanceEntry (illiquid net-worth assets you
+  /// periodically re-value rather than transact against: real estate,
+  /// vehicles, etc.).
+  MANUAL
+}
+
+enum CategoryType {
+  /// Feeds "Ready to Assign" when money hits this category; itself never
+  /// receives a budget assignment.
+  INCOME
+  /// A normal spending envelope.
+  EXPENSE
+  /// App-managed envelope the system creates and maintains automatically
+  /// (e.g. "Estimated Tax Reserve").
+  SYSTEM
+}
+
+enum ScheduleCLineItem {
+  ADVERTISING
+  CAR_AND_TRUCK
+  COMMISSIONS_AND_FEES
+  CONTRACT_LABOR
+  INSURANCE
+  INTEREST
+  LEGAL_AND_PROFESSIONAL
+  OFFICE_EXPENSE
+  RENT_OR_LEASE
+  REPAIRS_AND_MAINTENANCE
+  SUPPLIES
+  TAXES_AND_LICENSES
+  TRAVEL
+  MEALS
+  UTILITIES
+  WAGES
+  SOFTWARE_AND_SUBSCRIPTIONS
+  OTHER
+}
+
+enum ClearedStatus {
+  UNCLEARED
+  CLEARED
+  RECONCILED
+}
+
+/// Why money moved into/out of a category's assigned pool.
+enum AssignmentSource {
+  MANUAL
+  AUTO_TAX_RESERVE
+  REBALANCE_TAX_RELEASE
+  ROLLOVER
+  CORRECTION
+  /// Produced by a priority-waterfall auto-assign run. See WaterfallRun.
+  AUTO_WATERFALL
+}
+
+enum TaxQuarter {
+  Q1
+  Q2
+  Q3
+  Q4
+}
+
+enum ImportStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/// How a priority-bucket Category's funding target is defined.
+enum FundingTargetType {
+  /// Needs this amount assigned fresh every month (Rent, Groceries).
+  MONTHLY_FUNDING
+  /// Needs to reach and then hold this balance (emergency fund, insurance
+  /// reserve) — once funded, the waterfall skips it until it drops below target.
+  TARGET_BALANCE
+  /// Needs to reach the balance by a specific date (save $1,200 by December).
+  TARGET_BALANCE_BY_DATE
+}
+
+enum ReceiptStatus {
+  PENDING_UPLOAD
+  PROCESSING
+  PROCESSED
+  NEEDS_REVIEW
+  FAILED
+}
+
+enum SavingsOpportunityStatus {
+  NEW
+  DISMISSED
+  ACTED_ON
+  EXPIRED
+}
+
+enum RecommendationType {
+  CUT_SPENDING
+  INCREASE_ALLOCATION
+  /// "Add this to the budget" — e.g. suggest a new category/habit that
+  /// could capture or protect revenue.
+  NEW_CATEGORY_SUGGESTION
+  REVENUE_OPPORTUNITY
+  REALLOCATE_PRIORITY
+  CASH_FLOW_WARNING
+}
+
+enum RecommendationStatus {
+  NEW
+  ACCEPTED
+  DISMISSED
+  EXPIRED
+}
+
+// ----------------------------------------------------------------------------
+// USER
+// ----------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspaces Workspace[]
+
+  @@map("users")
+}
+
+// ----------------------------------------------------------------------------
+// WORKSPACE — the Personal / Business isolation boundary
+// ----------------------------------------------------------------------------
+
+model Workspace {
+  id         String        @id @default(cuid())
+  ownerId    String
+  owner      User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name       String
+  type       WorkspaceType
+  isArchived Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  taxProfile     TaxProfile?
+  accounts       Account[]
+  payees         Payee[]
+  categoryGroups CategoryGroup[]
+  categories     Category[]
+  transactions   Transaction[]
+  importBatches  ImportBatch[]
+  taxPayments    TaxPayment[]
+  receipts              Receipt[]
+  products              Product[]
+  savingsOpportunities  SavingsOpportunity[]
+  budgetRecommendations BudgetRecommendation[]
+  cashflowForecasts     CashflowForecast[]
+  waterfallRuns         WaterfallRun[]
+
+  @@index([ownerId])
+  @@map("workspaces")
+}
+
+/// 1:1 with a BUSINESS workspace. Unused/ignored for PERSONAL workspaces.
+model TaxProfile {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Default 30.00%. Decimal here is fine — this is a rate/multiplier, not a
+  /// currency amount, so it's exempt from the integer-cents rule.
+  reserveRatePercent Decimal @default(30.00) @db.Decimal(5, 2)
+
+  /// The SYSTEM category that automatically receives the tax holdback.
+  reserveCategoryId String?   @unique
+  reserveCategory   Category? @relation("TaxReserveCategory", fields: [reserveCategoryId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tax_profiles")
+}
+
+// ----------------------------------------------------------------------------
+// ACCOUNTS — physical/real-world locations of money, separate from envelopes
+// ----------------------------------------------------------------------------
+
+model Account {
+  id          String      @id @default(cuid())
+  workspaceId String
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  type        AccountType
+  balanceMode BalanceMode @default(TRANSACTION_DERIVED)
+
+  /// On-budget accounts participate in the envelope engine: their inflows
+  /// can be assigned to categories, their outflows count as category
+  /// activity. Off-budget/tracking accounts (INVESTMENT, LOAN, PROPERTY,
+  /// typically) still count toward Net Worth but never touch "Ready to
+  /// Assign".
+  onBudget Boolean @default(true)
+
+  /// Seed balance the running transaction ledger starts counting from.
+  /// Only meaningful when balanceMode = TRANSACTION_DERIVED.
+  openingBalanceCents Int       @default(0)
+  openingBalanceDate  DateTime? @db.Date
+
+  isArchived Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  transactions          Transaction[]        @relation("AccountTransactions")
+  transferTransactions  Transaction[]        @relation("TransferAccountTransactions")
+  manualBalanceEntries  ManualBalanceEntry[]
+  importBatches         ImportBatch[]
+  taxPaymentsSourced     TaxPayment[]
+
+  @@index([workspaceId])
+  @@map("accounts")
+}
+
+/// Point-in-time valuations for MANUAL-balance-mode accounts — illiquid
+/// net-worth assets that aren't transaction-driven (real estate, vehicles).
+model ManualBalanceEntry {
+  id           String   @id @default(cuid())
+  accountId    String
+  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  asOfDate     DateTime @db.Date
+  balanceCents Int
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@index([accountId, asOfDate])
+  @@map("manual_balance_entries")
+}
+
+// ----------------------------------------------------------------------------
+// PAYEES
+// ----------------------------------------------------------------------------
+
+model Payee {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name              String
+  /// Autofill convenience — last/preferred category for this payee.
+  defaultCategoryId String?
+  defaultCategory   Category? @relation(fields: [defaultCategoryId], references: [id], onDelete: SetNull)
+  isArchived        Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  transactions Transaction[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("payees")
+}
+
+// ----------------------------------------------------------------------------
+// ENVELOPE CATEGORIES
+// ----------------------------------------------------------------------------
+
+model CategoryGroup {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  sortOrder   Int       @default(0)
+  isArchived  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  categories Category[]
+
+  @@index([workspaceId])
+  @@map("category_groups")
+}
+
+model Category {
+  id              String         @id @default(cuid())
+  workspaceId     String
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  categoryGroupId String?
+  categoryGroup   CategoryGroup? @relation(fields: [categoryGroupId], references: [id], onDelete: SetNull)
+  name            String
+  type            CategoryType   @default(EXPENSE)
+
+  /// Business tax engine fields — only meaningful when workspace.type =
+  /// BUSINESS and type = EXPENSE.
+  isTaxDeductible   Boolean            @default(false)
+  scheduleCLineItem ScheduleCLineItem?
+
+  /// True for app-managed envelopes (e.g. "Estimated Tax Reserve") the UI
+  /// should prevent users from freely renaming, deleting, or repurposing.
+  isSystemManaged Boolean  @default(false)
+  sortOrder       Int      @default(0)
+
+  /// --- Priority waterfall ---
+  /// Lower = funded first when an auto-assign pass runs. Null = this
+  /// category sits outside the waterfall (manual assignment only). Ties are
+  /// allowed — the service layer decides how same-rank categories share a
+  /// pass (e.g. funded in parallel).
+  priorityRank        Int?
+  fundingTargetType   FundingTargetType?
+  fundingTargetCents  Int?
+  fundingTargetByDate DateTime?           @db.Date
+
+  isArchived Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  budgetAssignments BudgetAssignment[]
+  transactions      Transaction[]
+  transactionSplits TransactionSplit[]
+  payeeDefaults     Payee[]
+  taxProfileFor     TaxProfile?        @relation("TaxReserveCategory")
+  receiptLineItems      ReceiptLineItem[]
+  defaultForProducts    Product[]
+  budgetRecommendations BudgetRecommendation[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, type])
+  @@index([workspaceId, priorityRank])
+  @@map("categories")
+}
+
+/// Ledger of every dollar moved into/out of a category's assigned pool.
+/// "Assigned this month" = SUM(amountCents) grouped by category + month.
+/// Rolling "available" balance = cumulative(assignments) −
+/// cumulative(transaction activity) through that month — computed in the
+/// service layer, not stored here (see header note).
+model BudgetAssignment {
+  id     String           @id @default(cuid())
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  /// Normalized to the first of the month, e.g. 2026-09-01.
+  month       DateTime         @db.Date
+  amountCents Int
+  source      AssignmentSource @default(MANUAL)
+
+  /// Set when source = AUTO_TAX_RESERVE or REBALANCE_TAX_RELEASE, linking
+  /// back to the income/expense Transaction that triggered this movement.
+  relatedTransactionId String?
+  relatedTransaction   Transaction? @relation(fields: [relatedTransactionId], references: [id], onDelete: SetNull)
+
+  /// Set when source = AUTO_WATERFALL, grouping every row one auto-assign
+  /// pass produced so it can be shown/reported as a single event.
+  waterfallRunId String?
+  waterfallRun   WaterfallRun? @relation(fields: [waterfallRunId], references: [id], onDelete: SetNull)
+
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([categoryId, month])
+  @@index([waterfallRunId])
+  @@map("budget_assignments")
+}
+
+// ----------------------------------------------------------------------------
+// TRANSACTIONS
+// ----------------------------------------------------------------------------
+
+model Transaction {
+  id String @id @default(cuid())
+
+  /// Denormalized from account.workspaceId — deliberate. Enforces/queries
+  /// workspace isolation directly without a join on every read, and lets
+  /// the service layer cheaply validate "this account belongs to this
+  /// workspace" before writing.
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   Account @relation("AccountTransactions", fields: [accountId], references: [id], onDelete: Restrict)
+
+  /// Null for: uncategorized transactions awaiting review, and the "other
+  /// leg" of a transfer between two on-budget accounts (see header note on
+  /// transfers).
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  payeeId String?
+  payee   Payee? @relation(fields: [payeeId], references: [id], onDelete: Restrict)
+
+  /// Signed cents on THIS account's ledger: positive = inflow, negative =
+  /// outflow.
+  amountCents   Int
+  date          DateTime      @db.Date
+  memo          String?
+  clearedStatus ClearedStatus @default(UNCLEARED)
+  flagColor     String?
+
+  /// Snapshot of deductibility at the time of entry, independent of the
+  /// category's current default — keeps historical tax reporting accurate
+  /// even if the category's isTaxDeductible flag changes later. Tax savings
+  /// = amountCents × TaxProfile.reserveRatePercent, computed on read.
+  isTaxDeductible Boolean @default(false)
+
+  /// Groups the two rows of an inter-account transfer together.
+  transferGroupId   String?
+  transferAccountId String?
+  transferAccount   Account? @relation("TransferAccountTransactions", fields: [transferAccountId], references: [id], onDelete: SetNull)
+
+  /// CSV import bookkeeping.
+  importBatchId String?
+  importBatch   ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  /// Hash of (accountId + date + amountCents + raw payee/memo) — prevents
+  /// re-importing the same bank-statement row twice. Nullable; Postgres
+  /// allows multiple NULLs under a unique constraint, so manually entered
+  /// transactions (no hash) are unaffected.
+  importHash    String?
+  needsReview   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  budgetAssignmentsTriggered BudgetAssignment[]
+  taxPayment                 TaxPayment?
+  splits  TransactionSplit[]
+  receipt Receipt?
+
+  @@unique([accountId, importHash])
+  @@index([workspaceId, date])
+  @@index([accountId, date])
+  @@index([categoryId])
+  @@index([transferGroupId])
+  @@map("transactions")
+}
+
+// ----------------------------------------------------------------------------
+// CSV IMPORT
+// ----------------------------------------------------------------------------
+
+model ImportBatch {
+  id          String       @id @default(cuid())
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  fileName    String
+  status      ImportStatus @default(PROCESSING)
+
+  rowCount          Int @default(0)
+  importedRowCount  Int @default(0)
+  duplicateRowCount Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  transactions Transaction[]
+
+  @@index([workspaceId])
+  @@map("import_batches")
+}
+
+// ----------------------------------------------------------------------------
+// QUARTERLY ESTIMATED TAX PAYMENTS
+// ----------------------------------------------------------------------------
+
+model TaxPayment {
+  id          String     @id @default(cuid())
+  workspaceId String
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  taxYear     Int
+  quarter     TaxQuarter
+  amountCents Int
+  paidDate    DateTime   @db.Date
+
+  sourceAccountId String
+  sourceAccount   Account @relation(fields: [sourceAccountId], references: [id], onDelete: Restrict)
+
+  /// The outflow Transaction this payment created, drawing down the
+  /// Estimated Tax Reserve envelope.
+  relatedTransactionId String?      @unique
+  relatedTransaction   Transaction? @relation(fields: [relatedTransactionId], references: [id], onDelete: SetNull)
+
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([workspaceId, taxYear, quarter])
+  @@index([workspaceId])
+  @@map("tax_payments")
+}
+
+// ----------------------------------------------------------------------------
+// SPLIT TRANSACTIONS
+// ----------------------------------------------------------------------------
+
+/// One category's share of a transaction whose spend crosses multiple
+/// envelopes (e.g. a single Target receipt covering groceries + household).
+/// See header note on SPLIT TRANSACTIONS for the authoritative-source rule.
+model TransactionSplit {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  categoryId    String
+  category      Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  /// Signed cents, same convention as Transaction.amountCents.
+  amountCents     Int
+  memo            String?
+  isTaxDeductible Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([transactionId])
+  @@index([categoryId])
+  @@map("transaction_splits")
+}
+
+// ----------------------------------------------------------------------------
+// RECEIPTS
+// ----------------------------------------------------------------------------
+
+model Receipt {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Usually 1:1 with the Transaction it documents. Nullable — a receipt can
+  /// be uploaded before it's matched (or before a Transaction even exists,
+  /// e.g. a cash purchase that the receipt itself will generate).
+  transactionId String?      @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  /// The raw image/PDF lives in object storage (S3/R2/Supabase Storage), not
+  /// in Postgres — this is the storage key, not the bytes.
+  fileStorageKey String
+  fileUrl        String?
+  mimeType       String
+  fileSizeBytes  Int?
+
+  status       ReceiptStatus @default(PENDING_UPLOAD)
+  merchantName String?
+  /// Raw OCR merchant text before normalization/matching to a known Payee.
+  merchantRaw   String?
+  purchaseDate  DateTime? @db.Date
+  subtotalCents Int?
+  taxCents      Int?
+  tipCents      Int?
+  totalCents    Int?
+
+  /// Full raw OCR/vision-model response — kept so a receipt can be
+  /// reprocessed (e.g. after improving extraction logic) without re-scanning.
+  ocrRawResponse Json?
+  /// 0.000–1.000
+  ocrConfidence  Decimal? @db.Decimal(4, 3)
+  /// e.g. "claude-vision", "textract", "veryfi" — whichever provider you pick.
+  ocrProvider    String?
+
+  uploadedAt  DateTime  @default(now())
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lineItems ReceiptLineItem[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@map("receipts")
+}
+
+model ReceiptLineItem {
+  id        String  @id @default(cuid())
+  receiptId String
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  /// As printed on the receipt.
+  rawDescription String
+  /// Cleaned/normalized product name for matching across receipts.
+  normalizedName String?
+  productId      String?
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  quantity       Decimal @default(1) @db.Decimal(10, 3)
+  unitPriceCents Int?
+  totalCents     Int
+
+  /// AI-suggested category for this line item. This is a suggestion, not a
+  /// committed accounting record — approving the receipt is what turns it
+  /// into a real TransactionSplit row (see header note on RECEIPTS).
+  categoryId      String?
+  category        Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  isTaxDeductible Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+
+  savingsOpportunities SavingsOpportunity[]
+
+  @@index([receiptId])
+  @@index([productId])
+  @@map("receipt_line_items")
+}
+
+/// Canonical product identity, built up from receipt line items over time,
+/// so price history and "have we bought this before" analysis has something
+/// stable to key off instead of re-parsing raw receipt text every time.
+model Product {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Normalized/canonical name, e.g. "Tide Pods 42ct".
+  name       String
+  brand      String?
+  /// Barcode/UPC if ever captured — enables exact-match price lookups.
+  upc        String?
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  /// Flipped true once purchased 2+ times — signals this is worth including
+  /// in recurring-purchase savings analysis rather than a one-off buy.
+  isRecurring Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lineItems            ReceiptLineItem[]
+  savingsOpportunities SavingsOpportunity[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("products")
+}
+
+// ----------------------------------------------------------------------------
+// SAVINGS & CASHFLOW INSIGHTS
+// ----------------------------------------------------------------------------
+
+/// A "we found this cheaper elsewhere" result. Populated by an external
+/// analysis step (web-search agent or shopping-price API) — see header note.
+model SavingsOpportunity {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  productId  String?
+  product    Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineItemId String?
+  lineItem   ReceiptLineItem? @relation(fields: [lineItemId], references: [id], onDelete: SetNull)
+
+  /// Denormalized snapshot so the insight still reads sensibly even if the
+  /// source product/line item is later archived or deleted.
+  itemDescription String
+  paidPriceCents  Int
+  paidAtMerchant  String?
+  paidAtDate      DateTime @db.Date
+
+  suggestedSource       String
+  suggestedPriceCents   Int
+  suggestedUrl          String?
+  /// paidPriceCents − suggestedPriceCents, same unit basis.
+  estimatedSavingsCents Int
+
+  /// e.g. "web_search_agent_v1" — how this suggestion was produced, for
+  /// trust/debugging when providers or prompts change over time.
+  analysisMethod String
+  confidence     Decimal? @db.Decimal(4, 3)
+  evidenceNote   String?
+
+  status      SavingsOpportunityStatus @default(NEW)
+  generatedAt DateTime                 @default(now())
+  reviewedAt  DateTime?
+
+  @@index([workspaceId, status])
+  @@map("savings_opportunities")
+}
+
+/// A cashflow/budget-allocation suggestion — cut this, add that, reallocate
+/// priority here. Also a result of an external analysis step, stored as a
+/// persistent, dismissible/acceptable inbox item rather than regenerated
+/// fresh every time the app is opened.
+model BudgetRecommendation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  type       RecommendationType
+  categoryId String?
+  category   Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  title     String
+  /// The "why" — the analysis narrative shown to the user.
+  rationale String
+
+  /// The historical window this recommendation was generated from.
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+
+  /// e.g. -5000 (cut $50/mo) or +20000 (allocate $200/mo more).
+  suggestedChangeCents Int?
+  projectedImpactCents Int?
+
+  analysisMethod String
+  confidence     Decimal? @db.Decimal(4, 3)
+
+  status      RecommendationStatus @default(NEW)
+  generatedAt DateTime             @default(now())
+  reviewedAt  DateTime?
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, type])
+  @@map("budget_recommendations")
+}
+
+/// Cached forward-looking cashflow projection, so the reporting UI has
+/// something to chart without recomputing live on every page load.
+model CashflowForecast {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  asOfDate    DateTime @db.Date
+  horizonDays Int
+
+  projectedIncomeCents         Int
+  projectedExpenseCents        Int
+  projectedEndingBalanceCents  Int
+  lowestProjectedBalanceCents  Int
+  lowestBalanceDate            DateTime? @db.Date
+
+  generatedAt DateTime @default(now())
+
+  @@unique([workspaceId, asOfDate, horizonDays])
+  @@map("cashflow_forecasts")
+}
+
+// ----------------------------------------------------------------------------
+// PRIORITY WATERFALL
+// ----------------------------------------------------------------------------
+
+/// One "run new money through the priority buckets" pass. See the algorithm
+/// sketch in the accompanying explanation for how this gets populated.
+model WaterfallRun {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  month            DateTime @db.Date
+  /// The Ready-to-Assign pool this run distributed.
+  totalAmountCents Int
+  /// Leftover that couldn't be placed — every bucket was already satisfied,
+  /// or the pool ran dry mid-bucket.
+  remainderCents   Int
+
+  createdAt DateTime @default(now())
+
+  assignments BudgetAssignment[]
+
+  @@index([workspaceId, month])
+  @@map("waterfall_runs")
+}
+
+// ----------------------------------------------------------------------------
+// NET WORTH — consolidated across Personal + Business
+// ----------------------------------------------------------------------------
+
+/// Periodic cached rollup for fast charting. Source of truth is always
+/// Account balances (transaction-derived or latest ManualBalanceEntry); this
+/// table is a disposable performance cache, safe to fully regenerate.
+model NetWorthSnapshot {
+  id                    String   @id @default(cuid())
+  asOfDate              DateTime @db.Date
+  totalAssetsCents      Int
+  totalLiabilitiesCents Int
+  netWorthCents         Int
+  createdAt             DateTime @default(now())
+
+  @@unique([asOfDate])
+  @@map("net_worth_snapshots")
+}
