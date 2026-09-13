@@ -83,14 +83,17 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// As of Prisma 7, connection URLs no longer live in the schema file.
+// - CLI operations (generate, migrate) get their connection from
+//   prisma.config.ts, at the project root — using DIRECT_URL (unpooled),
+//   since migrations need a direct connection.
+// - The runtime PrismaClient gets its connection from a driver adapter
+//   passed to its constructor in lib/prisma.ts — using DATABASE_URL
+//   (pooled), since serverless functions open many short-lived
+//   connections and need Supabase's pooler.
+// See .env.example for both values.
 datasource db {
-  provider  = "postgresql"
-  // Runtime queries go through Supabase's connection pooler (port 6543) —
-  // required for serverless functions, which open many short-lived
-  // connections. `prisma migrate` needs a direct, non-pooled connection
-  // (port 5432) instead, hence the separate directUrl. See .env.example.
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 // ----------------------------------------------------------------------------
