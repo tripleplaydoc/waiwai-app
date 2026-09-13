@@ -1,10 +1,13 @@
-# Netlify's Next.js Runtime auto-detects Next.js and handles the adapter —
-# this file just pins the build command (so `prisma generate` always runs
-# before `next build`, even if postinstall is ever skipped by the platform)
-# and the Node version.
+# The Next.js Runtime is supposed to auto-attach for Next.js sites, but that
+# didn't happen reliably here — most likely because of the nested "webapp"
+# base directory in this repo, which sits outside the common zero-config
+# path. Declaring it explicitly below is the documented, deterministic fix.
 
 [build]
   command = "npx prisma generate && npm run build"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
