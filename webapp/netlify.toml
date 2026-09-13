@@ -2,9 +2,15 @@
 # didn't happen reliably here — most likely because of the nested "webapp"
 # base directory in this repo, which sits outside the common zero-config
 # path. Declaring it explicitly below is the documented, deterministic fix.
+#
+# `publish` must point at the actual Next.js build output (.next), not at
+# the base directory itself — the plugin reads compiled output from there
+# to build its functions; base and publish can't be the same path.
 
 [build]
+  base = "webapp"
   command = "npx prisma generate && npm run build"
+  publish = "webapp/.next"
 
 [build.environment]
   NODE_VERSION = "22"
