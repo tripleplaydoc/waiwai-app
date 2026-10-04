@@ -5,7 +5,8 @@ type Db = PrismaClient | Prisma.TransactionClient;
 /**
  * Ready to Assign, as of the end of `asOfDate` (inclusive):
  *
- *   RTA = cumulative inflow to on-budget accounts categorized as INCOME
+ *   RTA = starting balances of on-budget accounts (dated on or before asOfDate)
+ *       + cumulative inflow to on-budget accounts categorized as INCOME
  *       − cumulative BudgetAssignment.amountCents across every category
  *         and month, for this workspace
  *
@@ -34,7 +35,17 @@ export async function getReadyToAssign(
     )
   ); // exclusive upper bound — includes all of asOfDate
 
-  const [incomeSum, assignedSum] = await Promise.all([
+  const [openingSum, incomeSum, assignedSum] = await Promise.all([
+    // An account's starting balance is money you already have, so it is ready to assign (a negative one, like card debt, reduces it).
+    db.account.aggregate({
+      where: {
+        workspaceId,
+        onBudget: true,
+        balanceMode: "TRANSACTION_DERIVED",
+        OR: [{ openingBalanceDate: null }, { openingBalanceDate: { lt: periodEnd } }],
+      },
+      _sum: { openingBalanceCents: true },
+    }),
     db.transaction.aggregate({
       where: {
         workspaceId,
@@ -53,7 +64,8 @@ export async function getReadyToAssign(
     }),
   ]);
 
+  const opening = openingSum._sum.openingBalanceCents ?? 0;
   const income = incomeSum._sum.amountCents ?? 0;
   const assigned = assignedSum._sum.amountCents ?? 0;
-  return income - assigned;
+  return opening + income - assigned;
 }
