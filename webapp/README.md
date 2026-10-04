@@ -43,3 +43,5 @@ affected, but Supabase's public API can no longer read your data).
 **Supabase free projects pause after about a week without activity.** If the
 site shows "Database not reachable", open the Supabase dashboard and click
 Restore project (or use `/status`).
+
+<!-- redeploy marker: picks up APP_PASSWORD (2026-10-03) -->
