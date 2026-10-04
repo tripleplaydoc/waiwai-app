@@ -65,3 +65,7 @@ Restore project (or use `/status`).
 - **Reports tabs**: Overview (P&L + Age of money), Expenses (ring by category/type/tag), Assets (growth, monthly/quarterly/annual, optional Personal + Business), Cash flow (Cashflow-game style statement; tag income pockets earned/portfolio/passive via the pocket pencil), Review (the three monthly questions per expense).
 - **Assets & liabilities**: Accounts → "Assets & liabilities"; each value update keeps history. Accounts can now be edited (pencil), including the starting balance.
 - **Receipt scanner**: rotate, magnifier while dragging corners, Preview before saving, better edge finding on light tables (`lib/scan/geometry.test.ts`).
+
+### Personal flow: Give / Save / Live (Oct 2026)
+
+On the **Personal** workspace the Flow chip sets up a three-way split. **Assign** sends Ready to assign to Give 20% / Save 10% / Live 70% (all adjustable, must add to 100%). Each bucket pays into one or more categories; inside a bucket, pockets with a monthly cost or goal fill first (proportionally if short), and what is left is shared by each pocket's "share of what's left" (if none is set, the bucket's first pocket takes it). A bucket with no pockets leaves its money in Ready to assign. Setup reuses existing categories named Give/Giving, Save/Savings and Live/Bills/Everyday, and creates what is missing. Engine: `lib/budget/personal-flow.ts` (tested with `npx tsx lib/budget/personal-flow.test.ts`). Dialogs now render in a portal so they are never clipped by the Flow popover.

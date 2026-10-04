@@ -49,7 +49,7 @@ export function reserveTarget(monthlyOpexCents: number, months: number): number 
 }
 
 /** Splits `total` among `needs` in proportion to each need (never more than a need). */
-function fillByNeed(total: number, needs: { id: string; needCents: number }[]): { id: string; cents: number }[] {
+export function fillByNeed(total: number, needs: { id: string; needCents: number }[]): { id: string; cents: number }[] {
   const live = needs.filter((n) => n.needCents > 0);
   const sum = live.reduce((s, n) => s + n.needCents, 0);
   if (total <= 0 || sum === 0) return [];

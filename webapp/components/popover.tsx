@@ -21,7 +21,11 @@ export function Popover({ label, icon, align = "left", width = "w-[min(92vw,26re
   }, [open, shift]);
   useEffect(() => {
     if (!open) return;
-    const down = (e: MouseEvent | TouchEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const down = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Element;
+      if (t.closest?.('[aria-modal="true"]')) return; // a dialog opened from inside this panel (portaled to <body>)
+      if (box.current && !box.current.contains(t)) setOpen(false);
+    };
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", down);
     document.addEventListener("touchstart", down);

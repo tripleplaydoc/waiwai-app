@@ -11,6 +11,8 @@ import { formatCents } from "@/lib/utils/currency";
 import { monthFromParam, monthLabel, monthParam, shiftMonth, todayIso } from "@/lib/utils/dates";
 import { AutoAssignButton } from "./budget-controls";
 import { AssignButton, FlowPanel } from "./flow-controls";
+import { PersonalAssignButton, PersonalFlowPanel } from "./personal-flow-controls";
+import { loadPersonalFlow } from "@/lib/budget/personal-flow-state";
 import { loadFlow } from "@/lib/budget/waterfall-state";
 import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
@@ -71,7 +73,10 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
     prisma.categoryGroup.findMany({ where: { workspaceId: workspace.id, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
 
+  const isPersonal = workspace.type === "PERSONAL";
   const { vm: flow } = await loadFlow(workspace.id, month, summary.rows);
+  const pflow = isPersonal ? (await loadPersonalFlow(workspace.id, month, summary.rows)).vm : null;
+  const flowOn = pflow ? pflow.enabled : flow.enabled;
   const today = todayIso();
   const rta = summary.readyToAssignCents;
   const incomeRows = summary.rows.filter((r) => r.type === "INCOME").map((r) => toVM(r, month, today));
@@ -161,8 +166,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         <h1 className="text-lg font-bold tracking-tight sm:text-xl">{workspace.name} budget</h1>
         {(allPockets.length > 0 || goals.length > 0) && (
           <div className="flex items-center gap-2">
-            <Popover icon={<Droplets className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={flow.enabled && flow.owedCents > 0 ? <>Flow <span className="rounded-full bg-warn-soft px-1.5 text-warn">owes</span></> : "Flow"}>
-              <FlowPanel workspaceId={workspace.id} month={mp} flow={flow} />
+            <Popover icon={<Droplets className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={!isPersonal && flow.enabled && flow.owedCents > 0 ? <>Flow <span className="rounded-full bg-warn-soft px-1.5 text-warn">owes</span></> : "Flow"}>
+              {pflow ? <PersonalFlowPanel workspaceId={workspace.id} flow={pflow} /> : <FlowPanel workspaceId={workspace.id} month={mp} flow={flow} />}
             </Popover>
             <Popover
               icon={<CalendarClock className="size-3.5 text-[#2E6BE6]" aria-hidden />}
@@ -197,8 +202,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
             <span className={`nums text-2xl font-bold leading-tight tracking-tight ${rta < 0 ? "text-neg" : "text-pos"}`}>{formatCents(rta)}</span>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            {flow.enabled ? (
-              <AssignButton workspaceId={workspace.id} month={mp} disabled={rta <= 0} />
+            {flowOn ? (
+              pflow ? <PersonalAssignButton workspaceId={workspace.id} month={mp} disabled={rta <= 0} /> : <AssignButton workspaceId={workspace.id} month={mp} disabled={rta <= 0} />
             ) : (
               <>
                 <AllocationButton workspaceId={workspace.id} month={mp} groups={boardGroups} readyToAssignCents={rta} />

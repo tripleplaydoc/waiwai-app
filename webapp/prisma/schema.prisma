@@ -346,6 +346,7 @@ model Workspace {
   cashflowForecasts     CashflowForecast[]
   waterfallRuns         WaterfallRun[]
   waterfallConfig       WaterfallConfig?
+  personalFlowConfig    PersonalFlowConfig?
   reserveDraws          ReserveDraw[]
   expenseReviews        ExpenseReview[]
 
@@ -496,6 +497,8 @@ model Category {
   incomeKind        IncomeKind?
   /// Pockets in the waterfall's Cash category: this pocket's share of the cash, in basis points.
   cashShareBps      Int?
+  /// Personal Give/Save/Live flow: this pocket's share of what is left in its bucket after targets are met (basis points).
+  flowShareBps      Int?
 
   /// True for app-managed envelopes (e.g. "Estimated Tax Reserve") the UI
   /// should prevent users from freely renaming, deleting, or repurposing.
@@ -998,6 +1001,27 @@ model WaterfallRun {
 /// Per-workspace waterfall settings and the pockets that play each role.
 /// The pockets themselves are ordinary Category rows (so balances, targets and
 /// history all come from the normal ledger); this row only remembers which is which.
+/// Personal workspace: Assign splits Ready to assign into Give / Save / Live (basis points, add to 10000).
+model PersonalFlowConfig {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  enabled Boolean @default(false)
+  giveBps Int     @default(2000)
+  saveBps Int     @default(1000)
+  liveBps Int     @default(7000)
+  /// The categories (groups) each bucket pays into. A category belongs to at most one bucket.
+  giveGroupIds String[] @default([])
+  saveGroupIds String[] @default([])
+  liveGroupIds String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("personal_flow_configs")
+}
+
 model WaterfallConfig {
   id          String    @id @default(cuid())
   workspaceId String    @unique

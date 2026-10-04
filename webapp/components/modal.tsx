@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
@@ -33,8 +34,9 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
     return () => { document.removeEventListener("keydown", onKey); previouslyFocused?.focus?.(); };
   }, [open, onClose]);
 
-  if (!open) return null;
-  return (
+  if (!open || typeof document === "undefined") return null;
+  // Portaled to <body> so a transformed or scrolling parent (like the Flow popover) can't clip it.
+  return createPortal(
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 sm:items-center" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`card w-full ${wide ? "max-w-3xl" : "max-w-lg"} p-5 shadow-xl`}>
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -43,6 +45,7 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
