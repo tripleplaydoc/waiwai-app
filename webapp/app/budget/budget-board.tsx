@@ -393,6 +393,8 @@ export function BudgetBoard({
       {groupDlg && (
         <GroupDialog
           open onClose={() => setGroupDlg(null)} workspaceId={workspaceId} group={groupDlg.group}
+          pocketCount={groups.find((x) => x.id === groupDlg.group?.id)?.pockets.length ?? 0}
+          releaseCents={(groups.find((x) => x.id === groupDlg.group?.id)?.pockets ?? []).reduce((t, p) => t + Math.max(0, p.availableCents), 0)}
           onDelete={groupDlg.group ? async () => { const r = await archiveGroupAction(workspaceId, groupDlg.group!.id); return r.ok ? null : r.error; } : undefined}
         />
       )}

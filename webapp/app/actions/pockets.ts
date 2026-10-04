@@ -5,9 +5,9 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed } from "@/lib/auth";
-import { parseToCents } from "@/lib/utils/currency";
+import { formatCents, parseToCents } from "@/lib/utils/currency";
 import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
-import { addMonthsUTC } from "@/lib/budget/dates";
+import { addMonthsUTC, startOfMonthUTC } from "@/lib/budget/dates";
 import { getCategoryAvailableBalance } from "@/lib/budget/category-balance";
 import { bpsProblem, planAllocation, type AllocGroup } from "@/lib/budget/allocation";
 import { customKey, isCustomKey, isTypeKey, typesFor } from "@/lib/budget/expense-types";
@@ -168,27 +168,80 @@ export async function saveGroupAction(_prev: ActionResult | undefined, formData:
   return { ok: true };
 }
 
-/** Archives a category. It must be empty so no pocket is left homeless. */
-export async function archiveGroupAction(workspaceId: string, id: string): Promise<ActionResult> {
-  await assertAuthed();
-  const g = await prisma.categoryGroup.findFirst({ where: { id, workspaceId } });
-  if (!g) return { ok: false, error: "Category not found." };
-  const live = await prisma.category.count({ where: { categoryGroupId: id, isArchived: false } });
-  if (live > 0) return { ok: false, error: "Move or delete its pockets first." };
-  await prisma.categoryGroup.update({ where: { id }, data: { isArchived: true } });
-  revalidatePath("/budget");
-  return { ok: true };
+/**
+ * Takes pockets out of the budget. Money still sitting in a pocket goes back to Ready to assign
+ * (otherwise it would stay "assigned" to a pocket nobody can see). History keeps its reference.
+ * Returns the cents released. The app-managed Business tax reserve can't be removed; on Personal it can.
+ */
+async function removePockets(workspaceId: string, workspaceType: "PERSONAL" | "BUSINESS", ids: string[]): Promise<{ ok: true; releasedCents: number } | { ok: false; error: string }> {
+  if (ids.length === 0) return { ok: true, releasedCents: 0 };
+  const pockets = await prisma.category.findMany({ where: { id: { in: ids }, workspaceId, isArchived: false } });
+  const locked = pockets.find((c) => c.isSystemManaged && workspaceType === "BUSINESS");
+  if (locked) return { ok: false, error: `“${locked.name}” is managed by the app and can't be deleted.` };
+
+  const month = startOfMonthUTC(new Date());
+  const balances = await Promise.all(pockets.map((c) => getCategoryAvailableBalance(prisma, c.id, month)));
+  const release = pockets.map((c, i) => ({ c, cents: balances[i] })).filter((x) => x.cents > 0);
+  const live = pockets.map((c) => c.id);
+  await prisma.$transaction([
+    ...release.map((x) => prisma.budgetAssignment.create({ data: { categoryId: x.c.id, month, amountCents: -x.cents, source: "CORRECTION", note: "Released back to Ready to assign (pocket deleted)" } })),
+    prisma.category.updateMany({ where: { id: { in: live } }, data: { isArchived: true } }),
+  ]);
+  return { ok: true, releasedCents: release.reduce((s, x) => s + x.cents, 0) };
 }
 
-/** Archives a pocket (history keeps its reference). */
+/** Anything that pointed at deleted categories/pockets stops pointing there; the flows switch off instead of breaking. */
+async function unlinkFlows(workspaceId: string, groupIds: string[], pocketIds: string[]) {
+  const [wf, pf] = await Promise.all([
+    prisma.waterfallConfig.findUnique({ where: { workspaceId } }),
+    prisma.personalFlowConfig.findUnique({ where: { workspaceId } }),
+  ]);
+  const gone = (id: string | null) => !!id && (groupIds.includes(id) || pocketIds.includes(id));
+  if (wf && [wf.opexGroupId, wf.cashGroupId, wf.taxCategoryId, wf.reservoir1CategoryId, wf.reservoir2CategoryId].some(gone)) {
+    await prisma.waterfallConfig.update({
+      where: { workspaceId },
+      data: {
+        enabled: false,
+        opexGroupId: gone(wf.opexGroupId) ? null : wf.opexGroupId, cashGroupId: gone(wf.cashGroupId) ? null : wf.cashGroupId,
+        taxCategoryId: gone(wf.taxCategoryId) ? null : wf.taxCategoryId,
+        reservoir1CategoryId: gone(wf.reservoir1CategoryId) ? null : wf.reservoir1CategoryId,
+        reservoir2CategoryId: gone(wf.reservoir2CategoryId) ? null : wf.reservoir2CategoryId,
+      },
+    });
+  }
+  if (pf && [...pf.giveGroupIds, ...pf.saveGroupIds, ...pf.liveGroupIds].some((id) => groupIds.includes(id))) {
+    const keep = (ids: string[]) => ids.filter((id) => !groupIds.includes(id));
+    await prisma.personalFlowConfig.update({ where: { workspaceId }, data: { giveGroupIds: keep(pf.giveGroupIds), saveGroupIds: keep(pf.saveGroupIds), liveGroupIds: keep(pf.liveGroupIds) } });
+  }
+}
+
+/** Deletes a category together with every pocket in it. Money in those pockets returns to Ready to assign. */
+export async function archiveGroupAction(workspaceId: string, id: string): Promise<ActionResult> {
+  await assertAuthed();
+  const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+  const g = ws && (await prisma.categoryGroup.findFirst({ where: { id, workspaceId, isArchived: false } }));
+  if (!ws || !g) return { ok: false, error: "Category not found." };
+  const pockets = await prisma.category.findMany({ where: { categoryGroupId: id, isArchived: false }, select: { id: true } });
+  const r = await removePockets(workspaceId, ws.type, pockets.map((p) => p.id));
+  if (!r.ok) return r;
+  await prisma.categoryGroup.update({ where: { id }, data: { isArchived: true } });
+  await unlinkFlows(workspaceId, [id], pockets.map((p) => p.id));
+  revalidatePath("/budget");
+  const n = pockets.length;
+  return { ok: true, message: `Deleted “${g.name}”${n ? ` and its ${n} pocket${n === 1 ? "" : "s"}` : ""}.${r.releasedCents > 0 ? ` ${formatCents(r.releasedCents)} is back in Ready to assign.` : ""}` };
+}
+
+/** Deletes a pocket (history keeps its reference). Money in it returns to Ready to assign. */
 export async function archivePocketAction(workspaceId: string, id: string): Promise<ActionResult> {
   await assertAuthed();
-  const c = await prisma.category.findFirst({ where: { id, workspaceId } });
-  if (!c) return { ok: false, error: "Pocket not found." };
-  if (c.isSystemManaged) return { ok: false, error: "This pocket is managed by the app and can't be deleted." };
-  await prisma.category.update({ where: { id }, data: { isArchived: true } });
+  const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+  const c = ws && (await prisma.category.findFirst({ where: { id, workspaceId, isArchived: false } }));
+  if (!ws || !c) return { ok: false, error: "Pocket not found." };
+  const r = await removePockets(workspaceId, ws.type, [id]);
+  if (!r.ok) return r;
+  await unlinkFlows(workspaceId, [], [id]);
   revalidatePath("/budget");
-  return { ok: true };
+  return { ok: true, message: `Deleted “${c.name}”.${r.releasedCents > 0 ? ` ${formatCents(r.releasedCents)} is back in Ready to assign.` : ""}` };
 }
 
 const reorderSchema = z.object({

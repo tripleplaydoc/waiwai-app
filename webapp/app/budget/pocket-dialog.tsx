@@ -200,10 +200,10 @@ export function PocketDialog({
         {deleteError && <p role="alert" className="text-sm text-[#C9372C]">{deleteError}</p>}
 
         <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-          {editing && !system && (
+          {editing && (!system || !isBusiness) && (
             confirmDelete ? (
-              <span className="mr-auto flex items-center gap-2 text-sm">
-                Delete this pocket?
+              <span className="mr-auto flex flex-wrap items-center gap-2 text-sm">
+                Delete this pocket?{pocket.availableCents > 0 && <span className="text-xs text-slate-500">{formatCents(pocket.availableCents)} goes back to Ready to assign.</span>}
                 <button
                   type="button" className="btn btn-sm !border-[#C9372C] !text-[#C9372C]" disabled={deleting}
                   onClick={() => startDelete(async () => {
@@ -226,8 +226,8 @@ export function PocketDialog({
 }
 
 export function GroupDialog({
-  open, onClose, workspaceId, group, onDelete,
-}: { open: boolean; onClose: () => void; workspaceId: string; group: { id: string; name: string } | null; onDelete?: () => Promise<string | null> }) {
+  open, onClose, workspaceId, group, onDelete, pocketCount = 0, releaseCents = 0,
+}: { open: boolean; onClose: () => void; workspaceId: string; group: { id: string; name: string } | null; onDelete?: () => Promise<string | null>; pocketCount?: number; releaseCents?: number }) {
   const [state, action, pending] = useActionState(saveGroupAction, undefined);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
@@ -247,8 +247,8 @@ export function GroupDialog({
         <div className="flex flex-wrap items-center justify-end gap-2">
           {group && onDelete && (
             confirm ? (
-              <span className="mr-auto flex items-center gap-2 text-sm">
-                Delete this category?
+              <span className="mr-auto flex flex-wrap items-center gap-2 text-sm">
+                Delete this category{pocketCount > 0 ? ` and its ${pocketCount} pocket${pocketCount === 1 ? "" : "s"}` : ""}?{releaseCents > 0 && <span className="text-xs text-slate-500">{formatCents(releaseCents)} goes back to Ready to assign.</span>}
                 <button type="button" className="btn btn-sm !border-[#C9372C] !text-[#C9372C]" onClick={async () => { const e = await onDelete(); if (e) setError(e); else onClose(); }}>Yes, delete</button>
                 <button type="button" className="btn btn-sm" onClick={() => setConfirm(false)}>Keep</button>
               </span>
