@@ -14,8 +14,8 @@ import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
 import { BillBadge, MarkPaidButton } from "./bill-controls";
 import { shortDate } from "@/lib/budget/bills";
-import { IncomeSection } from "./income-section";
 import { MoveMoneyHost } from "./move-money-host";
+import { IncomeSection } from "./income-section";
 import { isCustomKey } from "@/lib/budget/expense-types";
 import { DailyVerse } from "@/components/daily-verse";
 import { Popover } from "@/components/popover";
@@ -176,7 +176,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
             )}
           </div>
         )}
-        <div className="ml-auto flex items-center">
+        <div className="flex w-full items-center justify-between sm:ml-auto sm:w-auto">
           <Link href={`/budget?month=${monthParam(shiftMonth(month, -1))}${wsQ}`} className="btn size-10 !px-0" aria-label="Previous month"><ChevronLeft className="size-4" aria-hidden /></Link>
           <span className="min-w-28 text-center text-sm font-semibold">{monthLabel(month)}</span>
           <Link href={`/budget?month=${monthParam(shiftMonth(month, 1))}${wsQ}`} className="btn size-10 !px-0" aria-label="Next month"><ChevronRight className="size-4" aria-hidden /></Link>
@@ -193,7 +193,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
             <AllocationButton workspaceId={workspace.id} month={mp} groups={boardGroups} readyToAssignCents={rta} />
             {hasRanked && <AutoAssignButton workspaceId={workspace.id} month={mp} />}
-            <MoveMoneyHost workspaceId={workspace.id} month={mp} pockets={allPockets.filter((p) => !p.isSystemManaged).map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents }))} />
           </div>
         </div>
 
@@ -237,6 +236,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
           {needsReview} transaction{needsReview === 1 ? "" : "s"} need a category
         </Link>
       )}
+
+      <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} pockets={allPockets.filter((p) => !p.isSystemManaged).map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents }))} />
 
       <IncomeSection customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} rows={incomeRows} allGroups={allGroups} />
 

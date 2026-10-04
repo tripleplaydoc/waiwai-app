@@ -79,7 +79,7 @@ export function Nav({ initial, name, email, avatar }: { initial: string; name: s
   const pathname = usePathname();
   const { ws, q } = useWs();
   return (
-    <header className="sticky top-0 z-30 overflow-x-clip bg-navy pt-[env(safe-area-inset-top)] text-white shadow-[0_8px_24px_-14px_rgba(15,26,56,0.6)]">
+    <header className="sticky top-0 z-30 bg-navy pt-[env(safe-area-inset-top)] text-white shadow-[0_8px_24px_-14px_rgba(15,26,56,0.6)]">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 px-3 sm:gap-3 sm:px-6">
         <Link href={`/budget${q(ws)}`} aria-label="WaiWai home" className="mr-1 shrink-0">
           <BrandName light />

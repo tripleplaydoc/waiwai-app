@@ -49,7 +49,7 @@ export function QuickAdd() {
               <span className="flex size-9 items-center justify-center rounded-full bg-blue-50 text-[#2E6BE6] dark:bg-blue-950"><ArrowLeftRight className="size-4" aria-hidden /></span> Add transaction
             </button>
             <button role="menuitem" type="button" className={row} onClick={() => pick("afford")}>
-              <span className="flex size-9 items-center justify-center rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950"><ShoppingBag className="size-4" aria-hidden /></span> Can I afford it?
+              <span className="flex size-9 items-center justify-center rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950"><ShoppingBag className="size-4" aria-hidden /></span> Can I buy this?
             </button>
             <button role="menuitem" type="button" className={row} onClick={() => pick("assign")}>
               <span className="flex size-9 items-center justify-center rounded-full bg-pos-soft text-pos"><HandCoins className="size-4" aria-hidden /></span> Assign money
@@ -68,7 +68,7 @@ export function QuickAdd() {
       </div>
 
       {mode && (
-        <Modal open onClose={close} title={mode === "tx" ? "Add transaction" : mode === "afford" ? "Can I afford it?" : mode === "move" ? "Move money between pockets" : "Assign money"}>
+        <Modal open onClose={close} title={mode === "tx" ? "Add transaction" : mode === "afford" ? "Can I buy this?" : mode === "move" ? "Move money between pockets" : "Assign money"}>
           {loadError ? (
             <p role="alert" className="text-sm text-neg">Couldn&apos;t load your accounts. Please try again.</p>
           ) : !data ? (

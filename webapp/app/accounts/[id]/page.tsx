@@ -42,13 +42,13 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div>
           <Link href={`/accounts${wsQ}`} className="text-xs text-slate-500 hover:underline">← All accounts</Link>
           <h1 className="text-2xl font-semibold tracking-tight">{account.name}</h1>
         </div>
         <div className={`nums text-2xl font-semibold ${balance < 0 ? "text-[#C9372C]" : "text-[#2E7D32]"}`}>{formatCents(balance)}</div>
-        <div className="ml-auto flex gap-2">
+        <div className="flex w-full gap-2 sm:ml-auto sm:w-auto [&>*]:flex-1 sm:[&>*]:flex-none">
           <Link href={`/import${wsQ}${wsQ ? "&" : "?"}account=${account.id}`} className="btn"><Upload className="size-4" aria-hidden /> Import CSV</Link>
           <AddTransactionButton
             accountId={account.id}
@@ -75,7 +75,33 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         </form>
       )}
 
-      <section className="card overflow-x-auto">
+      {/* Phone: one tidy card per transaction */}
+      <section className="card divide-y divide-[#E2E8F0] overflow-hidden md:hidden dark:divide-slate-800" aria-label="Transactions">
+        {transactions.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-500">No transactions yet. Tap + to add one, or import a CSV.</p>}
+        {transactions.map((t) => (
+          <article key={t.id} className="space-y-2 px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-[15px] font-semibold">{t.payee?.name ?? <span className="font-normal text-slate-400">No payee</span>}</div>
+                <div className="text-xs text-slate-500">{formatShortDate(t.date)}{t.memo ? ` · ${t.memo}` : ""}</div>
+              </div>
+              <div className={`nums shrink-0 text-[15px] font-semibold ${t.amountCents > 0 ? "text-pos" : ""}`}>{t.amountCents > 0 ? "+" : "−"}{formatCents(Math.abs(t.amountCents))}</div>
+            </div>
+            <CategorySelect transactionId={t.id} current={t.categoryId ?? ""} options={catOptions} needsReview={t.needsReview} />
+            <div className="flex flex-wrap items-center gap-2">
+              {people.length > 1 && <div className="min-w-0 flex-1"><PersonSelect transactionId={t.id} current={t.personId ?? ""} people={people} /></div>}
+              <ReceiptCell transactionId={t.id} receipt={t.receipt} />
+              <form action={deleteTransactionAction} className="ml-auto">
+                <input type="hidden" name="transactionId" value={t.id} />
+                <ConfirmDeleteButton />
+              </form>
+            </div>
+          </article>
+        ))}
+        {total > LIMIT && <p className="px-4 py-2 text-xs text-slate-500">Showing the latest {LIMIT} of {total} transactions.</p>}
+      </section>
+
+      <section className="card hidden overflow-x-auto md:block">
         <table className="w-full min-w-[920px] border-collapse">
           <thead className="border-b border-[#E2E8F0] bg-navy-soft dark:border-slate-800 dark:bg-slate-800/50">
             <tr>

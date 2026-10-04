@@ -10,7 +10,7 @@ export const MOVE_EVENT = "waiwai:move-money";
 export const openMoveMoney = (fromId?: string) => window.dispatchEvent(new CustomEvent(MOVE_EVENT, { detail: { fromId } }));
 
 /** Button + modal host; any pocket's available pill can also open it via openMoveMoney(). */
-export function MoveMoneyHost({ workspaceId, month, pockets }: { workspaceId: string; month: string; pockets: MovePocket[] }) {
+export function MoveMoneyHost({ workspaceId, month, pockets, hideButton }: { workspaceId: string; month: string; pockets: MovePocket[]; hideButton?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState<{ fromId?: string } | null>(null);
   useEffect(() => {
@@ -20,7 +20,7 @@ export function MoveMoneyHost({ workspaceId, month, pockets }: { workspaceId: st
   }, []);
   return (
     <>
-      <button type="button" className="btn btn-sm" onClick={() => setOpen({})}><ArrowRightLeft className="size-4" aria-hidden /> Move money</button>
+      {!hideButton && <button type="button" className="btn btn-sm" onClick={() => setOpen({})}><ArrowRightLeft className="size-4" aria-hidden /> Move money</button>}
       {open && (
         <Modal open onClose={() => setOpen(null)} title="Move money between pockets">
           <MoveForm workspaceId={workspaceId} month={month} pockets={pockets} initialFromId={open.fromId} onCancel={() => setOpen(null)} onDone={() => { setOpen(null); router.refresh(); }} />

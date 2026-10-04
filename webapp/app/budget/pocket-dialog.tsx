@@ -7,6 +7,7 @@ import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 import { monthsBetweenInclusive } from "@/lib/budget/dates";
 import type { PocketVM } from "@/lib/budget/board-types";
 import { typesFor, typeLabel } from "@/lib/budget/expense-types";
+import { AssignedInput } from "./budget-controls";
 
 type TT = "NONE" | "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE";
 
@@ -60,6 +61,19 @@ export function PocketDialog({
         <input type="hidden" name="workspaceId" value={workspaceId} />
         {editing && <input type="hidden" name="id" value={pocket.id} />}
         {!editing && <input type="hidden" name="type" value={isIncome ? "INCOME" : "EXPENSE"} />}
+
+        {editing && !isIncome && !system && (
+          <div className="rounded-xl border border-[#E2E8F0] bg-slate-50 p-3 md:hidden dark:border-slate-700 dark:bg-slate-800/50">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium">Assigned this month</span>
+              <AssignedInput categoryId={pocket.id} month={monthIso} initial={centsToInput(pocket.assignedCents)} label={`Assigned to ${pocket.name}`} />
+            </div>
+            <dl className="nums mt-2 flex justify-between text-xs text-slate-500">
+              <div>Spent <dd className="inline font-semibold text-slate-700 dark:text-slate-200">{formatCents(-pocket.activityCents)}</dd></div>
+              <div>Available <dd className="inline font-semibold text-slate-700 dark:text-slate-200">{formatCents(pocket.availableCents)}</dd></div>
+            </dl>
+          </div>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>

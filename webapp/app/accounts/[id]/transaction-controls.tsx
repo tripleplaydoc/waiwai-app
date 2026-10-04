@@ -52,7 +52,7 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
   return (
     <>
       <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
-        <Plus className="size-4" aria-hidden /> Add transaction <span className="kbd !border-indigo-300 !bg-indigo-500 !text-white">N</span>
+        <Plus className="size-4" aria-hidden /> Add transaction <span className="kbd hidden sm:inline-flex !border-indigo-300 !bg-indigo-500 !text-white">N</span>
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title="Add transaction">
         <form ref={formRef} action={action} className="space-y-3">

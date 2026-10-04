@@ -50,7 +50,7 @@ Restore project (or use `/status`).
 - Income sits at the top of the budget; each pocket has a **type** (Advertising, Auto expense, Housing…) used by the P&L.
 - **Reports** page: profit & loss by type with prior-period comparison, CSV export, print, and (Business) a tax set-aside estimate.
 - **Receipts** attach to any transaction (photo or PDF, stored in the database, shown behind login only). On a phone, **Scan receipt** opens the camera, finds the paper's edges, straightens it and cleans it to black & white, all on the device.
-- **Can I afford it?** (the + menu): enter what you want, the price and the pocket; it says yes or no and suggests where to borrow (Ready to assign, then free pockets, then spare bill money, then goals), with one tap to apply.
+- **Can I buy this?** (the + menu): enter what you want, the price and the pocket; it says yes or no and suggests where to borrow (Ready to assign, then free pockets, then spare bill money, then goals), with one tap to apply.
 - **People**: every transaction records who made it; filter by person on an account, see a By person report, and a Person column in exports. Profile pictures are set in Settings.
 - **Move money** between pockets from the + button, the budget page, or by tapping a pocket's available amount.
 - A daily rotating verse / saying from `webapp/lib/verses.ts`.

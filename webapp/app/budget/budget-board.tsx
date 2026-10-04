@@ -8,7 +8,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil, Plus } from "lucide-react";
+import { ChevronDown, ChevronsDownUp, ChevronsUpDown, GripVertical, Pencil, Plus } from "lucide-react";
 import { AssignedInput } from "./budget-controls";
 import { GroupDialog, PocketDialog } from "./pocket-dialog";
 import { archiveGroupAction, renameGroupAction, renamePocketAction, reorderAction } from "@/app/actions/pockets";
@@ -16,11 +16,13 @@ import { InlineName } from "@/components/inline-name";
 import { typeLabel } from "@/lib/budget/expense-types";
 import { openMoveMoney } from "./move-money-host";
 import { BillBadge, MarkPaidButton } from "./bill-controls";
+import { shortDate } from "@/lib/budget/bills";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
 import type { GroupVM, PocketVM } from "@/lib/budget/board-types";
 
 // Desktop columns: handle | name | assigned | activity | available | edit.
 const COLS = "md:grid-cols-[28px_minmax(0,1fr)_128px_104px_116px_40px]";
+const STORE = "waiwai:collapsed-groups";
 
 function pill(p: PocketVM): string {
   const pr = p.progress;
@@ -79,13 +81,15 @@ function PocketRowView({
   p: PocketVM; workspaceId: string; month: string; onEdit: () => void; overlay?: boolean;
   handleProps?: React.HTMLAttributes<HTMLButtonElement>;
 }) {
+  const pr = p.progress;
+  const sub = [typeLabel(p.expenseType), p.bill && !overlay ? (p.bill.state === "paid" ? "Paid" : p.bill.state === "overdue" ? "Overdue" : `Due ${shortDate(p.bill.dueIso)}`) : null].filter(Boolean).join(" · ");
   return (
-    <div className={`grid grid-cols-[28px_minmax(0,1fr)_auto] items-start gap-x-2 gap-y-2 border-t border-[#E2E8F0] bg-white px-3 py-3 md:items-center md:gap-x-3 ${COLS} dark:border-slate-800 dark:bg-slate-900 ${overlay ? "rounded-xl border shadow-xl" : ""}`}>
-      <button type="button" aria-label={`Drag ${p.name}`} className="col-start-1 row-start-1 flex size-8 cursor-grab touch-none items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-500 active:cursor-grabbing md:col-auto md:row-auto md:size-7 dark:hover:bg-slate-800" {...handleProps}>
+    <div className={`grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 border-t border-[#E2E8F0] bg-white px-3 py-2.5 md:items-center md:gap-x-3 md:py-3 ${COLS} dark:border-slate-800 dark:bg-slate-900 ${overlay ? "rounded-xl border shadow-xl" : ""}`}>
+      <button type="button" aria-label={`Drag ${p.name}`} className="hidden size-7 cursor-grab touch-none items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-500 active:cursor-grabbing md:flex dark:hover:bg-slate-800" {...handleProps}>
         <GripVertical className="size-4" aria-hidden />
       </button>
 
-      <div className="col-start-2 row-start-1 min-w-0 md:col-auto md:row-auto">
+      <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {overlay ? <span className="text-sm font-semibold">{p.name}</span> : (
             <InlineName
@@ -94,43 +98,40 @@ function PocketRowView({
               className="break-words text-[15px] font-semibold leading-snug md:text-sm md:font-medium"
             />
           )}
-          {typeLabel(p.expenseType) && <span className="rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] font-medium text-water dark:bg-cyan-950/60">{typeLabel(p.expenseType)}</span>}
-          {p.priorityRank !== null && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-[#1E4FBF] dark:bg-blue-950 dark:text-blue-300">P{p.priorityRank}</span>}
+          {typeLabel(p.expenseType) && <span className="hidden rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] font-medium text-water md:inline dark:bg-cyan-950/60">{typeLabel(p.expenseType)}</span>}
+          {p.priorityRank !== null && <span className="hidden rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-[#1E4FBF] md:inline dark:bg-blue-950 dark:text-blue-300">P{p.priorityRank}</span>}
           {p.isSystemManaged && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800">system</span>}
-          {p.allocationBps !== null && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800">{p.allocationBps / 100}%</span>}
+          {p.allocationBps !== null && <span className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 md:inline dark:bg-slate-800">{p.allocationBps / 100}%</span>}
         </div>
+        {sub && <div className={`mt-0.5 truncate text-xs md:hidden ${p.bill?.state === "overdue" ? "font-medium text-neg" : "text-slate-500 dark:text-slate-400"}`}>{sub}</div>}
         {p.bill && !overlay && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <div className="mt-1.5 hidden flex-wrap items-center gap-2 md:flex">
             <BillBadge status={p.bill} />
             <MarkPaidButton workspaceId={workspaceId} categoryId={p.id} month={month} status={p.bill} manualPaid={p.manualPaid} />
           </div>
         )}
-        <ProgressBlock p={p} onSetCost={onEdit} />
+        <div className="hidden md:block"><ProgressBlock p={p} onSetCost={onEdit} /></div>
       </div>
 
-      <div className="col-start-3 row-start-1 text-right md:order-5 md:col-auto md:row-auto">
+      <div className="text-right md:order-5">
         {p.isSystemManaged || overlay ? (
-          <span className={`nums inline-block min-w-[4.75rem] rounded-full px-2.5 py-1 text-right text-sm font-semibold md:min-w-20 md:px-3 ${pill(p)}`}>{formatCents(p.availableCents)}</span>
+          <span className={`nums inline-block min-w-[5.5rem] rounded-full px-3 py-1.5 text-right text-[15px] font-semibold md:min-w-20 md:py-1 md:text-sm ${pill(p)}`}>{formatCents(p.availableCents)}</span>
         ) : (
           <button type="button" onClick={() => openMoveMoney(p.id)} title="Move money out of this pocket" aria-label={`${p.name}: ${formatCents(p.availableCents)} available. Move money`}
-            className={`nums inline-block min-w-[4.75rem] cursor-pointer rounded-full px-2.5 py-1 text-right text-sm font-semibold hover:ring-2 hover:ring-water/40 md:min-w-20 md:px-3 ${pill(p)}`}>{formatCents(p.availableCents)}</button>
+            className={`nums inline-block min-w-[5.5rem] cursor-pointer rounded-full px-3 py-1.5 text-right text-[15px] font-semibold hover:ring-2 hover:ring-water/40 md:min-w-20 md:py-1 md:text-sm ${pill(p)}`}>{formatCents(p.availableCents)}</button>
         )}
       </div>
 
-      <div className="col-span-2 col-start-2 row-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 md:contents">
-        <label className="flex items-center gap-2 md:order-3 md:block md:text-right">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400 md:hidden">Assigned</span>
-          {overlay ? <span className="nums text-sm">{centsToInput(p.assignedCents)}</span> : (
-            <AssignedInput categoryId={p.id} month={month} initial={centsToInput(p.assignedCents)} label={`Assigned to ${p.name}`} />
-          )}
-        </label>
-        <div className="nums text-xs text-slate-500 md:order-4 md:text-right md:text-sm md:text-slate-600 dark:text-slate-400 md:dark:text-slate-300">
-          <span className="md:hidden">Activity </span>{formatCents(p.activityCents)}
-        </div>
-        <button type="button" onClick={onEdit} aria-label={`Edit ${p.name}`} className="ml-auto flex size-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 md:order-6 md:ml-0 dark:hover:bg-slate-800">
-          <Pencil className="size-4" aria-hidden />
-        </button>
-      </div>
+      <label className="hidden items-center gap-2 md:order-3 md:block md:text-right">
+        <span className="sr-only">Assigned</span>
+        {overlay ? <span className="nums text-sm">{centsToInput(p.assignedCents)}</span> : (
+          <AssignedInput categoryId={p.id} month={month} initial={centsToInput(p.assignedCents)} label={`Assigned to ${p.name}`} />
+        )}
+      </label>
+      <div className="nums hidden text-right text-sm text-slate-600 md:order-4 md:block dark:text-slate-300">{formatCents(p.activityCents)}</div>
+      <button type="button" onClick={onEdit} aria-label={`Edit ${p.name}`} className="flex size-10 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 md:order-6 md:size-9 dark:hover:bg-slate-800">
+        <Pencil className="size-4" aria-hidden />
+      </button>
     </div>
   );
 }
@@ -145,9 +146,9 @@ function SortablePocket({ p, workspaceId, month, onEdit }: { p: PocketVM; worksp
 }
 
 function GroupSection({
-  g, workspaceId, month, onEditPocket, onAddPocket, onEditGroup, fixed,
+  g, workspaceId, month, onEditPocket, onAddPocket, onEditGroup, fixed, collapsed, onToggle,
 }: {
-  g: GroupVM; workspaceId: string; month: string; fixed: boolean;
+  g: GroupVM; workspaceId: string; month: string; fixed: boolean; collapsed: boolean; onToggle: () => void;
   onEditPocket: (p: PocketVM) => void; onAddPocket: (groupId: string) => void; onEditGroup: (g: GroupVM) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `g:${g.id}`, data: { type: "group" }, disabled: fixed });
@@ -162,13 +163,16 @@ function GroupSection({
       className="card overflow-hidden"
       aria-label={g.name}
     >
-      <div className={`flex items-center gap-2 bg-group px-3 py-2.5 text-white md:grid md:gap-x-3 ${COLS}`}>
-        {fixed ? <span className="size-8 md:size-7" /> : (
-          <button type="button" aria-label={`Drag category ${g.name}`} className={`${iconBtn} cursor-grab touch-none active:cursor-grabbing`} {...attributes} {...listeners}>
+      <div className={`flex items-center gap-1.5 bg-group px-2 py-1.5 text-white md:grid md:gap-x-3 md:px-3 md:py-2 ${COLS}`}>
+        {fixed ? <span className="hidden size-7 md:block" /> : (
+          <button type="button" aria-label={`Drag category ${g.name}`} className={`${iconBtn} hidden cursor-grab touch-none active:cursor-grabbing md:flex`} {...attributes} {...listeners}>
             <GripVertical className="size-4" aria-hidden />
           </button>
         )}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          <button type="button" onClick={onToggle} aria-expanded={!collapsed} aria-label={`${collapsed ? "Expand" : "Collapse"} ${g.name}`} className={`${iconBtn} shrink-0 md:-ml-1`}>
+            <ChevronDown className={`size-4 transition-transform ${collapsed ? "-rotate-90" : ""}`} aria-hidden />
+          </button>
           <h2 className="min-w-0 text-[15px] font-bold tracking-tight md:text-sm">
             {fixed ? g.name : (
               <InlineName
@@ -188,13 +192,13 @@ function GroupSection({
         </div>
         <div className="nums hidden text-right text-xs font-semibold text-white/85 md:order-3 md:block">{formatCents(sum((p) => p.assignedCents))}</div>
         <div className="nums hidden text-right text-xs font-semibold text-white/85 md:order-4 md:block">{formatCents(sum((p) => p.activityCents))}</div>
-        <div className="nums shrink-0 text-right text-xs font-semibold text-white/90 md:order-5">{formatCents(sum((p) => p.availableCents))}</div>
+        <div className="nums shrink-0 text-right text-[13px] font-semibold text-white/90 md:order-5 md:text-xs">{formatCents(sum((p) => p.availableCents))}</div>
         <button type="button" onClick={() => onAddPocket(g.id)} aria-label={`Add pocket to ${g.name}`} className={`${iconBtn} shrink-0 md:order-6`}>
           <Plus className="size-4" aria-hidden />
         </button>
       </div>
-      {needed > 0 && <div className="border-t border-[#E2E8F0] bg-warn-soft/60 px-4 py-1 text-[11px] font-medium text-warn dark:border-slate-800">{formatCents(needed)} still needed to fund this category</div>}
-      <div ref={drop.setNodeRef}>
+      {!collapsed && needed > 0 && <div className="border-t border-[#E2E8F0] bg-warn-soft/60 px-4 py-1 text-[11px] font-medium text-warn dark:border-slate-800">{formatCents(needed)} still needed to fund this category</div>}
+      <div ref={drop.setNodeRef} hidden={collapsed}>
         <SortableContext items={g.pockets.map((p) => `p:${p.id}`)} strategy={verticalListSortingStrategy}>
           {g.pockets.map((p) => <SortablePocket key={p.id} p={p} workspaceId={workspaceId} month={month} onEdit={() => onEditPocket(p)} />)}
         </SortableContext>
@@ -228,6 +232,15 @@ export function BudgetBoard({
   const [groupDlg, setGroupDlg] = useState<{ group: { id: string; name: string } | null } | null>(null);
 
   useEffect(() => { setGroups(serverGroups); ref.current = serverGroups; }, [serverGroups]);
+
+  // Which categories are folded up (remembered on this device, per workspace).
+  const storeKey = `${STORE}:${workspaceId}`;
+  const [collapsed, setCollapsed] = useState<string[]>([]);
+  useEffect(() => {
+    try { const v = JSON.parse(localStorage.getItem(storeKey) ?? "[]"); if (Array.isArray(v)) setCollapsed(v.filter((x) => typeof x === "string")); } catch { /* ignore */ }
+  }, [storeKey]);
+  const saveCollapsed = (next: string[]) => { setCollapsed(next); try { localStorage.setItem(storeKey, JSON.stringify(next)); } catch { /* ignore */ } };
+  const toggleGroup = (id: string) => saveCollapsed(collapsed.includes(id) ? collapsed.filter((x) => x !== id) : [...collapsed, id]);
 
   const update = useCallback((fn: (prev: GroupVM[]) => GroupVM[]) => {
     setGroups((prev) => { const next = fn(prev); ref.current = next; return next; });
@@ -330,8 +343,16 @@ export function BudgetBoard({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-base font-bold tracking-tight">Your pockets</h2>
+        {groups.length > 1 && (() => {
+          const allFolded = groups.every((g) => collapsed.includes(g.id));
+          return (
+            <button type="button" className="btn btn-sm" onClick={() => saveCollapsed(allFolded ? [] : groups.map((g) => g.id))} aria-label={allFolded ? "Expand all categories" : "Collapse all categories"}>
+              {allFolded ? <ChevronsUpDown className="size-4" aria-hidden /> : <ChevronsDownUp className="size-4" aria-hidden />} <span className="hidden sm:inline">{allFolded ? "Expand all" : "Collapse all"}</span>
+            </button>
+          );
+        })()}
         <button type="button" className="btn btn-sm" onClick={() => setGroupDlg({ group: null })}><Plus className="size-4" aria-hidden /> Category</button>
-        <button type="button" className="btn btn-sm btn-primary" onClick={() => setPocketDlg({ pocket: null })}><Plus className="size-4" aria-hidden /> Pocket <span className="kbd !border-white/30 !bg-white/15 !text-white">N</span></button>
+        <button type="button" className="btn btn-sm btn-primary" onClick={() => setPocketDlg({ pocket: null })}><Plus className="size-4" aria-hidden /> Pocket <span className="kbd hidden sm:inline-flex !border-white/30 !bg-white/15 !text-white">N</span></button>
       </div>
 
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-neg-soft px-4 py-2 text-sm text-neg">{error}</p>}
@@ -345,7 +366,7 @@ export function BudgetBoard({
           <div className="space-y-4">
             {groups.map((g) => (
               <GroupSection
-                key={g.id} g={g} workspaceId={workspaceId} month={month} fixed={g.id === "__none"}
+                key={g.id} g={g} collapsed={collapsed.includes(g.id)} onToggle={() => toggleGroup(g.id)} workspaceId={workspaceId} month={month} fixed={g.id === "__none"}
                 onEditPocket={(p) => setPocketDlg({ pocket: p })}
                 onAddPocket={(groupId) => setPocketDlg({ pocket: null, groupId })}
                 onEditGroup={(grp) => setGroupDlg({ group: { id: grp.id, name: grp.name } })}
@@ -360,7 +381,7 @@ export function BudgetBoard({
       </DndContext>
 
       {!hasAny && <p className="text-sm text-slate-500">No categories yet. Add one to get started.</p>}
-      <p className="text-xs text-slate-500 dark:text-slate-400">Drag the handle <GripVertical className="inline size-3.5 align-text-bottom" aria-hidden /> to reorder, or to move a pocket into another category. Click any name to rename it. Keyboard: focus a handle, press Space, use the arrow keys, then Space to drop.</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">Drag the handle <GripVertical className="inline size-3.5 align-text-bottom" aria-hidden /> to reorder, or to move a pocket into another category. Tap the arrow to fold a category. Click any name to rename it. Keyboard: focus a handle, press Space, use the arrow keys, then Space to drop.</p>
 
       {pocketDlg && (
         <PocketDialog

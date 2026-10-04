@@ -9,9 +9,10 @@ import { QuickAdd } from "@/components/quick-add";
 
 export const metadata: Metadata = {
   title: "WaiWai",
+  appleWebApp: { capable: true, title: "WaiWai", statusBarStyle: "black-translucent" },
   description: "WaiWai — wealth, like water: let it flow with purpose. Zero-based budgeting for Personal and Business.",
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#1F2E5A" };
 
 // Runs before first paint so the saved theme never flashes. Class names match
 // the spec: html.light / html.dark, saved in localStorage.
@@ -33,7 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Nav initial={(user?.name || user?.email || "?").trim().charAt(0).toUpperCase()} name={user?.name ?? ""} email={user?.email ?? ""} avatar={user ? avatarUrl(user) : null} />
           </Suspense>
         )}
-        {authed ? <main className="mx-auto w-full max-w-6xl px-4 pb-36 pt-6 sm:px-6 md:pb-24 md:pt-8">{children}</main> : children}
+        {authed ? <main className="mx-auto w-full max-w-6xl px-4 pb-36 pt-6 sm:px-6 md:pb-24 md:pt-8">{children}</main> : <div className="pt-[env(safe-area-inset-top)]">{children}</div>}
         {authed && (
           <Suspense fallback={null}>
             <BottomTabs />

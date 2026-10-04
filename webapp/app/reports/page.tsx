@@ -85,11 +85,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
         </div>
       </div>
 
-      <form method="get" className="card flex flex-wrap items-end gap-3 p-4 print:hidden" aria-label="Report period">
+      <form method="get" className="card grid grid-cols-2 items-end gap-3 p-4 sm:flex sm:flex-wrap print:hidden" aria-label="Report period">
         {wsKey === "business" && <input type="hidden" name="ws" value="business" />}
-        <div>
+        <div className="col-span-2 sm:col-span-1">
           <label htmlFor="rp-period" className="label">Period</label>
-          <select id="rp-period" name="period" defaultValue={period.preset} className="input min-w-44">
+          <select id="rp-period" name="period" defaultValue={period.preset} className="input sm:min-w-44">
             {PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
         </div>
@@ -101,7 +101,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
           <label htmlFor="rp-to" className="label">To (custom)</label>
           <input id="rp-to" type="date" name="to" defaultValue={period.to} className="input" />
         </div>
-        <button type="submit" className="btn btn-primary">Update</button>
+        <button type="submit" className="btn btn-primary col-span-2 sm:col-span-1">Update</button>
       </form>
 
       <div className="grid gap-4 sm:grid-cols-3">
