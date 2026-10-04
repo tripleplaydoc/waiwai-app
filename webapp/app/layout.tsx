@@ -4,6 +4,7 @@ import "@fontsource-variable/inter";
 import "./globals.css";
 import { getCurrentUser } from "@/lib/auth";
 import { BottomTabs, Nav } from "@/components/nav";
+import { LiveRefresh } from "@/components/live-refresh";
 import { avatarUrl } from "@/components/avatar";
 import { QuickAdd } from "@/components/quick-add";
 
@@ -39,6 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Suspense fallback={null}>
             <BottomTabs />
             <QuickAdd />
+            <LiveRefresh />
           </Suspense>
         )}
       </body>
