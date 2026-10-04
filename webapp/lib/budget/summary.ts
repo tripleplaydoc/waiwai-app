@@ -14,12 +14,24 @@ export interface EnvelopeRow {
   availableCents: number; // rolling: all assignments - all activity through this month
   priorityRank: number | null;
   isSystemManaged: boolean;
+  isTaxDeductible: boolean;
+  targetType: "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE" | null;
+  targetCents: number | null;
+  targetDate: string | null; // YYYY-MM-DD
+  allocationBps: number | null;
+}
+
+export interface GroupRow {
+  id: string | null;
+  name: string;
+  allocationBps: number | null;
+  rows: EnvelopeRow[];
 }
 
 export interface BudgetSummary {
   readyToAssignCents: number;
   rows: EnvelopeRow[];
-  groups: { id: string | null; name: string; rows: EnvelopeRow[] }[];
+  groups: GroupRow[];
   totalAssignedCents: number;
   totalActivityCents: number;
   totalAvailableCents: number;
@@ -72,16 +84,21 @@ export async function getBudgetSummary(workspaceId: string, month: Date): Promis
       availableCents: c.type === "INCOME" ? 0 : (aC.get(c.id) ?? 0) + activityCum,
       priorityRank: c.priorityRank,
       isSystemManaged: c.isSystemManaged,
+      isTaxDeductible: c.isTaxDeductible,
+      targetType: c.fundingTargetType,
+      targetCents: c.fundingTargetCents,
+      targetDate: c.fundingTargetByDate ? c.fundingTargetByDate.toISOString().slice(0, 10) : null,
+      allocationBps: c.allocationBps,
     };
   });
 
   const groups: BudgetSummary["groups"] = [];
   for (const g of groupsDb) {
     const gRows = rows.filter((r) => r.groupId === g.id);
-    if (gRows.length) groups.push({ id: g.id, name: g.name, rows: gRows });
+    groups.push({ id: g.id, name: g.name, allocationBps: g.allocationBps, rows: gRows }); // empty groups stay visible
   }
   const loose = rows.filter((r) => !r.groupId || !groupName.has(r.groupId));
-  if (loose.length) groups.push({ id: null, name: "Other", rows: loose });
+  if (loose.length) groups.push({ id: null, name: "Other", allocationBps: null, rows: loose });
 
   const env = rows.filter((r) => r.type !== "INCOME");
   return {

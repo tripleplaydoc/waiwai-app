@@ -53,10 +53,10 @@ function AccountTable({ title, rows, wsQ, footer }: { title: string; rows: Await
           {rows.map((a) => (
             <tr key={a.id} className="border-b border-[#E2E8F0] last:border-0 dark:border-slate-800">
               <td className="td">
-                <Link href={`/accounts/${a.id}${wsQ}`} className="font-medium text-[#4F46E5] hover:underline dark:text-indigo-300">{a.name}</Link>
+                <Link href={`/accounts/${a.id}${wsQ}`} className="font-medium text-[#2E6BE6] hover:underline dark:text-indigo-300">{a.name}</Link>
                 <span className="ml-2 text-xs text-slate-500">{TYPE_LABEL[a.type]}</span>
               </td>
-              <td className={`td nums text-right font-medium ${a.balanceCents < 0 ? "text-[#DC2626]" : ""}`}>{formatCents(a.balanceCents)}</td>
+              <td className={`td nums text-right font-medium ${a.balanceCents < 0 ? "text-[#C9372C]" : ""}`}>{formatCents(a.balanceCents)}</td>
             </tr>
           ))}
         </tbody>

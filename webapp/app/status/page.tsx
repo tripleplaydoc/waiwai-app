@@ -23,7 +23,7 @@ export default async function StatusPage() {
       <div className="card p-5">
         {s.connected ? (
           <>
-            <p className="mb-3 font-semibold text-[#059669]">Database connected</p>
+            <p className="mb-3 font-semibold text-[#2E7D32]">Database connected</p>
             <dl className="nums grid grid-cols-[1fr_auto] gap-y-2 text-sm">
               <dt className="text-slate-500">Workspaces</dt><dd className="text-right">{s.workspaces}</dd>
               <dt className="text-slate-500">Categories</dt><dd className="text-right">{s.categories}</dd>
@@ -33,7 +33,7 @@ export default async function StatusPage() {
           </>
         ) : (
           <>
-            <p className="mb-2 font-semibold text-[#D97706]">Database not reachable</p>
+            <p className="mb-2 font-semibold text-[#8A5A00]">Database not reachable</p>
             <p className="mb-2 text-sm text-slate-500">Check DATABASE_URL in Netlify, and that the Supabase project isn’t paused.</p>
             <pre className="overflow-x-auto rounded-xl border border-[#E2E8F0] p-3 text-xs dark:border-slate-700">{s.error}</pre>
           </>

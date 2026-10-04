@@ -27,10 +27,10 @@ export function Nav({ initial }: { initial: string }) {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[#E2E8F0] bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
+    <header className="sticky top-0 z-30 bg-navy text-white shadow-[0_1px_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(15,26,56,0.5)]">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 px-4 py-2 sm:px-6">
         <Link href={`/budget${q(ws)}`} className="mr-3" aria-label="Financial Tracker home">
-          <BrandName />
+          <BrandName light />
         </Link>
         <nav className="flex items-center gap-1" aria-label="Main">
           {links.map(({ href, label, icon: Icon }) => {
@@ -42,8 +42,8 @@ export function Nav({ initial }: { initial: string }) {
                 aria-current={active ? "page" : undefined}
                 className={`inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-medium ${
                   active
-                    ? "bg-indigo-50 text-[#4F46E5] dark:bg-indigo-950 dark:text-indigo-300"
-                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    ? "bg-white/15 text-white"
+                    : "text-blue-100/75 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 <Icon className="size-4" aria-hidden /> {label}
@@ -52,21 +52,21 @@ export function Nav({ initial }: { initial: string }) {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-2">
-          <div role="group" aria-label="Workspace" className="flex rounded-xl border border-[#E2E8F0] p-0.5 dark:border-slate-700">
+          <div role="group" aria-label="Workspace" className="flex rounded-xl border border-white/20 p-0.5">
             {(["personal", "business"] as const).map((w) => (
               <Link
                 key={w}
                 href={`${pathname.startsWith("/accounts/") ? "/accounts" : pathname}${q(w)}`}
                 aria-current={ws === w ? "true" : undefined}
-                className={`min-h-10 rounded-[10px] px-4 py-2 text-sm font-medium capitalize ${
-                  ws === w ? "bg-[#4F46E5] text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                className={`min-h-10 rounded-[10px] px-3 py-2 text-sm font-medium capitalize sm:px-4 ${
+                  ws === w ? "bg-white text-navy" : "text-blue-100/80 hover:bg-white/10"
                 }`}
               >
                 {w}
               </Link>
             ))}
           </div>
-          <button type="button" onClick={toggleTheme} className="btn size-11 !px-0" aria-label="Toggle dark mode">
+          <button type="button" onClick={toggleTheme} className="btn-nav size-11 !px-0" aria-label="Toggle dark mode">
             <Sun className="size-4 dark:hidden" aria-hidden />
             <Moon className="hidden size-4 dark:block" aria-hidden />
           </button>
@@ -74,13 +74,13 @@ export function Nav({ initial }: { initial: string }) {
             href="/settings"
             aria-label="Settings"
             title="Settings"
-            className={`btn size-11 !px-0 ${pathname === "/settings" ? "!border-[#4F46E5] !text-[#4F46E5]" : ""}`}
+            className={`btn-nav size-11 !px-0 ${pathname === "/settings" ? "!bg-white/20" : ""}`}
           >
             <Settings className="size-4" aria-hidden />
           </Link>
-          <span aria-hidden className="flex size-11 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 text-sm font-semibold text-white">{initial}</span>
+          <span aria-hidden className="hidden size-11 items-center sm:flex justify-center rounded-full bg-[#8ED081] text-sm font-bold text-[#1F2E5A]">{initial}</span>
           <form action={logoutAction}>
-            <button type="submit" className="btn size-11 !px-0" aria-label="Sign out">
+            <button type="submit" className="btn-nav size-11 !px-0" aria-label="Sign out">
               <LogOut className="size-4" aria-hidden />
             </button>
           </form>

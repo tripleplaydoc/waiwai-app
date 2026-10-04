@@ -10,7 +10,7 @@ const points = [
 export function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-slate-900 p-12 text-white lg:flex lg:flex-col lg:justify-between">
+      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-[#2E6BE6] via-[#1F2E5A] to-[#0F1A38] p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="pointer-events-none absolute -right-24 -top-24 size-96 rounded-full bg-white/10 blur-3xl" aria-hidden />
         <div className="pointer-events-none absolute -bottom-32 -left-16 size-96 rounded-full bg-emerald-400/20 blur-3xl" aria-hidden />
         <div className="relative flex items-center gap-3">

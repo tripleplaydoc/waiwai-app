@@ -47,7 +47,7 @@ export function AddAccountButton({ workspaceId, today }: { workspaceId: string; 
             <input id="acct-date" name="openingDate" type="date" defaultValue={today} className="input" />
           </div>
           <p className="text-xs text-slate-500">Use a minus sign for a credit card balance you owe, e.g. -450.00.</p>
-          {state && !state.ok && <p role="alert" className="text-sm text-[#DC2626]">{state.error}</p>}
+          {state && !state.ok && <p role="alert" className="text-sm text-[#C9372C]">{state.error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel <span className="kbd">Esc</span></button>
             <button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Saving…" : "Save account"}</button>

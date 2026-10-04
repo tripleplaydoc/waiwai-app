@@ -70,23 +70,23 @@ export function ImportClient({ accounts, initialAccountId, workspaceLabel, wsQue
         <section className="card overflow-hidden" aria-live="polite">
           <div className="flex flex-wrap items-center gap-3 border-b border-[#E2E8F0] px-4 py-3 dark:border-slate-800">
             <strong className="text-sm">{parsed.rows.length} row{parsed.rows.length === 1 ? "" : "s"} ready</strong>
-            {parsed.errors.length > 0 && <span className="text-sm text-[#D97706]">{parsed.errors.length} skipped</span>}
+            {parsed.errors.length > 0 && <span className="text-sm text-[#8A5A00]">{parsed.errors.length} skipped</span>}
             <button type="button" className="btn btn-primary ml-auto" disabled={pending || parsed.rows.length === 0 || result?.ok === true} onClick={commit}>
               {pending ? "Importing…" : `Import ${parsed.rows.length} transactions`}
             </button>
           </div>
 
           {result && (result.ok ? (
-            <div className="border-b border-[#E2E8F0] bg-emerald-50 px-4 py-3 text-sm text-[#059669] dark:border-slate-800 dark:bg-emerald-950">
+            <div className="border-b border-[#E2E8F0] bg-emerald-50 px-4 py-3 text-sm text-[#2E7D32] dark:border-slate-800 dark:bg-emerald-950">
               Imported {result.imported}; skipped {result.duplicates} already-imported duplicate{result.duplicates === 1 ? "" : "s"}.{" "}
               <Link className="font-semibold underline" href={`/accounts/${result.accountId}${wsQuery}`}>Open the account to categorize them →</Link>
             </div>
           ) : (
-            <div role="alert" className="border-b border-[#E2E8F0] bg-red-50 px-4 py-3 text-sm text-[#DC2626] dark:border-slate-800 dark:bg-red-950">{result.error}</div>
+            <div role="alert" className="border-b border-[#E2E8F0] bg-red-50 px-4 py-3 text-sm text-[#C9372C] dark:border-slate-800 dark:bg-red-950">{result.error}</div>
           ))}
 
           {parsed.errors.length > 0 && (
-            <ul className="border-b border-[#E2E8F0] px-4 py-3 text-xs text-[#D97706] dark:border-slate-800">
+            <ul className="border-b border-[#E2E8F0] px-4 py-3 text-xs text-[#8A5A00] dark:border-slate-800">
               {parsed.errors.slice(0, 10).map((e) => <li key={e.line}>Line {e.line}: {e.message}</li>)}
               {parsed.errors.length > 10 && <li>…and {parsed.errors.length - 10} more.</li>}
             </ul>
@@ -95,7 +95,7 @@ export function ImportClient({ accounts, initialAccountId, workspaceLabel, wsQue
           {parsed.rows.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] border-collapse">
-                <thead className="border-b border-[#E2E8F0] bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
+                <thead className="border-b border-[#E2E8F0] bg-navy-soft dark:border-slate-800 dark:bg-slate-800/50">
                   <tr><th className="th">Date</th><th className="th">Payee</th><th className="th">Memo</th><th className="th text-right">Amount</th></tr>
                 </thead>
                 <tbody>
@@ -104,7 +104,7 @@ export function ImportClient({ accounts, initialAccountId, workspaceLabel, wsQue
                       <td className="td nums whitespace-nowrap">{r.date}</td>
                       <td className="td">{r.payee}</td>
                       <td className="td max-w-xs truncate text-slate-500">{r.memo}</td>
-                      <td className={`td nums text-right ${r.amountCents < 0 ? "" : "text-[#059669]"}`}>{formatCents(r.amountCents)}</td>
+                      <td className={`td nums text-right ${r.amountCents < 0 ? "" : "text-[#2E7D32]"}`}>{formatCents(r.amountCents)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -9,7 +9,7 @@ const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([typ
  * Keyboard-first dialog: ESC closes, Tab/Shift+Tab stay inside, the first
  * field gets focus on open, and focus returns to whatever opened it.
  */
-export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
@@ -36,7 +36,7 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 sm:items-center" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} className="card w-full max-w-lg p-5 shadow-xl">
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`card w-full ${wide ? "max-w-3xl" : "max-w-lg"} p-5 shadow-xl`}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
           <button type="button" onClick={onClose} className="btn size-10 !px-0" aria-label="Close (Esc)"><X className="size-4" aria-hidden /></button>

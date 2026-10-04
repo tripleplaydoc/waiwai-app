@@ -1,21 +1,45 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Target } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
 import { getBudgetSummary, type EnvelopeRow } from "@/lib/budget/summary";
-import { formatCents, centsToInput } from "@/lib/utils/currency";
+import { budgetHealth, describeMonths, pocketProgress } from "@/lib/budget/targets";
+import type { GroupVM, PocketVM } from "@/lib/budget/board-types";
+import { formatCents } from "@/lib/utils/currency";
 import { monthFromParam, monthLabel, monthParam, shiftMonth } from "@/lib/utils/dates";
-import { AssignedInput, AutoAssignButton, AddCategoryButton } from "./budget-controls";
+import { AutoAssignButton } from "./budget-controls";
+import { AllocationButton } from "./allocation-dialog";
+import { BudgetBoard } from "./budget-board";
+import { IncomeSection } from "./income-section";
 
 export const dynamic = "force-dynamic";
 
 type SP = Promise<{ ws?: string; month?: string }>;
 
-function availableClass(cents: number) {
-  if (cents < 0) return "text-[#DC2626] font-semibold";
-  if (cents > 0) return "text-[#059669] font-semibold";
-  return "text-slate-400";
+function toVM(r: EnvelopeRow, month: Date): PocketVM {
+  const progress = pocketProgress(
+    {
+      assignedCents: r.assignedCents, activityCents: r.activityCents, availableCents: r.availableCents,
+      targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate ? new Date(`${r.targetDate}T00:00:00.000Z`) : null,
+    },
+    month
+  );
+  return {
+    id: r.id, name: r.name, groupId: r.groupId, assignedCents: r.assignedCents, activityCents: r.activityCents,
+    availableCents: r.availableCents, isSystemManaged: r.isSystemManaged, isTaxDeductible: r.isTaxDeductible,
+    priorityRank: r.priorityRank, targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate,
+    allocationBps: r.allocationBps, progress,
+  };
+}
+
+function Meter({ value, tone }: { value: number; tone: "pos" | "warn" | "neg" | "blue" }) {
+  const color = { pos: "bg-pos", warn: "bg-warn", neg: "bg-neg", blue: "bg-[#2E6BE6]" }[tone];
+  return (
+    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="presentation">
+      <div className={`h-full rounded-full ${color} transition-[width] duration-500`} style={{ width: `${Math.round(Math.min(1, Math.max(0, value)) * 100)}%` }} />
+    </div>
+  );
 }
 
 export default async function BudgetPage({ searchParams }: { searchParams: SP }) {
@@ -35,16 +59,38 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   ]);
 
   const rta = summary.readyToAssignCents;
-  const incomeRows = summary.rows.filter((r) => r.type === "INCOME");
-  const envelopeGroups = summary.groups
-    .map((g) => ({ ...g, rows: g.rows.filter((r) => r.type !== "INCOME") }))
-    .filter((g) => g.rows.length > 0);
-  const hasRanked = summary.rows.some((r) => r.priorityRank !== null);
+  const incomeRows = summary.rows.filter((r) => r.type === "INCOME").map((r) => toVM(r, month));
+  const expenseRows = summary.rows.filter((r) => r.type !== "INCOME");
+
+  // Board groups: every category that isn't income-only (empty ones stay visible).
+  const boardGroups: GroupVM[] = summary.groups
+    .map((g) => ({
+      id: g.id ?? "__none",
+      name: g.name,
+      allocationBps: g.allocationBps,
+      pockets: g.rows.filter((r) => r.type !== "INCOME").map((r) => toVM(r, month)),
+      hasIncome: g.rows.some((r) => r.type === "INCOME"),
+    }))
+    .filter((g) => !(g.hasIncome && g.pockets.length === 0) && !(g.id === "__none" && g.pockets.length === 0))
+    .map(({ hasIncome: _h, ...g }) => g);
+  const allGroups = groupsDb.map((g) => ({ id: g.id, name: g.name }));
+
+  const allPockets = boardGroups.flatMap((g) => g.pockets);
+  const health = budgetHealth(
+    allPockets.map((p) => ({
+      input: { assignedCents: p.assignedCents, activityCents: p.activityCents, availableCents: p.availableCents, targetType: p.targetType, targetCents: p.targetCents, targetDate: p.targetDate ? new Date(`${p.targetDate}T00:00:00.000Z`) : null },
+      progress: p.progress,
+    })),
+    rta
+  );
+  const goals = allPockets.filter((p) => p.targetType === "TARGET_BALANCE" || p.targetType === "TARGET_BALANCE_BY_DATE");
+  const hasRanked = expenseRows.some((r) => r.priorityRank !== null);
+  const anyTargets = health.monthlyCostCents > 0 || health.stillNeededCents > 0 || goals.length > 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{workspace.name} budget</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{workspace.name} budget</h1>
         <div className="ml-auto flex items-center gap-1">
           <Link href={`/budget?month=${monthParam(shiftMonth(month, -1))}${wsQ}`} className="btn size-11 !px-0" aria-label="Previous month"><ChevronLeft className="size-4" aria-hidden /></Link>
           <span className="min-w-36 text-center text-sm font-semibold">{monthLabel(month)}</span>
@@ -52,118 +98,112 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </div>
       </div>
 
-      <section aria-label="Ready to assign" className={`card flex flex-wrap items-center gap-4 p-6 ${
-          rta < 0
-            ? "border-red-300 bg-gradient-to-br from-red-50 to-white dark:border-red-900 dark:from-red-950/40 dark:to-slate-900"
-            : "bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-950/30 dark:via-slate-900 dark:to-slate-900"
-        }`}>
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            {rta < 0 ? "Over-assigned" : "Ready to assign"}
-          </div>
-          <div className={`nums text-4xl font-semibold tracking-tight ${rta < 0 ? "text-[#DC2626]" : "text-[#059669]"}`}>{formatCents(rta)}</div>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {rta < 0
-              ? "You've assigned more than you've received. Lower an envelope below."
-              : rta === 0
-                ? "Every dollar has a job."
-                : "Income received that hasn't been given to an envelope yet."}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Ready to assign */}
+        <section aria-label="Ready to assign" className={`card flex flex-col p-5 ${rta < 0 ? "!border-red-300 bg-neg-soft/50" : "bg-pos-soft/60 dark:bg-pos-soft/10"}`}>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">{rta < 0 ? "Over-assigned" : "Ready to assign"}</div>
+          <div className={`nums mt-1 text-4xl font-bold tracking-tight ${rta < 0 ? "text-neg" : "text-pos"}`}>{formatCents(rta)}</div>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+            {rta < 0 ? "You've assigned more than you've received. Lower a pocket below." : rta === 0 ? "Every dollar has a job." : "Income that hasn't been given to a pocket yet."}
           </p>
-        </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {needsReview > 0 && (
-            <Link href={`/accounts${wsKey === "business" ? "?ws=business" : ""}`} className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-[#D97706] dark:border-amber-700 dark:bg-amber-950">
-              {needsReview} transaction{needsReview === 1 ? "" : "s"} need a category
-            </Link>
+          <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+            <AllocationButton workspaceId={workspace.id} month={mp} groups={boardGroups} readyToAssignCents={rta} />
+            {hasRanked && <AutoAssignButton workspaceId={workspace.id} month={mp} />}
+          </div>
+        </section>
+
+        {/* Can I cover it */}
+        <section aria-label="Can I cover everything" className="card p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Can I cover this month?</div>
+          {!anyTargets ? (
+            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Give your pockets a <strong>monthly cost</strong> or a <strong>goal</strong> and I&apos;ll show whether your money covers it.</p>
+          ) : (
+            <>
+              <div className={`mt-1 text-xl font-bold tracking-tight ${health.canCover ? "text-pos" : "text-warn"}`}>
+                {health.stillNeededCents === 0 ? "Everything is funded" : health.canCover ? "Yes, you can cover it" : `Short by ${formatCents(health.shortfallCents)}`}
+              </div>
+              <div className="mt-3"><Meter value={health.stillNeededCents === 0 ? 1 : Math.max(0, rta) / health.stillNeededCents} tone={health.canCover ? "pos" : "warn"} /></div>
+              <dl className="nums mt-3 grid grid-cols-[1fr_auto] gap-y-1 text-sm">
+                <dt className="text-slate-500">Monthly costs you&apos;ve set</dt><dd className="text-right font-medium">{formatCents(health.monthlyCostCents)}</dd>
+                {health.goalPaceCents > 0 && (<><dt className="text-slate-500">Goals, this month&apos;s pace</dt><dd className="text-right font-medium">{formatCents(health.goalPaceCents)}</dd></>)}
+                <dt className="text-slate-500">Still to assign</dt><dd className="text-right font-medium">{formatCents(health.stillNeededCents)}</dd>
+                <dt className="text-slate-500">Ready to assign</dt><dd className="text-right font-medium">{formatCents(Math.max(0, rta))}</dd>
+              </dl>
+            </>
           )}
-          {hasRanked && <AutoAssignButton workspaceId={workspace.id} month={mp} />}
-          <AddCategoryButton
-            workspaceId={workspace.id}
-            isBusiness={workspace.type === "BUSINESS"}
-            groups={groupsDb.map((g) => ({ id: g.id, name: g.name }))}
-          />
-        </div>
-      </section>
+        </section>
+
+        {/* Months ahead */}
+        <section aria-label="Months ahead" className="card p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Months ahead</div>
+          {health.monthsAhead === null ? (
+            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Set monthly costs on your pockets to see how many months your money lasts.</p>
+          ) : (
+            <>
+              <div className="nums mt-1 text-4xl font-bold tracking-tight text-[#2E6BE6] dark:text-blue-300">
+                {health.monthsAhead.toFixed(1)} <span className="text-lg font-semibold">months</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                {describeMonths(health.monthsAhead)} of your {formatCents(health.monthlyCostCents)}/mo costs are covered by money already in your pockets ({formatCents(health.pocketMoneyCents)}).
+              </p>
+              <div className="mt-3"><Meter value={health.monthsAhead / 6} tone="blue" /></div>
+              <div className="nums mt-1 flex justify-between text-[10px] text-slate-400"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6+ mo</span></div>
+              {rta > 0 && health.monthsAheadWithRta !== null && (
+                <p className="mt-2 text-xs text-slate-500">Assign your {formatCents(rta)} too and you&apos;d be <strong>{health.monthsAheadWithRta.toFixed(1)} months</strong> ahead.</p>
+              )}
+            </>
+          )}
+        </section>
+      </div>
 
       {accountCount === 0 && (
         <div className="card p-5 text-sm">
           <strong>Start here:</strong> add an account (checking, savings, card…) on the{" "}
-          <Link className="font-medium text-[#4F46E5] underline dark:text-indigo-300" href={`/accounts${wsKey === "business" ? "?ws=business" : ""}`}>Accounts</Link>{" "}
+          <Link className="font-medium text-[#2E6BE6] underline dark:text-blue-300" href={`/accounts${wsKey === "business" ? "?ws=business" : ""}`}>Accounts</Link>{" "}
           page, then record your first paycheck as an inflow in an Income category. It will appear above as Ready to assign.
+          {needsReview > 0 && null}
         </div>
       )}
+      {needsReview > 0 && (
+        <Link href={`/accounts${wsKey === "business" ? "?ws=business" : ""}`} className="inline-block rounded-xl border border-amber-300 bg-warn-soft px-3 py-2 text-xs font-medium text-warn dark:border-amber-700">
+          {needsReview} transaction{needsReview === 1 ? "" : "s"} need a category
+        </Link>
+      )}
 
-      <section className="card overflow-hidden" aria-label="Envelopes">
-        <table className="w-full border-collapse">
-          <thead className="border-b border-[#E2E8F0] bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
-            <tr>
-              <th className="th">Envelope</th>
-              <th className="th text-right">Assigned</th>
-              <th className="th text-right">Activity</th>
-              <th className="th text-right">Available</th>
-            </tr>
-          </thead>
-          <tbody>
-            {envelopeGroups.length === 0 && (
-              <tr><td colSpan={4} className="td text-slate-500">No envelopes yet. Use “Add category”.</td></tr>
-            )}
-            {envelopeGroups.map((g) => (
-              <GroupRows key={g.id ?? "other"} name={g.name} rows={g.rows} month={mp} />
-            ))}
-          </tbody>
-          <tfoot className="border-t border-[#E2E8F0] bg-slate-50 font-semibold dark:border-slate-800 dark:bg-slate-950/40">
-            <tr>
-              <td className="td">Totals</td>
-              <td className="td nums text-right">{formatCents(summary.totalAssignedCents)}</td>
-              <td className="td nums text-right">{formatCents(summary.totalActivityCents)}</td>
-              <td className={`td nums text-right ${availableClass(summary.totalAvailableCents)}`}>{formatCents(summary.totalAvailableCents)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </section>
-
-      {incomeRows.length > 0 && (
-        <section className="card overflow-hidden" aria-label="Income">
-          <table className="w-full border-collapse">
-            <thead className="border-b border-[#E2E8F0] bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
-              <tr><th className="th">Income category</th><th className="th text-right">Received this month</th></tr>
-            </thead>
-            <tbody>
-              {incomeRows.map((r) => (
-                <tr key={r.id} className="border-b border-[#E2E8F0] last:border-0 dark:border-slate-800">
-                  <td className="td">{r.name}</td>
-                  <td className="td nums text-right text-[#059669]">{formatCents(r.activityCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {goals.length > 0 && (
+        <section className="card p-5" aria-label="Goals">
+          <h2 className="mb-4 flex items-center gap-2 text-base font-bold tracking-tight"><Target className="size-4 text-[#2E6BE6]" aria-hidden /> Goals</h2>
+          <ul className="grid gap-5 md:grid-cols-2">
+            {goals.map((p) => {
+              const pr = p.progress;
+              const by = p.targetDate ? new Date(`${p.targetDate}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) : null;
+              return (
+                <li key={p.id}>
+                  <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                    <span className="truncate text-sm font-semibold">{p.name}</span>
+                    <span className="nums text-xs text-slate-500">{formatCents(Math.max(0, p.availableCents))} / {formatCents(pr.targetCents)}</span>
+                  </div>
+                  <Meter value={pr.progress} tone={pr.state === "overspent" ? "neg" : pr.stillNeededCents === 0 ? "pos" : "warn"} />
+                  <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
+                    {by ? <>Reach by <strong>{by}</strong> — put in <strong className="nums">{formatCents(pr.needThisMonthCents)}</strong> a month{pr.monthsLeft ? ` (${pr.monthsLeft} month${pr.monthsLeft === 1 ? "" : "s"} left)` : ""}. </> : <>Build up to <strong className="nums">{formatCents(pr.targetCents)}</strong>. </>}
+                    {pr.stillNeededCents > 0 ? <span className="text-warn">Still need {formatCents(pr.stillNeededCents)} this month.</span> : <span className="text-pos">On track this month.</span>}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
+
+      <BudgetBoard workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />
+
+      {incomeRows.length > 0 && (
+        <IncomeSection workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} rows={incomeRows} allGroups={allGroups} />
+      )}
+
+      <section className="card px-5 py-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Totals">
+        <span className="nums">Totals this month — assigned {formatCents(summary.totalAssignedCents)} · activity {formatCents(summary.totalActivityCents)} · available {formatCents(summary.totalAvailableCents)}</span>
+      </section>
     </div>
   );
 }
-
-function GroupRows({ name, rows, month }: { name: string; rows: EnvelopeRow[]; month: string }) {
-  return (
-    <>
-      <tr className="bg-slate-50 dark:bg-slate-800/40">
-        <th colSpan={4} scope="colgroup" className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300">{name}</th>
-      </tr>
-      {rows.map((r) => (
-        <tr key={r.id} className="border-b border-[#E2E8F0] last:border-0 transition-colors hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/30">
-          <td className="td">
-            <span className="font-medium">{r.name}</span>
-            {r.priorityRank !== null && <span className="ml-2 rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-[#4F46E5] dark:bg-indigo-950 dark:text-indigo-300">P{r.priorityRank}</span>}
-            {r.isSystemManaged && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800">system</span>}
-          </td>
-          <td className="td text-right">
-            <AssignedInput categoryId={r.id} month={month} initial={centsToInput(r.assignedCents)} label={`Assigned to ${r.name}`} />
-          </td>
-          <td className="td nums text-right text-slate-600 dark:text-slate-300">{formatCents(r.activityCents)}</td>
-          <td className={`td nums text-right ${availableClass(r.availableCents)}`}>{formatCents(r.availableCents)}</td>
-        </tr>
-      ))}
-    </>
-  );
-}
-

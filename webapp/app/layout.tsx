@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
+import "@fontsource-variable/inter";
 import "./globals.css";
 import { getCurrentUser } from "@/lib/auth";
 import { Nav } from "@/components/nav";

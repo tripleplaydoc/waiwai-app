@@ -26,14 +26,14 @@ export function SetupForm({ firstTime }: { firstTime: boolean }) {
       <PasswordField id="password" name="password" label="New password" autoComplete="new-password" hint="At least 10 characters." />
       <PasswordField id="confirm" name="confirm" label="Confirm new password" autoComplete="new-password" />
       {state?.error && (
-        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#DC2626] dark:border-red-900 dark:bg-red-950/40">{state.error}</p>
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#C9372C] dark:border-red-900 dark:bg-red-950/40">{state.error}</p>
       )}
       <button type="submit" disabled={pending} className="btn btn-primary w-full">
         {pending ? "Saving…" : firstTime ? "Create account" : "Reset and sign in"}
       </button>
       {!firstTime && (
         <p className="text-center text-xs">
-          <Link href="/login" className="font-medium text-[#4F46E5] hover:underline dark:text-indigo-300">Back to sign in</Link>
+          <Link href="/login" className="font-medium text-[#2E6BE6] hover:underline dark:text-indigo-300">Back to sign in</Link>
         </p>
       )}
     </form>

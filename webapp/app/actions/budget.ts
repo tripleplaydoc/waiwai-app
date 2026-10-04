@@ -56,67 +56,6 @@ export async function autoAssignAction(formData: FormData): Promise<ActionResult
   }
 }
 
-const categorySchema = z.object({
-  workspaceId: z.string().min(1),
-  name: z.string().trim().min(1, "Name is required").max(80),
-  groupId: z.string().optional(),
-  newGroupName: z.string().trim().max(80).optional(),
-  type: z.enum(["EXPENSE", "INCOME"]),
-  target: z.string().optional(),
-  priorityRank: z.string().optional(),
-  isTaxDeductible: z.string().optional(),
-});
-
-export async function createCategoryAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
-  await assertAuthed();
-  const parsed = categorySchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
-  const d = parsed.data;
-
-  const workspace = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
-  if (!workspace) return { ok: false, error: "Workspace not found." };
-
-  let groupId: string | null = d.groupId && d.groupId !== "__new" ? d.groupId : null;
-  if (d.groupId === "__new") {
-    if (!d.newGroupName) return { ok: false, error: "Name the new group." };
-    const g = await prisma.categoryGroup.create({ data: { workspaceId: d.workspaceId, name: d.newGroupName } });
-    groupId = g.id;
-  } else if (groupId) {
-    const g = await prisma.categoryGroup.findFirst({ where: { id: groupId, workspaceId: d.workspaceId } });
-    if (!g) return { ok: false, error: "Group not found." };
-  }
-
-  let targetCents: number | null = null;
-  if (d.target && d.target.trim() !== "") {
-    targetCents = parseToCents(d.target);
-    if (targetCents === null || targetCents <= 0) return { ok: false, error: "Monthly target must be an amount like 500.00" };
-  }
-  let rank: number | null = null;
-  if (d.priorityRank && d.priorityRank.trim() !== "") {
-    rank = Number(d.priorityRank);
-    if (!Number.isInteger(rank) || rank < 1 || rank > 999) return { ok: false, error: "Priority must be a whole number from 1 to 999." };
-  }
-
-  try {
-    await prisma.category.create({
-      data: {
-        workspaceId: d.workspaceId,
-        categoryGroupId: groupId,
-        name: d.name,
-        type: d.type,
-        isTaxDeductible: workspace.type === "BUSINESS" && d.type === "EXPENSE" && d.isTaxDeductible === "on",
-        priorityRank: d.type === "EXPENSE" ? rank : null,
-        fundingTargetType: d.type === "EXPENSE" && targetCents ? "MONTHLY_FUNDING" : null,
-        fundingTargetCents: d.type === "EXPENSE" ? targetCents : null,
-      },
-    });
-  } catch {
-    return { ok: false, error: "Couldn't save that category." };
-  }
-  revalidatePath("/budget");
-  return { ok: true };
-}
-
 /** Archives (never deletes) a category so historical transactions keep their reference. */
 export async function archiveCategoryAction(formData: FormData): Promise<void> {
   await assertAuthed();

@@ -1,14 +1,58 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* YNAB-inspired palette: deep navy chrome, friendly blue actions, green for
+   money you have, yellow for "needs attention", red for overspent. */
+:root {
+  --c-canvas: #F3F6FA;
+  --c-navy: #1F2E5A;
+  --c-navy-soft: #E9EFF9;
+  --c-pos: #2E7D32;
+  --c-pos-soft: #D9F1D5;
+  --c-warn: #8A5A00;
+  --c-warn-soft: #FBEFB8;
+  --c-neg: #B3261E;
+  --c-neg-soft: #F9D5D1;
+}
+html.dark {
+  --c-canvas: #0B1220;
+  --c-navy: #121C3B;
+  --c-navy-soft: #1A2547;
+  --c-pos: #7FD58A;
+  --c-pos-soft: #17361F;
+  --c-warn: #F2C75C;
+  --c-warn-soft: #3A2E0B;
+  --c-neg: #FF8F86;
+  --c-neg-soft: #4A1B18;
+}
+
+@theme {
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-canvas: var(--c-canvas);
+  --color-navy: var(--c-navy);
+  --color-navy-soft: var(--c-navy-soft);
+  --color-pos: var(--c-pos);
+  --color-pos-soft: var(--c-pos-soft);
+  --color-warn: var(--c-warn);
+  --color-warn-soft: var(--c-warn-soft);
+  --color-neg: var(--c-neg);
+  --color-neg-soft: var(--c-neg-soft);
+  /* Re-point the "indigo" scale at a YNAB-style blue so every existing indigo class follows. */
+  --color-indigo-50: #EEF4FF; --color-indigo-100: #DCE8FF; --color-indigo-200: #BBD1FF;
+  --color-indigo-300: #8FB1FA; --color-indigo-400: #5F8EF2; --color-indigo-500: #2E6BE6;
+  --color-indigo-600: #2557C4; --color-indigo-700: #1E4699; --color-indigo-800: #1B3A78;
+  --color-indigo-900: #172E5E; --color-indigo-950: #0F1E40;
+}
+
 @layer base {
   html { color-scheme: light; }
   html.dark { color-scheme: dark; }
   body {
-    @apply bg-[#F8FAFC] text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    @apply bg-canvas font-sans text-slate-900 antialiased dark:text-slate-100;
+    letter-spacing: -0.006em;
+    font-feature-settings: "cv11", "ss03";
   }
-  :focus-visible { @apply outline-2 outline-offset-2 outline-[#4F46E5] dark:outline-indigo-400; }
+  :focus-visible { @apply outline-2 outline-offset-2 outline-[#2E6BE6] dark:outline-indigo-400; }
 }
 
 @layer components {
@@ -21,12 +65,15 @@
   .btn-primary {
     @apply border-transparent bg-gradient-to-b from-indigo-500 to-indigo-600 text-white shadow-sm shadow-indigo-600/30 hover:from-indigo-600 hover:to-indigo-700 dark:text-white;
   }
+  .btn-nav {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-3 text-sm font-medium text-white transition-colors hover:bg-white/15;
+  }
   .btn-sm { @apply min-h-9 px-3 py-1.5 text-xs; }
   .input {
-    @apply min-h-11 transition-shadow focus:border-[#4F46E5] focus:outline-none focus:ring-4 focus:ring-indigo-500/15 w-full rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100;
+    @apply min-h-11 transition-shadow focus:border-[#2E6BE6] focus:outline-none focus:ring-4 focus:ring-indigo-500/15 w-full rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100;
   }
   .label { @apply mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400; }
-  .nums { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  .nums { font-variant-numeric: tabular-nums; font-feature-settings: "tnum", "zero" 0, "cv11"; letter-spacing: -0.01em; }
   .th { @apply px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400; }
   .td { @apply px-4 py-2.5 text-sm; }
   .kbd { @apply rounded border border-slate-300 bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300; }

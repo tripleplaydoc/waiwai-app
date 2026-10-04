@@ -42,7 +42,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
           <Link href={`/accounts${wsQ}`} className="text-xs text-slate-500 hover:underline">← All accounts</Link>
           <h1 className="text-2xl font-semibold tracking-tight">{account.name}</h1>
         </div>
-        <div className={`nums text-2xl font-semibold ${balance < 0 ? "text-[#DC2626]" : "text-[#059669]"}`}>{formatCents(balance)}</div>
+        <div className={`nums text-2xl font-semibold ${balance < 0 ? "text-[#C9372C]" : "text-[#2E7D32]"}`}>{formatCents(balance)}</div>
         <div className="ml-auto flex gap-2">
           <Link href={`/import${wsQ}${wsQ ? "&" : "?"}account=${account.id}`} className="btn"><Upload className="size-4" aria-hidden /> Import CSV</Link>
           <AddTransactionButton
@@ -57,7 +57,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
 
       <section className="card overflow-x-auto">
         <table className="w-full min-w-[720px] border-collapse">
-          <thead className="border-b border-[#E2E8F0] bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
+          <thead className="border-b border-[#E2E8F0] bg-navy-soft dark:border-slate-800 dark:bg-slate-800/50">
             <tr>
               <th className="th">Date</th><th className="th">Payee</th><th className="th">Category</th>
               <th className="th text-right">Outflow</th><th className="th text-right">Inflow</th><th className="th"><span className="sr-only">Actions</span></th>
@@ -76,7 +76,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
                 </td>
                 <td className="td"><CategorySelect transactionId={t.id} current={t.categoryId ?? ""} options={catOptions} needsReview={t.needsReview} /></td>
                 <td className="td nums text-right">{t.amountCents < 0 ? formatCents(-t.amountCents) : ""}</td>
-                <td className="td nums text-right text-[#059669]">{t.amountCents > 0 ? formatCents(t.amountCents) : ""}</td>
+                <td className="td nums text-right text-[#2E7D32]">{t.amountCents > 0 ? formatCents(t.amountCents) : ""}</td>
                 <td className="td text-right">
                   <form action={deleteTransactionAction}>
                     <input type="hidden" name="transactionId" value={t.id} />

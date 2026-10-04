@@ -57,9 +57,9 @@ export function AddTransactionButton({ accountId, isBusiness, categories, payees
           <input type="hidden" name="accountId" value={accountId} />
           <fieldset className="flex gap-2" aria-label="Direction">
             {(["outflow", "inflow"] as const).map((d) => (
-              <label key={d} className={`flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-xl border px-4 text-sm font-medium capitalize has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[#4F46E5] ${
+              <label key={d} className={`flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-xl border px-4 text-sm font-medium capitalize has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[#2E6BE6] ${
                 direction === d
-                  ? d === "outflow" ? "border-[#DC2626] bg-red-50 text-[#DC2626] dark:bg-red-950" : "border-[#059669] bg-emerald-50 text-[#059669] dark:bg-emerald-950"
+                  ? d === "outflow" ? "border-[#C9372C] bg-red-50 text-[#C9372C] dark:bg-red-950" : "border-[#2E7D32] bg-emerald-50 text-[#2E7D32] dark:bg-emerald-950"
                   : "border-[#E2E8F0] dark:border-slate-700"
               }`}>
                 <input type="radio" name="direction" value={d} checked={direction === d} onChange={() => setDirection(d)} className="sr-only" />
@@ -99,7 +99,7 @@ export function AddTransactionButton({ accountId, isBusiness, categories, payees
               <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" /> Tax-deductible</label>
             )}
           </div>
-          {state && !state.ok && <p role="alert" className="text-sm text-[#DC2626]">{state.error}</p>}
+          {state && !state.ok && <p role="alert" className="text-sm text-[#C9372C]">{state.error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel <span className="kbd">Esc</span></button>
             <button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
@@ -122,7 +122,7 @@ export function CategorySelect({ transactionId, current, options, needsReview }:
         aria-label="Category"
         defaultValue={current}
         onChange={() => formRef.current?.requestSubmit()}
-        className={`input !min-h-10 !py-1.5 ${needsReview && !current ? "!border-[#D97706]" : ""}`}
+        className={`input !min-h-10 !py-1.5 ${needsReview && !current ? "!border-[#8A5A00]" : ""}`}
       >
         <option value="">{needsReview ? "Needs a category" : "Uncategorized"}</option>
         <CategoryOptions options={options} />

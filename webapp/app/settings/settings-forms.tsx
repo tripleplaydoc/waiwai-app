@@ -5,8 +5,8 @@ import { changePasswordAction, updateProfileAction } from "@/app/actions/setting
 import { PasswordField } from "@/components/password-field";
 
 function Notice({ state }: { state: { error?: string; ok?: string } | undefined }) {
-  if (state?.error) return <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#DC2626] dark:border-red-900 dark:bg-red-950/40">{state.error}</p>;
-  if (state?.ok) return <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-[#059669] dark:border-emerald-900 dark:bg-emerald-950/40">{state.ok}</p>;
+  if (state?.error) return <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#C9372C] dark:border-red-900 dark:bg-red-950/40">{state.error}</p>;
+  if (state?.ok) return <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-[#2E7D32] dark:border-emerald-900 dark:bg-emerald-950/40">{state.ok}</p>;
   return null;
 }
 

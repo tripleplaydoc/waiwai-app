@@ -175,6 +175,8 @@ enum AssignmentSource {
   CORRECTION
   /// Produced by a priority-waterfall auto-assign run. See WaterfallRun.
   AUTO_WATERFALL
+  /// Produced by "Assign by percentages" (category/pocket allocation split).
+  AUTO_PERCENT
 }
 
 enum TaxQuarter {
@@ -390,6 +392,9 @@ model CategoryGroup {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   sortOrder   Int       @default(0)
+  /// Share of income this category receives when assigning by percentages,
+  /// in basis points (2500 = 25.00%). Null = not part of the split.
+  allocationBps Int?
   isArchived  Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -424,6 +429,8 @@ model Category {
   /// category sits outside the waterfall (manual assignment only). Ties are
   /// allowed — the service layer decides how same-rank categories share a
   /// pass (e.g. funded in parallel).
+  /// Share of its category's allocation (basis points, 5000 = 50.00%).
+  allocationBps       Int?
   priorityRank        Int?
   fundingTargetType   FundingTargetType?
   fundingTargetCents  Int?
