@@ -8,27 +8,25 @@ export function wsKeyFromParam(param: string | string[] | undefined): WsKey {
   return param === "business" ? "business" : "personal";
 }
 
-const OWNER_EMAIL = "owner@financial-tracker.local";
-
 /**
- * First-run bootstrap. There is a single owner; the login is the APP_PASSWORD
- * gate, so the User row's passwordHash is an unusable placeholder. Creates the
+ * First-run bootstrap. There is a single owner; the owner signs in with
+ * email + password. Creates the
  * Personal and Business workspaces (and the Business "Estimated Tax Reserve"
  * system envelope + tax profile) the first time the app runs. Idempotent.
  */
 export async function ensureWorkspaces(): Promise<{ personal: Workspace; business: Workspace }> {
   const existing = await prisma.workspace.findMany({
-    where: { owner: { email: OWNER_EMAIL }, isArchived: false },
+    where: { isArchived: false },
   });
   let personal = existing.find((w) => w.type === "PERSONAL");
   let business = existing.find((w) => w.type === "BUSINESS");
   if (personal && business) return { personal, business };
 
-  const owner = await prisma.user.upsert({
-    where: { email: OWNER_EMAIL },
-    update: {},
-    create: { email: OWNER_EMAIL, name: "Owner", passwordHash: "!login-handled-by-APP_PASSWORD" },
-  });
+  // Single owner: reuse the account created at sign-up (its email can change),
+  // or make a placeholder that sign-up will take over.
+  const owner =
+    (await prisma.user.findFirst({ orderBy: { createdAt: "asc" } })) ??
+    (await prisma.user.create({ data: { email: "owner@financial-tracker.local", name: "Owner", passwordHash: "!setup-pending" } }));
 
   if (!personal) {
     personal = await prisma.workspace.create({ data: { ownerId: owner.id, name: "Personal", type: "PERSONAL" } });

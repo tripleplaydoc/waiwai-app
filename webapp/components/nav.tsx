@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Moon, Sun, LogOut, Wallet, Landmark, Upload } from "lucide-react";
+import { Moon, Sun, LogOut, Wallet, Landmark, Upload, Settings } from "lucide-react";
+import { BrandName } from "@/components/brand";
 import { logoutAction } from "@/app/actions/auth";
 
-export function Nav() {
+export function Nav({ initial }: { initial: string }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const ws = params.get("ws") === "business" ? "business" : "personal";
@@ -26,10 +27,10 @@ export function Nav() {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[#E2E8F0] bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+    <header className="sticky top-0 z-30 border-b border-[#E2E8F0] bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 px-4 py-2 sm:px-6">
-        <Link href={`/budget${q(ws)}`} className="mr-2 text-base font-semibold tracking-tight">
-          Financial Tracker
+        <Link href={`/budget${q(ws)}`} className="mr-3" aria-label="Financial Tracker home">
+          <BrandName />
         </Link>
         <nav className="flex items-center gap-1" aria-label="Main">
           {links.map(({ href, label, icon: Icon }) => {
@@ -69,6 +70,15 @@ export function Nav() {
             <Sun className="size-4 dark:hidden" aria-hidden />
             <Moon className="hidden size-4 dark:block" aria-hidden />
           </button>
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            title="Settings"
+            className={`btn size-11 !px-0 ${pathname === "/settings" ? "!border-[#4F46E5] !text-[#4F46E5]" : ""}`}
+          >
+            <Settings className="size-4" aria-hidden />
+          </Link>
+          <span aria-hidden className="flex size-11 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 text-sm font-semibold text-white">{initial}</span>
           <form action={logoutAction}>
             <button type="submit" className="btn size-11 !px-0" aria-label="Sign out">
               <LogOut className="size-4" aria-hidden />

@@ -44,7 +44,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">{workspace.name} budget</h1>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{workspace.name} budget</h1>
         <div className="ml-auto flex items-center gap-1">
           <Link href={`/budget?month=${monthParam(shiftMonth(month, -1))}${wsQ}`} className="btn size-11 !px-0" aria-label="Previous month"><ChevronLeft className="size-4" aria-hidden /></Link>
           <span className="min-w-36 text-center text-sm font-semibold">{monthLabel(month)}</span>
@@ -52,12 +52,16 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </div>
       </div>
 
-      <section aria-label="Ready to assign" className={`card flex flex-wrap items-center gap-4 p-5 ${rta < 0 ? "border-[#DC2626]" : ""}`}>
+      <section aria-label="Ready to assign" className={`card flex flex-wrap items-center gap-4 p-6 ${
+          rta < 0
+            ? "border-red-300 bg-gradient-to-br from-red-50 to-white dark:border-red-900 dark:from-red-950/40 dark:to-slate-900"
+            : "bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-950/30 dark:via-slate-900 dark:to-slate-900"
+        }`}>
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {rta < 0 ? "Over-assigned" : "Ready to assign"}
           </div>
-          <div className={`nums text-3xl font-semibold ${rta < 0 ? "text-[#DC2626]" : "text-[#059669]"}`}>{formatCents(rta)}</div>
+          <div className={`nums text-4xl font-semibold tracking-tight ${rta < 0 ? "text-[#DC2626]" : "text-[#059669]"}`}>{formatCents(rta)}</div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {rta < 0
               ? "You've assigned more than you've received. Lower an envelope below."
@@ -142,11 +146,11 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
 function GroupRows({ name, rows, month }: { name: string; rows: EnvelopeRow[]; month: string }) {
   return (
     <>
-      <tr className="bg-slate-100/70 dark:bg-slate-800/40">
-        <th colSpan={4} scope="colgroup" className="px-4 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{name}</th>
+      <tr className="bg-slate-50 dark:bg-slate-800/40">
+        <th colSpan={4} scope="colgroup" className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300">{name}</th>
       </tr>
       {rows.map((r) => (
-        <tr key={r.id} className="border-b border-[#E2E8F0] last:border-0 dark:border-slate-800">
+        <tr key={r.id} className="border-b border-[#E2E8F0] last:border-0 transition-colors hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/30">
           <td className="td">
             <span className="font-medium">{r.name}</span>
             {r.priorityRank !== null && <span className="ml-2 rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-[#4F46E5] dark:bg-indigo-950 dark:text-indigo-300">P{r.priorityRank}</span>}
