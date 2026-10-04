@@ -7,6 +7,7 @@
   --c-canvas: #F3F6FA;
   --c-navy: #1F2E5A;
   --c-navy-soft: #E9EFF9;
+  --c-group: #2A4380;
   --c-pos: #2E7D32;
   --c-pos-soft: #D9F1D5;
   --c-warn: #8A5A00;
@@ -18,6 +19,7 @@ html.dark {
   --c-canvas: #0B1220;
   --c-navy: #121C3B;
   --c-navy-soft: #1A2547;
+  --c-group: #243A72;
   --c-pos: #7FD58A;
   --c-pos-soft: #17361F;
   --c-warn: #F2C75C;
@@ -31,6 +33,7 @@ html.dark {
   --color-canvas: var(--c-canvas);
   --color-navy: var(--c-navy);
   --color-navy-soft: var(--c-navy-soft);
+  --color-group: var(--c-group);
   --color-pos: var(--c-pos);
   --color-pos-soft: var(--c-pos-soft);
   --color-warn: var(--c-warn);

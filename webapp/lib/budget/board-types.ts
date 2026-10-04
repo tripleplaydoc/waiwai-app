@@ -1,4 +1,5 @@
 import type { PocketProgress } from "./targets";
+import type { BillStatus } from "./bills";
 
 export interface PocketVM {
   id: string;
@@ -14,6 +15,9 @@ export interface PocketVM {
   targetCents: number | null;
   targetDate: string | null;
   allocationBps: number | null;
+  dueDay: number | null;
+  manualPaid: boolean;
+  bill: BillStatus | null;
   progress: PocketProgress;
 }
 

@@ -19,6 +19,8 @@ export interface EnvelopeRow {
   targetCents: number | null;
   targetDate: string | null; // YYYY-MM-DD
   allocationBps: number | null;
+  dueDay: number | null;
+  manualPaid: boolean;
 }
 
 export interface GroupRow {
@@ -48,7 +50,7 @@ export interface BudgetSummary {
 export async function getBudgetSummary(workspaceId: string, month: Date): Promise<BudgetSummary> {
   const nextMonth = addMonthsUTC(month, 1);
 
-  const [groupsDb, categories, assignedMonth, assignedCum, directCum, directMonth, splitCum, splitMonth, rta] =
+  const [groupsDb, categories, assignedMonth, assignedCum, directCum, directMonth, splitCum, splitMonth, rta, paidRows] =
     await Promise.all([
       prisma.categoryGroup.findMany({ where: { workspaceId, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
       prisma.category.findMany({ where: { workspaceId, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
@@ -59,7 +61,9 @@ export async function getBudgetSummary(workspaceId: string, month: Date): Promis
       prisma.transactionSplit.groupBy({ by: ["categoryId"], where: { transaction: { workspaceId, date: { lt: nextMonth } } }, _sum: { amountCents: true } }),
       prisma.transactionSplit.groupBy({ by: ["categoryId"], where: { transaction: { workspaceId, date: { gte: month, lt: nextMonth } } }, _sum: { amountCents: true } }),
       getReadyToAssign(prisma, workspaceId, new Date(nextMonth.getTime() - 1)),
+      prisma.billPayment.findMany({ where: { category: { workspaceId }, month }, select: { categoryId: true } }),
     ]);
+  const paidSet = new Set(paidRows.map((r) => r.categoryId));
 
   const toMap = (rows: { categoryId: string | null; _sum: { amountCents: number | null } }[]) => {
     const m = new Map<string, number>();
@@ -89,6 +93,8 @@ export async function getBudgetSummary(workspaceId: string, month: Date): Promis
       targetCents: c.fundingTargetCents,
       targetDate: c.fundingTargetByDate ? c.fundingTargetByDate.toISOString().slice(0, 10) : null,
       allocationBps: c.allocationBps,
+      dueDay: c.dueDay,
+      manualPaid: paidSet.has(c.id),
     };
   });
 

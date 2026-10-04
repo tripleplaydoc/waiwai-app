@@ -3,7 +3,8 @@ import { Suspense } from "react";
 import "@fontsource-variable/inter";
 import "./globals.css";
 import { getCurrentUser } from "@/lib/auth";
-import { Nav } from "@/components/nav";
+import { BottomTabs, Nav } from "@/components/nav";
+import { QuickAdd } from "@/components/quick-add";
 
 export const metadata: Metadata = {
   title: "Financial Tracker",
@@ -27,10 +28,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         {authed && (
           <Suspense fallback={null}>
-            <Nav initial={(user?.name || user?.email || "?").trim().charAt(0).toUpperCase()} />
+            <Nav initial={(user?.name || user?.email || "?").trim().charAt(0).toUpperCase()} name={user?.name ?? ""} email={user?.email ?? ""} />
           </Suspense>
         )}
-        {authed ? <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">{children}</main> : children}
+        {authed ? <main className="mx-auto w-full max-w-6xl px-4 pb-32 pt-6 sm:px-6 md:pb-24 md:pt-8">{children}</main> : children}
+        {authed && (
+          <Suspense fallback={null}>
+            <BottomTabs />
+            <QuickAdd />
+          </Suspense>
+        )}
       </body>
     </html>
   );

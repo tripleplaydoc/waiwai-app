@@ -431,6 +431,8 @@ model Category {
   /// pass (e.g. funded in parallel).
   /// Share of its category's allocation (basis points, 5000 = 50.00%).
   allocationBps       Int?
+  /// Day of the month this bill/expense is due (1-31; short months use their last day). Null = no due date.
+  dueDay              Int?
   priorityRank        Int?
   fundingTargetType   FundingTargetType?
   fundingTargetCents  Int?
@@ -448,6 +450,7 @@ model Category {
   receiptLineItems      ReceiptLineItem[]
   defaultForProducts    Product[]
   budgetRecommendations BudgetRecommendation[]
+  billPayments          BillPayment[]
 
   @@index([workspaceId])
   @@index([workspaceId, type])
@@ -460,6 +463,21 @@ model Category {
 /// Rolling "available" balance = cumulative(assignments) −
 /// cumulative(transaction activity) through that month — computed in the
 /// service layer, not stored here (see header note).
+/// "I paid this bill" marker for one pocket in one month. Payments recorded as
+/// transactions also count as paid automatically; this covers bills paid
+/// outside the app or a month-by-month manual tick.
+model BillPayment {
+  id         String   @id @default(cuid())
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  /// First of the month the payment covers, e.g. 2026-10-01.
+  month      DateTime @db.Date
+  paidAt     DateTime @default(now())
+
+  @@unique([categoryId, month])
+  @@map("bill_payments")
+}
+
 model BudgetAssignment {
   id     String           @id @default(cuid())
 

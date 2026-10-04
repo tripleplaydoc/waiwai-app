@@ -1,23 +1,26 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Target } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Target } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
 import { getBudgetSummary, type EnvelopeRow } from "@/lib/budget/summary";
 import { budgetHealth, describeMonths, pocketProgress } from "@/lib/budget/targets";
+import { billStatus } from "@/lib/budget/bills";
 import type { GroupVM, PocketVM } from "@/lib/budget/board-types";
 import { formatCents } from "@/lib/utils/currency";
-import { monthFromParam, monthLabel, monthParam, shiftMonth } from "@/lib/utils/dates";
+import { monthFromParam, monthLabel, monthParam, shiftMonth, todayIso } from "@/lib/utils/dates";
 import { AutoAssignButton } from "./budget-controls";
 import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
+import { BillBadge, MarkPaidButton } from "./bill-controls";
+import { shortDate } from "@/lib/budget/bills";
 import { IncomeSection } from "./income-section";
 
 export const dynamic = "force-dynamic";
 
 type SP = Promise<{ ws?: string; month?: string }>;
 
-function toVM(r: EnvelopeRow, month: Date): PocketVM {
+function toVM(r: EnvelopeRow, month: Date, today: string): PocketVM {
   const progress = pocketProgress(
     {
       assignedCents: r.assignedCents, activityCents: r.activityCents, availableCents: r.availableCents,
@@ -29,7 +32,11 @@ function toVM(r: EnvelopeRow, month: Date): PocketVM {
     id: r.id, name: r.name, groupId: r.groupId, assignedCents: r.assignedCents, activityCents: r.activityCents,
     availableCents: r.availableCents, isSystemManaged: r.isSystemManaged, isTaxDeductible: r.isTaxDeductible,
     priorityRank: r.priorityRank, targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate,
-    allocationBps: r.allocationBps, progress,
+    allocationBps: r.allocationBps, dueDay: r.dueDay, manualPaid: r.manualPaid, progress,
+    bill: r.type === "INCOME" ? null : billStatus({
+      dueDay: r.dueDay, monthIso: monthParam(month), todayIso: today, manualPaid: r.manualPaid,
+      spentCents: Math.max(0, -r.activityCents), targetCents: r.targetType === "MONTHLY_FUNDING" ? r.targetCents : null,
+    }),
   };
 }
 
@@ -58,8 +65,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
     prisma.categoryGroup.findMany({ where: { workspaceId: workspace.id, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
 
+  const today = todayIso();
   const rta = summary.readyToAssignCents;
-  const incomeRows = summary.rows.filter((r) => r.type === "INCOME").map((r) => toVM(r, month));
+  const incomeRows = summary.rows.filter((r) => r.type === "INCOME").map((r) => toVM(r, month, today));
   const expenseRows = summary.rows.filter((r) => r.type !== "INCOME");
 
   // Board groups: every category that isn't income-only (empty ones stay visible).
@@ -68,7 +76,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
       id: g.id ?? "__none",
       name: g.name,
       allocationBps: g.allocationBps,
-      pockets: g.rows.filter((r) => r.type !== "INCOME").map((r) => toVM(r, month)),
+      pockets: g.rows.filter((r) => r.type !== "INCOME").map((r) => toVM(r, month, today)),
       hasIncome: g.rows.some((r) => r.type === "INCOME"),
     }))
     .filter((g) => !(g.hasIncome && g.pockets.length === 0) && !(g.id === "__none" && g.pockets.length === 0))
@@ -84,6 +92,13 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
     rta
   );
   const goals = allPockets.filter((p) => p.targetType === "TARGET_BALANCE" || p.targetType === "TARGET_BALANCE_BY_DATE");
+  const bills = allPockets
+    .filter((p) => p.bill)
+    .sort((a, b) => Number(a.bill!.state === "paid") - Number(b.bill!.state === "paid") || a.bill!.dueIso.localeCompare(b.bill!.dueIso));
+  const billsPaid = bills.filter((p) => p.bill!.state === "paid").length;
+  const billsOverdue = bills.filter((p) => p.bill!.state === "overdue").length;
+  const billAmount = (p: PocketVM) => (p.targetType === "MONTHLY_FUNDING" && p.targetCents ? p.targetCents : Math.max(p.assignedCents, 0));
+  const billsStillDue = bills.filter((p) => p.bill!.state !== "paid").reduce((s, p) => s + billAmount(p), 0);
   const hasRanked = expenseRows.some((r) => r.priorityRank !== null);
   const anyTargets = health.monthlyCostCents > 0 || health.stillNeededCents > 0 || goals.length > 0;
 
@@ -155,6 +170,35 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
           )}
         </section>
       </div>
+
+      {bills.length > 0 ? (
+        <section className="card p-5" aria-label="Bills and due dates">
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <h2 className="flex items-center gap-2 text-base font-bold tracking-tight"><CalendarClock className="size-4 text-[#2E6BE6]" aria-hidden /> Bills this month</h2>
+            <span className="text-sm text-slate-600 dark:text-slate-300">{billsPaid} of {bills.length} paid</span>
+            {billsOverdue > 0 && <span className="rounded-full bg-neg-soft px-2.5 py-0.5 text-xs font-semibold text-neg">{billsOverdue} overdue</span>}
+            {billsStillDue > 0 && <span className="nums ml-auto text-sm text-slate-500">Still to pay ≈ {formatCents(billsStillDue)}</span>}
+          </div>
+          <Meter value={billsPaid / bills.length} tone={billsOverdue > 0 ? "neg" : "pos"} />
+          <ul className="mt-3 divide-y divide-[#E2E8F0] dark:divide-slate-800">
+            {bills.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
+                <div className="flex min-w-0 flex-1 basis-40 flex-col">
+                  <span className="break-words text-sm font-semibold">{p.name}</span>
+                  <span className="text-xs text-slate-500">Due {shortDate(p.bill!.dueIso)}{billAmount(p) > 0 ? ` · ${formatCents(billAmount(p))}` : ""}</span>
+                </div>
+                <BillBadge status={p.bill!} />
+                <MarkPaidButton workspaceId={workspace.id} categoryId={p.id} month={mp} status={p.bill!} manualPaid={p.manualPaid} size="md" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : allPockets.length > 0 ? (
+        <p className="rounded-2xl border border-dashed border-[#CBD5E1] px-5 py-3 text-sm text-slate-500 dark:border-slate-700">
+          <CalendarClock className="mr-2 inline size-4 align-text-bottom" aria-hidden />
+          Add a <strong>due day</strong> to a bill (tap the pencil on a pocket) to track what&apos;s due and what you&apos;ve paid.
+        </p>
+      ) : null}
 
       {accountCount === 0 && (
         <div className="card p-5 text-sm">

@@ -25,6 +25,7 @@ const pocketSchema = z.object({
   amount: z.string().optional(),
   targetDate: z.string().optional(),
   priorityRank: z.string().optional(),
+  dueDay: z.string().optional(),
   isTaxDeductible: z.string().optional(),
 });
 
@@ -74,6 +75,12 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
     if (!Number.isInteger(rank) || rank < 1 || rank > 999) return { ok: false, error: "Priority must be a whole number from 1 to 999." };
   }
 
+  let dueDay: number | null = null;
+  if (!isIncome && d.dueDay && d.dueDay.trim() !== "") {
+    dueDay = Number(d.dueDay);
+    if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) return { ok: false, error: "Due day must be a number from 1 to 31." };
+  }
+
   const deductible = workspace.type === "BUSINESS" && !isIncome && d.isTaxDeductible === "on";
   try {
     if (existing) {
@@ -84,6 +91,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           ...(existing.isSystemManaged ? {} : { name: d.name, categoryGroupId: groupId }),
           isTaxDeductible: existing.isSystemManaged ? existing.isTaxDeductible : deductible,
           priorityRank: isIncome ? null : rank,
+          dueDay,
           fundingTargetType: targetType,
           fundingTargetCents: targetCents,
           fundingTargetByDate: targetDate,
@@ -100,6 +108,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           sortOrder: (top._max.sortOrder ?? -1) + 1,
           isTaxDeductible: deductible,
           priorityRank: isIncome ? null : rank,
+          dueDay,
           fundingTargetType: targetType,
           fundingTargetCents: targetCents,
           fundingTargetByDate: targetDate,
@@ -278,4 +287,69 @@ export async function applyAllocationAction(workspaceId: string, month: string, 
   });
   revalidatePath("/budget");
   return { ok: true, message: `Assigned across ${preview.lines.length} pocket${preview.lines.length === 1 ? "" : "s"}.` };
+}
+
+const nameSchema = z.string().trim().min(1, "Name can't be empty").max(80);
+
+/** Click-to-rename for a pocket. */
+export async function renamePocketAction(workspaceId: string, id: string, name: string): Promise<ActionResult> {
+  await assertAuthed();
+  const n = nameSchema.safeParse(name);
+  if (!n.success) return { ok: false, error: n.error.issues[0]?.message ?? "Bad name." };
+  const c = await prisma.category.findFirst({ where: { id, workspaceId } });
+  if (!c) return { ok: false, error: "Pocket not found." };
+  if (c.isSystemManaged) return { ok: false, error: "This pocket is managed by the app and can't be renamed." };
+  await prisma.category.update({ where: { id }, data: { name: n.data } });
+  revalidatePath("/budget");
+  return { ok: true };
+}
+
+/** Click-to-rename for a category. */
+export async function renameGroupAction(workspaceId: string, id: string, name: string): Promise<ActionResult> {
+  await assertAuthed();
+  const n = nameSchema.safeParse(name);
+  if (!n.success) return { ok: false, error: n.error.issues[0]?.message ?? "Bad name." };
+  const g = await prisma.categoryGroup.findFirst({ where: { id, workspaceId } });
+  if (!g) return { ok: false, error: "Category not found." };
+  await prisma.categoryGroup.update({ where: { id }, data: { name: n.data } });
+  revalidatePath("/budget");
+  return { ok: true };
+}
+
+/** Marks (or un-marks) a pocket's bill as paid for one month. */
+export async function setPaidAction(workspaceId: string, categoryId: string, month: string, paid: boolean): Promise<ActionResult> {
+  await assertAuthed();
+  const m = monthSchema.safeParse(month);
+  if (!m.success) return { ok: false, error: "Bad request." };
+  const c = await prisma.category.findFirst({ where: { id: categoryId, workspaceId, isArchived: false } });
+  if (!c) return { ok: false, error: "Pocket not found." };
+  const monthDate = new Date(`${m.data}-01T00:00:00.000Z`);
+  if (paid) {
+    await prisma.billPayment.upsert({
+      where: { categoryId_month: { categoryId, month: monthDate } },
+      update: {},
+      create: { categoryId, month: monthDate },
+    });
+  } else {
+    await prisma.billPayment.deleteMany({ where: { categoryId, month: monthDate } });
+  }
+  revalidatePath("/budget");
+  return { ok: true };
+}
+
+/** Adds money to a pocket from Ready to Assign (on top of what's already there). */
+export async function assignMoreAction(workspaceId: string, categoryId: string, month: string, amount: string): Promise<ActionResult> {
+  await assertAuthed();
+  const m = monthSchema.safeParse(month);
+  if (!m.success) return { ok: false, error: "Bad request." };
+  const cents = parseToCents(amount);
+  if (cents === null || cents <= 0) return { ok: false, error: "Enter an amount like 250.00" };
+  const c = await prisma.category.findFirst({ where: { id: categoryId, workspaceId, isArchived: false } });
+  if (!c || c.type === "INCOME") return { ok: false, error: "Pick a spending pocket." };
+  const monthDate = new Date(`${m.data}-01T00:00:00.000Z`);
+  const rta = await getReadyToAssign(prisma, workspaceId, new Date(addMonthsUTC(monthDate, 1).getTime() - 1));
+  if (cents > rta) return { ok: false, error: `Only ${(Math.max(0, rta) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} is ready to assign.` };
+  await prisma.budgetAssignment.create({ data: { categoryId, month: monthDate, amountCents: cents, source: "MANUAL" } });
+  revalidatePath("/budget");
+  return { ok: true };
 }

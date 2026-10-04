@@ -27,7 +27,7 @@ export function AssignedInput({ categoryId, month, initial, label }: { categoryI
   }
 
   return (
-    <div className="inline-flex w-full flex-col items-end">
+    <div className="inline-flex flex-col items-end md:w-full">
       <input
         ref={ref}
         aria-label={label}
@@ -43,7 +43,7 @@ export function AssignedInput({ categoryId, month, initial, label }: { categoryI
           if (e.key === "Enter") { e.preventDefault(); commit(); }
           if (e.key === "Escape") { setValue(initial); setError(undefined); e.currentTarget.blur(); }
         }}
-        className={`input nums !min-h-10 w-full max-w-32 !px-2 text-right sm:!px-4 ${error ? "!border-[#C9372C]" : ""}`}
+        className={`input nums !min-h-10 w-28 !px-3 text-right md:w-full md:max-w-32 md:!px-4 ${error ? "!border-[#C9372C]" : ""}`}
       />
       {error && <span role="alert" className="mt-1 text-[11px] text-[#C9372C]">{error}</span>}
     </div>

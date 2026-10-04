@@ -15,7 +15,7 @@ export function BrandName({ light }: { light?: boolean }) {
   return (
     <span className="flex items-center gap-2.5">
       <BrandMark className={light ? "!bg-white/10 !shadow-none ring-1 ring-white/25" : ""} />
-      <span className="text-[15px] font-bold tracking-tight">Financial Tracker</span>
+      <span className="hidden text-[15px] font-bold tracking-tight sm:inline">Financial Tracker</span>
     </span>
   );
 }
