@@ -139,7 +139,7 @@ function TxForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => 
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label htmlFor="qa-acct" className="label">Account</label>
+          <label htmlFor="qa-acct" className="label">Paid from / received into</label>
           <select id="qa-acct" name="accountId" className="input" defaultValue={data.accounts[0].id}>
             {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>

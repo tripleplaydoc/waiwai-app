@@ -6,7 +6,7 @@ import { archivePocketAction, saveGroupAction, savePocketAction } from "@/app/ac
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 import { monthsBetweenInclusive } from "@/lib/budget/dates";
 import type { PocketVM } from "@/lib/budget/board-types";
-import { typesFor } from "@/lib/budget/expense-types";
+import { typesFor, typeLabel } from "@/lib/budget/expense-types";
 
 type TT = "NONE" | "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE";
 
@@ -18,8 +18,9 @@ const KINDS: { value: TT; label: string; hint: string }[] = [
 ];
 
 export function PocketDialog({
-  open, onClose, workspaceId, isBusiness, groups, pocket, defaultGroupId, monthIso, kindOfNew,
+  open, onClose, workspaceId, isBusiness, groups, pocket, defaultGroupId, monthIso, kindOfNew, customTypes = [],
 }: {
+  customTypes?: string[];
   open: boolean; onClose: () => void; workspaceId: string; isBusiness: boolean;
   groups: { id: string; name: string }[]; pocket: PocketVM | null; defaultGroupId?: string;
   monthIso: string; kindOfNew?: "EXPENSE" | "INCOME";
@@ -87,6 +88,13 @@ export function PocketDialog({
             <label htmlFor="pk-type" className="label">Type <span className="font-normal text-slate-400">(for your P&amp;L)</span></label>
             <select id="pk-type" name="expenseType" className="input" value={etype} onChange={(e) => setEtype(e.target.value)}>
               <option value="">Not classified</option>
+              {etype && !customTypes.includes(etype) && etype.startsWith("CUSTOM:") && <option value={etype}>{typeLabel(etype)}</option>}
+              {customTypes.length > 0 && (
+                <optgroup label="Your custom types">
+                  {customTypes.map((k) => <option key={k} value={k}>{typeLabel(k)}</option>)}
+                </optgroup>
+              )}
+              <option value="__new">+ Add a custom type…</option>
               {isIncome ? typesFor("INCOME").map((t) => <option key={t.key} value={t.key}>{t.label}</option>) : (
                 (isBusiness ? (["Business", "Personal"] as const) : (["Personal", "Business"] as const)).map((g) => (
                   <optgroup key={g} label={g === "Business" ? "Business expenses" : "Personal & everyday"}>
@@ -95,6 +103,9 @@ export function PocketDialog({
                 ))
               )}
             </select>
+            {etype === "__new" && (
+              <input name="customType" required maxLength={40} autoFocus placeholder={isIncome ? "e.g. Speaking fees" : "e.g. Lab testing"} className="input mt-2" aria-label="Custom type name" />
+            )}
           </div>
         )}
 

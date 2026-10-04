@@ -6,6 +6,8 @@ import { PRESETS, resolvePeriod } from "@/lib/reports/periods";
 import { formatCents } from "@/lib/utils/currency";
 import { todayIso } from "@/lib/utils/dates";
 import { PrintButton } from "./print-button";
+import { ExportForm } from "./export-form";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 type SP = Promise<{ ws?: string; period?: string; from?: string; to?: string }>;
@@ -59,7 +61,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
   const wsKey = wsKeyFromParam(sp.ws);
   const ws = await getWorkspace(wsKey);
   const period = resolvePeriod(sp.period, sp.from, sp.to, todayIso());
-  const [r, bps] = await Promise.all([buildPnl(ws.id, period), taxRateBps(ws.id)]);
+  const [r, bps, accounts] = await Promise.all([
+    buildPnl(ws.id, period), taxRateBps(ws.id),
+    prisma.account.findMany({ where: { workspaceId: ws.id, isArchived: false }, orderBy: [{ onBudget: "desc" }, { name: "asc" }], select: { id: true, name: true } }),
+  ]);
   const isBiz = ws.type === "BUSINESS";
   const margin = r.revenueCents > 0 ? Math.round((r.netCents / r.revenueCents) * 1000) / 10 : null;
   const taxableCents = Math.max(0, r.revenueCents - r.deductibleCents);
@@ -75,7 +80,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
           <p className="text-sm text-slate-600 dark:text-slate-300">{period.label}</p>
         </div>
         <div className="ml-auto flex gap-2 print:hidden">
-          <a href={`/reports/export?${exportQ}`} className="btn btn-sm"><Download className="size-4" aria-hidden /> CSV</a>
+          <a href={`/reports/export?${exportQ}&kind=pnl`} className="btn btn-sm"><Download className="size-4" aria-hidden /> CSV</a>
           <PrintButton />
         </div>
       </div>
@@ -157,6 +162,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
           <p className="mt-3 text-xs text-slate-500">An estimate for planning, not tax advice. Mark pockets tax-deductible on the budget page to include them.</p>
         </section>
       )}
+
+      <section className="card p-5 print:hidden" aria-labelledby="ex-h">
+        <h2 id="ex-h" className="text-base font-bold tracking-tight">Export for QuickBooks &amp; taxes</h2>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Uses the period above ({period.label}). Files are CSV, which QuickBooks, Excel and most tax software accept.</p>
+        <ExportForm accounts={accounts} wsKey={wsKey} from={period.from} to={period.to} />
+        <ul className="mt-4 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+          <li><strong>QuickBooks:</strong> Banking → Upload transactions → choose the file for that account; the columns Date, Description and Amount map automatically. Then categorize inside QuickBooks.</li>
+          <li><strong>Schedule C:</strong> totals by IRS line for your preparer or tax software. It&apos;s a planning aid; confirm meals, equipment and home-office items with a tax professional.</li>
+        </ul>
+      </section>
     </div>
   );
 }

@@ -7,7 +7,8 @@ import { formatCents } from "@/lib/utils/currency";
 import { typeLabel } from "@/lib/budget/expense-types";
 import type { PocketVM } from "@/lib/budget/board-types";
 
-export function IncomeSection({ workspaceId, isBusiness, month, rows, allGroups }: {
+export function IncomeSection({ workspaceId, isBusiness, month, rows, allGroups, customTypes }: {
+  customTypes: string[];
   workspaceId: string; isBusiness: boolean; month: string; rows: PocketVM[]; allGroups: { id: string; name: string }[];
 }) {
   const [dlg, setDlg] = useState<{ pocket: PocketVM | null } | null>(null);
@@ -31,6 +32,7 @@ export function IncomeSection({ workspaceId, isBusiness, month, rows, allGroups 
       ))}
       {dlg && (
         <PocketDialog
+          customTypes={customTypes}
           open onClose={() => setDlg(null)} workspaceId={workspaceId} isBusiness={isBusiness} groups={allGroups}
           pocket={dlg.pocket ? { ...dlg.pocket } : null} monthIso={month} kindOfNew="INCOME" defaultGroupId={rows[0]?.groupId ?? undefined}
         />

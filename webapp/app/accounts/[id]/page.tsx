@@ -17,7 +17,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
   const account = await prisma.account.findUnique({ where: { id }, include: { workspace: true } });
   if (!account) notFound();
 
-  const [transactions, sum, categories, groups, payees] = await Promise.all([
+  const [transactions, sum, categories, groups, payees, allAccounts] = await Promise.all([
     prisma.transaction.findMany({
       where: { accountId: id },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
@@ -28,6 +28,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
     prisma.category.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     prisma.categoryGroup.findMany({ where: { workspaceId: account.workspaceId, isArchived: false } }),
     prisma.payee.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: { name: "asc" }, take: 500 }),
+    prisma.account.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: [{ onBudget: "desc" }, { name: "asc" }], select: { id: true, name: true } }),
   ]);
   const total = await prisma.transaction.count({ where: { accountId: id } });
   const balance = account.openingBalanceCents + (sum._sum.amountCents ?? 0);
@@ -47,6 +48,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
           <Link href={`/import${wsQ}${wsQ ? "&" : "?"}account=${account.id}`} className="btn"><Upload className="size-4" aria-hidden /> Import CSV</Link>
           <AddTransactionButton
             accountId={account.id}
+            accounts={allAccounts}
             isBusiness={account.workspace.type === "BUSINESS"}
             categories={catOptions}
             payees={payees.map((p) => p.name)}

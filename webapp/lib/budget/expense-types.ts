@@ -50,8 +50,12 @@ export const TYPE_DEFS: TypeDef[] = [
 ];
 
 const BY_KEY = new Map(TYPE_DEFS.map((t) => [t.key, t]));
-export const isTypeKey = (k: string) => BY_KEY.has(k);
-export const typeLabel = (key: string | null | undefined) => (key ? BY_KEY.get(key)?.label ?? null : null);
+/** Custom types are stored as "CUSTOM:<name>" so they need no database changes. */
+export const CUSTOM_PREFIX = "CUSTOM:";
+export const customKey = (name: string) => CUSTOM_PREFIX + name.trim().replace(/\s+/g, " ").slice(0, 40);
+export const isCustomKey = (k: string) => k.startsWith(CUSTOM_PREFIX) && k.length > CUSTOM_PREFIX.length;
+export const isTypeKey = (k: string) => BY_KEY.has(k) || isCustomKey(k);
+export const typeLabel = (key: string | null | undefined) => (key ? (isCustomKey(key) ? key.slice(CUSTOM_PREFIX.length) : BY_KEY.get(key)?.label ?? null) : null);
 export const typesFor = (kind: TypeKind) => TYPE_DEFS.filter((t) => t.kind === kind);
 
 /** Older Schedule C tags map onto the new keys so existing business pockets are already classified. */
@@ -63,6 +67,6 @@ const SCHEDULE_C: Record<string, string> = {
 };
 
 export function effectiveType(c: { expenseType: string | null; scheduleCLineItem: string | null }): string | null {
-  if (c.expenseType && BY_KEY.has(c.expenseType)) return c.expenseType;
+  if (c.expenseType && (BY_KEY.has(c.expenseType) || isCustomKey(c.expenseType))) return c.expenseType;
   return c.scheduleCLineItem ? SCHEDULE_C[c.scheduleCLineItem] ?? null : null;
 }

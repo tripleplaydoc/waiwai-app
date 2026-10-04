@@ -217,8 +217,8 @@ const collision: CollisionDetection = (args) => {
 };
 
 export function BudgetBoard({
-  workspaceId, isBusiness, month, groups: serverGroups, allGroups,
-}: { workspaceId: string; isBusiness: boolean; month: string; groups: GroupVM[]; allGroups: { id: string; name: string }[] }) {
+  workspaceId, isBusiness, month, groups: serverGroups, allGroups, customTypes,
+}: { customTypes: string[]; workspaceId: string; isBusiness: boolean; month: string; groups: GroupVM[]; allGroups: { id: string; name: string }[] }) {
   const [groups, setGroups] = useState(serverGroups);
   const ref = useRef(serverGroups);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -364,6 +364,7 @@ export function BudgetBoard({
 
       {pocketDlg && (
         <PocketDialog
+          customTypes={customTypes}
           open onClose={() => setPocketDlg(null)} workspaceId={workspaceId} isBusiness={isBusiness}
           groups={allGroups} pocket={pocketDlg.pocket} defaultGroupId={pocketDlg.groupId} monthIso={month}
         />

@@ -24,8 +24,8 @@ function CategoryOptions({ options }: { options: CatOption[] }) {
   );
 }
 
-export function AddTransactionButton({ accountId, isBusiness, categories, payees, today }: {
-  accountId: string; isBusiness: boolean; categories: CatOption[]; payees: string[]; today: string;
+export function AddTransactionButton({ accountId, accounts, isBusiness, categories, payees, today }: {
+  accountId: string; accounts: { id: string; name: string }[]; isBusiness: boolean; categories: CatOption[]; payees: string[]; today: string;
 }) {
   const [open, setOpen] = useState(false);
   const [direction, setDirection] = useState<"outflow" | "inflow">("outflow");
@@ -56,7 +56,6 @@ export function AddTransactionButton({ accountId, isBusiness, categories, payees
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title="Add transaction">
         <form ref={formRef} action={action} className="space-y-3">
-          <input type="hidden" name="accountId" value={accountId} />
           <fieldset className="flex gap-2" aria-label="Direction">
             {(["outflow", "inflow"] as const).map((d) => (
               <label key={d} className={`flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-xl border px-4 text-sm font-medium capitalize has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[#2E6BE6] ${
@@ -78,6 +77,12 @@ export function AddTransactionButton({ accountId, isBusiness, categories, payees
               <label htmlFor="tx-date" className="label">Date</label>
               <input id="tx-date" name="date" type="date" required defaultValue={today} className="input" />
             </div>
+          </div>
+          <div>
+            <label htmlFor="tx-acct" className="label">Paid from / received into</label>
+            <select id="tx-acct" name="accountId" className="input" defaultValue={accountId}>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
           </div>
           <div>
             <label htmlFor="tx-payee" className="label">Payee</label>

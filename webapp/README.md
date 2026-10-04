@@ -52,3 +52,6 @@ Restore project (or use `/status`).
 - **Receipts** attach to any transaction (photo or PDF, stored in the database, shown behind login only).
 - **Move money** between pockets from the + button, the budget page, or by tapping a pocket's available amount.
 - A daily rotating verse / saying from `webapp/lib/verses.ts`.
+- **Custom types**: choose "+ Add a custom type…" on any pocket.
+- **Household access** (Settings): the owner adds a login for a spouse; everyone shares the same budgets.
+- **Exports** (Reports): QuickBooks Online bank CSV, full transactions CSV, Schedule C summary, P&L.

@@ -10,7 +10,7 @@ import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
 import { addMonthsUTC } from "@/lib/budget/dates";
 import { getCategoryAvailableBalance } from "@/lib/budget/category-balance";
 import { bpsProblem, planAllocation, type AllocGroup } from "@/lib/budget/allocation";
-import { isTypeKey, typesFor } from "@/lib/budget/expense-types";
+import { customKey, isCustomKey, isTypeKey, typesFor } from "@/lib/budget/expense-types";
 import type { ActionResult } from "./types";
 
 const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
@@ -30,6 +30,7 @@ const pocketSchema = z.object({
   dueDay: z.string().optional(),
   isTaxDeductible: z.string().optional(),
   expenseType: z.string().optional(),
+  customType: z.string().optional(),
 });
 
 /** Creates or edits a pocket (an envelope inside a category). */
@@ -85,10 +86,20 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
   }
 
   let expenseType: string | null = null;
-  if (d.expenseType && d.expenseType.trim() !== "") {
+  if (d.expenseType === "__new") {
+    const name = (d.customType ?? "").trim().replace(/\s+/g, " ");
+    if (name.length < 2 || name.length > 40) return { ok: false, error: "Name your custom type (2–40 characters)." };
+    if (/[<>"]/.test(name)) return { ok: false, error: "Custom type names can't include < > or quotes." };
+    // Reuse an existing custom type with the same name (any capitalization) so the P&L groups them together.
+    const known = await prisma.category.findMany({ where: { workspaceId: d.workspaceId, expenseType: { startsWith: "CUSTOM:" } }, select: { expenseType: true }, distinct: ["expenseType"] });
+    const match = known.find((k) => k.expenseType!.slice(7).toLowerCase() === name.toLowerCase());
+    const builtIn = [...typesFor("EXPENSE"), ...typesFor("INCOME")].find((t) => t.label.toLowerCase() === name.toLowerCase());
+    expenseType = builtIn ? builtIn.key : match?.expenseType ?? customKey(name);
+  } else if (d.expenseType && d.expenseType.trim() !== "") {
     if (!isTypeKey(d.expenseType)) return { ok: false, error: "Pick a type from the list." };
-    const allowed = typesFor(isIncome ? "INCOME" : "EXPENSE").some((t) => t.key === d.expenseType);
-    if (!allowed) return { ok: false, error: isIncome ? "Pick an income type." : "Pick an expense type." };
+    if (!isCustomKey(d.expenseType) && !typesFor(isIncome ? "INCOME" : "EXPENSE").some((t) => t.key === d.expenseType)) {
+      return { ok: false, error: isIncome ? "Pick an income type." : "Pick an expense type." };
+    }
     expenseType = d.expenseType;
   }
 

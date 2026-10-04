@@ -73,8 +73,7 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
   });
   if (rec.input) await saveReceipt(prisma, account.workspaceId, created.id, rec.input);
   revalidatePath("/budget");
-  revalidatePath("/accounts");
-  revalidatePath(`/accounts/${account.id}`);
+  revalidatePath("/accounts", "layout");
   return { ok: true };
 }
 
