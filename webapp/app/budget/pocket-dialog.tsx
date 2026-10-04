@@ -35,6 +35,7 @@ export function PocketDialog({
   const [amount, setAmount] = useState(pocket?.targetCents ? centsToInput(pocket.targetCents) : "");
   const [date, setDate] = useState(pocket?.targetDate ?? "");
   const [etype, setEtype] = useState(pocket?.expenseType ?? "");
+  const [ikind, setIkind] = useState<string>(pocket?.incomeKind ?? "EARNED");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, startDelete] = useTransition();
   const [deleteError, setDeleteError] = useState<string>();
@@ -94,6 +95,17 @@ export function PocketDialog({
           <div>
             <label htmlFor="pk-newgroup" className="label">New category name</label>
             <input id="pk-newgroup" name="newGroupName" maxLength={80} className="input" />
+          </div>
+        )}
+
+        {isIncome && (
+          <div>
+            <label htmlFor="pk-ikind" className="label">Kind of income <span className="font-normal text-slate-400">(for your cash flow report)</span></label>
+            <select id="pk-ikind" name="incomeKind" className="input" value={ikind} onChange={(e) => setIkind(e.target.value)}>
+              <option value="EARNED">Earned — paychecks, sales, services</option>
+              <option value="PORTFOLIO">Portfolio — interest, dividends, gains</option>
+              <option value="PASSIVE">Passive — rent, royalties, hands-off business</option>
+            </select>
           </div>
         )}
 

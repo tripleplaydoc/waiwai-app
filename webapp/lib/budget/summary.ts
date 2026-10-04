@@ -23,6 +23,7 @@ export interface EnvelopeRow {
   dueDay: number | null;
   manualPaid: boolean;
   expenseType: string | null;
+  incomeKind: "EARNED" | "PORTFOLIO" | "PASSIVE" | null;
 }
 
 export interface GroupRow {
@@ -98,6 +99,7 @@ export async function getBudgetSummary(workspaceId: string, month: Date): Promis
       dueDay: c.dueDay,
       manualPaid: paidSet.has(c.id),
       expenseType: effectiveType(c),
+      incomeKind: c.incomeKind,
     };
   });
 

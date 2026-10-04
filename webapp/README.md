@@ -57,3 +57,11 @@ Restore project (or use `/status`).
 - **Custom types**: choose "+ Add a custom type…" on any pocket.
 - **Household access** (Settings): the owner adds a login for a spouse; everyone shares the same budgets.
 - **Exports** (Reports): QuickBooks Online bank CSV, full transactions CSV, Schedule C summary, P&L.
+
+## Cashflow waterfall, tags, reviews and reports (Oct 2026, round 5)
+- **Assign button** (budget page, after "Flow → Set up the waterfall"): Ready to assign is repaid to any reserve it was pulled from first, then split 30% Taxes / 70% OPEX; OPEX pockets fill to their monthly costs; overflow fills Reservoir 1 (months × monthly OPEX, default 3); then it splits 50/50 to Reservoir 2 (default 3 months) and Cash; once both reservoirs are full everything goes to Cash, shared by each Cash pocket's %. All settings are in Flow → Settings. Pure math: `lib/budget/cashflow-waterfall.ts` (tests: `npx tsx lib/budget/cashflow-waterfall.test.ts`).
+- **Cover from reserves**: overspent OPEX pockets are covered 50/50 from Taxes and Reservoir 1, then Reservoir 2; each pull is a `ReserveDraw` that the next Assign pays back first.
+- **Expense tags** (Cultivate, Preserve, Support, Regenerate, Leakage; several per expense) on the transaction forms and the Tag button on each expense. Wording lives in `lib/budget/expense-tags.ts`.
+- **Reports tabs**: Overview (P&L + Age of money), Expenses (ring by category/type/tag), Assets (growth, monthly/quarterly/annual, optional Personal + Business), Cash flow (Cashflow-game style statement; tag income pockets earned/portfolio/passive via the pocket pencil), Review (the three monthly questions per expense).
+- **Assets & liabilities**: Accounts → "Assets & liabilities"; each value update keeps history. Accounts can now be edited (pencil), including the starting balance.
+- **Receipt scanner**: rotate, magnifier while dragging corners, Preview before saving, better edge finding on light tables (`lib/scan/geometry.test.ts`).

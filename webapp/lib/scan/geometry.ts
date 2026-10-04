@@ -60,20 +60,8 @@ export function otsu(g: Uint8Array): number {
   return thr;
 }
 
-/**
- * Finds the receipt/paper: the largest bright blob. Returns 4 corners (TL, TR, BR, BL)
- * in 0..1 coordinates of the analysed image, or null when nothing convincing is found.
- */
-export function detectQuad(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number): Pt[] | null {
-  const raw = toGray(rgba, w, h);
-  const g = new Uint8Array(w * h);
-  const m = localMean(raw, w, h, 2);
-  for (let i = 0; i < g.length; i++) g[i] = m[i];
-  const t = otsu(g);
-  const mask = new Uint8Array(w * h);
-  for (let i = 0; i < mask.length; i++) mask[i] = g[i] > t ? 1 : 0;
-
-  // Largest 4-connected bright component (iterative flood fill).
+/** Largest 4-connected component of a binary mask (iterative flood fill). */
+function largestComponent(mask: Uint8Array, w: number, h: number): number[] {
   const seen = new Uint8Array(w * h);
   const stack = new Int32Array(w * h);
   let best: number[] = [];
@@ -92,8 +80,11 @@ export function detectQuad(rgba: Uint8ClampedArray | Uint8Array, w: number, h: n
     }
     if (comp.length > best.length) best = comp;
   }
-  if (best.length < w * h * 0.08) return null;
+  return best;
+}
 
+/** Extreme corners (TL, TR, BR, BL) of a pixel set, normalised to 0..1. */
+function cornersOf(best: number[], w: number, h: number): Pt[] {
   let tl = Infinity, br = -Infinity, tr = -Infinity, bl = Infinity;
   let pTL: Pt = { x: 0, y: 0 }, pBR: Pt = { x: w - 1, y: h - 1 }, pTR: Pt = { x: w - 1, y: 0 }, pBL: Pt = { x: 0, y: h - 1 };
   for (const p of best) {
@@ -104,9 +95,67 @@ export function detectQuad(rgba: Uint8ClampedArray | Uint8Array, w: number, h: n
     if (d > tr) { tr = d; pTR = { x, y }; }
     if (d < bl) { bl = d; pBL = { x, y }; }
   }
-  const quad = [pTL, pTR, pBR, pBL].map((p) => ({ x: p.x / (w - 1), y: p.y / (h - 1) }));
-  if (polygonArea(quad) < 0.1 || !isConvex(quad)) return null;
-  return quad;
+  return [pTL, pTR, pBR, pBL].map((p) => ({ x: p.x / (w - 1), y: p.y / (h - 1) }));
+}
+
+/** Fills holes inside a mask (text on a receipt is darker than the paper and would otherwise punch holes in it). */
+function closeMask(mask: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  const g = new Uint8Array(w * h);
+  for (let i = 0; i < g.length; i++) g[i] = mask[i] ? 255 : 0;
+  const m = localMean(g, w, h, r);
+  const out = new Uint8Array(w * h);
+  for (let i = 0; i < out.length; i++) out[i] = m[i] > 110 ? 1 : 0; // majority vote in the window
+  return out;
+}
+
+const plausible = (q: Pt[]) => { const a = polygonArea(q); return a >= 0.1 && a <= 0.97 && isConvex(q); };
+
+/** Method 1: the receipt is the largest bright blob (white paper on a darker surface). */
+function detectBright(raw: Uint8Array, w: number, h: number): Pt[] | null {
+  const g = new Uint8Array(w * h);
+  const m = localMean(raw, w, h, 2);
+  for (let i = 0; i < g.length; i++) g[i] = m[i];
+  const t = otsu(g);
+  const mask = new Uint8Array(w * h);
+  for (let i = 0; i < mask.length; i++) mask[i] = g[i] > t ? 1 : 0;
+  const best = largestComponent(closeMask(mask, w, h, Math.max(2, Math.round(Math.min(w, h) / 60))), w, h);
+  if (best.length < w * h * 0.08) return null;
+  const q = cornersOf(best, w, h);
+  return plausible(q) ? q : null;
+}
+
+/** Method 2: the receipt is whatever differs from the table, judged against the colour along the photo's border. */
+function detectByBorder(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number): Pt[] | null {
+  const band = Math.max(2, Math.round(Math.min(w, h) * 0.04));
+  const rs: number[] = [], gs: number[] = [], bs: number[] = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (x >= band && x < w - band && y >= band && y < h - band) { x = w - band - 1; continue; }
+    const o = (y * w + x) * 4; rs.push(rgba[o]); gs.push(rgba[o + 1]); bs.push(rgba[o + 2]);
+  }
+  const med = (a: number[]) => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
+  const R = med(rs), G = med(gs), B = med(bs);
+  const dist = new Uint8Array(w * h);
+  for (let i = 0, j = 0; i < dist.length; i++, j += 4) dist[i] = Math.min(255, Math.hypot(rgba[j] - R, rgba[j + 1] - G, rgba[j + 2] - B));
+  const sm = localMean(dist, w, h, 2);
+  const d8 = new Uint8Array(w * h);
+  for (let i = 0; i < d8.length; i++) d8[i] = sm[i];
+  const t = Math.max(18, otsu(d8));
+  const mask = new Uint8Array(w * h);
+  for (let i = 0; i < mask.length; i++) mask[i] = d8[i] > t ? 1 : 0;
+  const best = largestComponent(closeMask(mask, w, h, Math.max(2, Math.round(Math.min(w, h) / 60))), w, h);
+  if (best.length < w * h * 0.08) return null;
+  const q = cornersOf(best, w, h);
+  return plausible(q) ? q : null;
+}
+
+/**
+ * Finds the receipt/paper. Returns 4 corners (TL, TR, BR, BL) in 0..1 coordinates of the
+ * analysed image, or null when nothing convincing is found. Tries "bright paper on a darker
+ * surface" first, then "different from the table" for light tables.
+ */
+export function detectQuad(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number): Pt[] | null {
+  const raw = toGray(rgba, w, h);
+  return detectBright(raw, w, h) ?? detectByBorder(rgba, w, h);
 }
 
 export function defaultQuad(): Pt[] {

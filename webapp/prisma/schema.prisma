@@ -177,6 +177,65 @@ enum AssignmentSource {
   AUTO_WATERFALL
   /// Produced by "Assign by percentages" (category/pocket allocation split).
   AUTO_PERCENT
+  /// Produced by the cashflow waterfall "Assign" button (taxes / OPEX / reservoirs / cash).
+  WATERFALL
+  /// Money pulled from the reserves to cover a shortfall (negative rows on the
+  /// reserve, positive row on the covered pocket).
+  WATERFALL_COVER
+}
+
+/// Spending lens for an expense. An expense can carry several.
+enum ExpenseTag {
+  CULTIVATE
+  PRESERVE
+  SUPPORT
+  REGENERATE
+  LEAKAGE
+}
+
+/// Answer to a yes/no question in the monthly expense review.
+enum ReviewAnswer {
+  YES
+  NO
+  UNSURE
+}
+
+/// What an expense does for the business (monthly expense review, question 2).
+enum StrategicValue {
+  CAPACITY
+  RISK
+  STRENGTH
+}
+
+/// Finer classification of an asset or liability for the cash flow statement.
+/// Null on an Account = derive from AccountType.
+enum HoldingClass {
+  CASH_SAVINGS
+  STOCKS_FUNDS
+  REAL_ESTATE
+  BUSINESS
+  VEHICLE
+  OTHER_ASSET
+  MORTGAGE
+  STUDENT_LOAN
+  CAR_LOAN
+  CREDIT_CARD
+  BANK_LOAN
+  OTHER_LIABILITY
+}
+
+/// Where an income pocket sits on the cash flow statement. Null = EARNED.
+enum IncomeKind {
+  EARNED
+  PORTFOLIO
+  PASSIVE
+}
+
+/// The reserves money can be pulled from to cover a shortfall.
+enum ReserveBucket {
+  TAXES
+  RESERVOIR_1
+  RESERVOIR_2
 }
 
 enum TaxQuarter {
@@ -253,6 +312,7 @@ model User {
 
   workspaces   Workspace[]
   transactions Transaction[] @relation("TransactionPerson")
+  expenseReviews ExpenseReview[]
 
   @@map("users")
 }
@@ -285,6 +345,9 @@ model Workspace {
   budgetRecommendations BudgetRecommendation[]
   cashflowForecasts     CashflowForecast[]
   waterfallRuns         WaterfallRun[]
+  waterfallConfig       WaterfallConfig?
+  reserveDraws          ReserveDraw[]
+  expenseReviews        ExpenseReview[]
 
   @@index([ownerId])
   @@map("workspaces")
@@ -333,6 +396,11 @@ model Account {
   /// Only meaningful when balanceMode = TRANSACTION_DERIVED.
   openingBalanceCents Int       @default(0)
   openingBalanceDate  DateTime? @db.Date
+
+  /// Asset/liability classification for the cash flow statement (null = derive from type).
+  holdingClass HoldingClass?
+  /// Assets: monthly income this asset produces. Liabilities: the monthly payment. Always positive.
+  monthlyCashflowCents Int?
 
   isArchived Boolean  @default(false)
   createdAt  DateTime @default(now())
@@ -424,6 +492,10 @@ model Category {
   scheduleCLineItem ScheduleCLineItem?
   /// WaiWai classification key (lib/budget/expense-types.ts), e.g. ADVERTISING.
   expenseType       String?
+  /// Income pockets only: earned / portfolio / passive. Null = earned.
+  incomeKind        IncomeKind?
+  /// Pockets in the waterfall's Cash category: this pocket's share of the cash, in basis points.
+  cashShareBps      Int?
 
   /// True for app-managed envelopes (e.g. "Estimated Tax Reserve") the UI
   /// should prevent users from freely renaming, deleting, or repurposing.
@@ -568,6 +640,9 @@ model Transaction {
   importHash    String?
   needsReview   Boolean @default(false)
 
+  /// Spending lenses (Cultivate / Preserve / Support / Regenerate / Leakage). Several allowed.
+  tags ExpenseTag[] @default([])
+
   /// Which household member made this purchase / received this money.
   personId String?
   person   User?   @relation("TransactionPerson", fields: [personId], references: [id], onDelete: SetNull)
@@ -579,6 +654,7 @@ model Transaction {
   taxPayment                 TaxPayment?
   splits  TransactionSplit[]
   receipt Receipt?
+  expenseReview ExpenseReview?
 
   @@unique([accountId, importHash])
   @@index([workspaceId, date])
@@ -912,6 +988,90 @@ model WaterfallRun {
 
   @@index([workspaceId, month])
   @@map("waterfall_runs")
+}
+
+// ----------------------------------------------------------------------------
+// CASHFLOW WATERFALL — one "Assign" button that splits Ready to Assign into
+// Taxes / OPEX / Reservoir 1 / Reservoir 2 / Cash. See lib/budget/cashflow-waterfall.ts.
+// ----------------------------------------------------------------------------
+
+/// Per-workspace waterfall settings and the pockets that play each role.
+/// The pockets themselves are ordinary Category rows (so balances, targets and
+/// history all come from the normal ledger); this row only remembers which is which.
+model WaterfallConfig {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  enabled Boolean @default(false)
+  /// Share of every assigned dollar set aside for taxes (basis points, 3000 = 30%).
+  taxBps  Int     @default(3000)
+  /// Reservoir targets, as a number of months of OPEX (monthly cost targets). Multipliers, not money.
+  reservoir1Months Decimal @default(3) @db.Decimal(5, 2)
+  reservoir2Months Decimal @default(3) @db.Decimal(5, 2)
+  /// Of the money that overflows Reservoir 1, the share that goes to Reservoir 2 (rest goes to Cash).
+  reservoir2ShareBps Int @default(5000)
+
+  opexGroupId          String?
+  taxCategoryId        String?
+  reservoir1CategoryId String?
+  reservoir2CategoryId String?
+  /// The category (group) whose pockets share the Cash money, by Category.cashShareBps.
+  cashGroupId          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("waterfall_configs")
+}
+
+/// Money pulled out of a reserve to cover a shortfall. Incoming money repays
+/// the oldest outstanding draws first (see planAssign).
+model ReserveDraw {
+  id          String        @id @default(cuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  bucket      ReserveBucket
+  /// Total taken, and how much has been paid back so far.
+  amountCents Int
+  repaidCents Int           @default(0)
+  /// What it covered (name kept so history survives a rename or archive).
+  coveredCategoryId String?
+  coveredName       String?
+  month       DateTime      @db.Date
+  createdAt   DateTime      @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@map("reserve_draws")
+}
+
+// ----------------------------------------------------------------------------
+// MONTHLY EXPENSE REVIEW
+// ----------------------------------------------------------------------------
+
+/// The three monthly questions for one expense:
+///  1. Does it increase revenue or profitability?
+///  2. What is its strategic value (capacity / risk / strengthens the business)?
+///  3. Stewardship: is it fair, responsible and in line with the business I want to build?
+model ExpenseReview {
+  id            String      @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactionId String      @unique
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  increasesRevenue ReviewAnswer?
+  strategicValue   StrategicValue[] @default([])
+  stewardship      ReviewAnswer?
+  notes            String?
+
+  reviewedById String?
+  reviewedBy   User?    @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@map("expense_reviews")
 }
 
 // ----------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState, useTransition } from "reac
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeftRight, ArrowRightLeft, HandCoins, Plus, ShoppingBag } from "lucide-react";
 import { ReceiptField } from "@/components/receipt-field";
+import { TagChips } from "@/components/tag-picker";
 import { MoveForm } from "@/components/move-money";
 import { Modal } from "@/components/modal";
 import { createTransactionAction } from "@/app/actions/transactions";
@@ -175,6 +176,7 @@ function TxForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => 
         <label htmlFor="qa-memo" className="label">Memo</label>
         <input id="qa-memo" name="memo" maxLength={500} className="input" />
       </div>
+      {direction === "outflow" && <TagChips idPrefix="qa-tag" />}
       <ReceiptField id="qa-receipt" />
       {data.isBusiness && direction === "outflow" && (
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" /> Tax-deductible</label>

@@ -86,7 +86,7 @@ export function Nav({ initial, name, email, avatar }: { initial: string; name: s
         </Link>
         <nav className="ml-3 hidden items-center gap-1 md:flex" aria-label="Main">
           {LINKS.map(({ href, label }) => {
-            const active = pathname === href || pathname.startsWith(href + "/");
+            const active = pathname === href || pathname.startsWith(href + "/") || (href === "/accounts" && pathname === "/holdings");
             return (
               <Link
                 key={href} href={`${href}${q(ws)}`} aria-current={active ? "page" : undefined}
@@ -125,7 +125,7 @@ export function BottomTabs() {
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-navy pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-1 text-white md:hidden">
       <ul className="mx-auto grid max-w-md grid-cols-4">
         {LINKS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
+          const active = pathname === href || pathname.startsWith(href + "/") || (href === "/accounts" && pathname === "/holdings");
           return (
             <li key={href}>
               <Link

@@ -15,7 +15,7 @@ export interface Pnl {
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
 
 /** Per-category net activity (signed cents) for a window. Splits are authoritative over a transaction's own category; transfers are ignored. */
-async function activity(workspaceId: string, from: string, to: string) {
+export async function activity(workspaceId: string, from: string, to: string) {
   const range = { gte: d(from), lte: d(to) };
   const [direct, splits, uncat] = await Promise.all([
     prisma.transaction.groupBy({ by: ["categoryId"], where: { workspaceId, categoryId: { not: null }, date: range, splits: { none: {} }, transferGroupId: null }, _sum: { amountCents: true } }),

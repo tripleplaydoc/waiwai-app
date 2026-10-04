@@ -19,6 +19,7 @@ export interface PocketVM {
   manualPaid: boolean;
   kind: "INCOME" | "EXPENSE" | "SYSTEM";
   expenseType: string | null;
+  incomeKind: "EARNED" | "PORTFOLIO" | "PASSIVE" | null;
   bill: BillStatus | null;
   progress: PocketProgress;
 }

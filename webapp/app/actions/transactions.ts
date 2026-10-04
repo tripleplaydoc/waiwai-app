@@ -8,6 +8,7 @@ import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
 import { isoToDate } from "@/lib/utils/dates";
 import { readReceipt, saveReceipt } from "@/lib/receipts";
+import { parseTags } from "@/lib/budget/expense-tags";
 import type { ActionResult } from "./types";
 
 const txSchema = z.object({
@@ -78,11 +79,22 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
       isTaxDeductible: deductible,
       needsReview: categoryId === null,
       personId,
+      tags: parseTags(formData.getAll("tags")),
     },
   });
   if (rec.input) await saveReceipt(prisma, account.workspaceId, created.id, rec.input);
   revalidatePath("/budget");
   revalidatePath("/accounts", "layout");
+  return { ok: true };
+}
+
+export async function setTransactionTagsAction(transactionId: string, tags: string[]): Promise<ActionResult> {
+  await assertAuthed();
+  const tx = await prisma.transaction.findUnique({ where: { id: transactionId }, select: { id: true, accountId: true } });
+  if (!tx) return { ok: false, error: "Transaction not found." };
+  await prisma.transaction.update({ where: { id: tx.id }, data: { tags: parseTags(tags) } });
+  revalidatePath(`/accounts/${tx.accountId}`);
+  revalidatePath("/reports");
   return { ok: true };
 }
 

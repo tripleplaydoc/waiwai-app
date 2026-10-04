@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/utils/currency";
 import { dateToIso, formatShortDate, todayIso } from "@/lib/utils/dates";
 import { deleteTransactionAction } from "@/app/actions/transactions";
+import { TagEditor } from "@/components/tag-picker";
+import { EditAccountButton } from "../edit-account";
 import { AddTransactionButton, CategorySelect, ConfirmDeleteButton, PersonSelect, ReceiptCell } from "./transaction-controls";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +17,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   await requireAuth();
   const { id } = await params;
   const { person } = await searchParams;
-  const account = await prisma.account.findUnique({ where: { id }, include: { workspace: true } });
+  const account = await prisma.account.findUnique({ where: { id }, include: { workspace: true, manualBalanceEntries: { orderBy: { asOfDate: "desc" }, take: 1 } } });
   if (!account) notFound();
 
   const [transactions, sum, categories, groups, payees, allAccounts, usersDb, me] = await Promise.all([
@@ -35,7 +37,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   ]);
   const people = usersDb.map((u) => ({ id: u.id, name: u.name || u.email.split("@")[0] }));
   const total = await prisma.transaction.count({ where: { accountId: id } });
-  const balance = account.openingBalanceCents + (sum._sum.amountCents ?? 0);
+  const balance = account.balanceMode === "MANUAL" ? account.manualBalanceEntries[0]?.balanceCents ?? 0 : account.openingBalanceCents + (sum._sum.amountCents ?? 0);
   const wsQ = account.workspace.type === "BUSINESS" ? "?ws=business" : "";
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
   const catOptions = categories.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroupId ? groupName.get(c.categoryGroupId) ?? "Other" : "Other", type: c.type }));
@@ -48,6 +50,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           <h1 className="text-2xl font-semibold tracking-tight">{account.name}</h1>
         </div>
         <div className={`nums text-2xl font-semibold ${balance < 0 ? "text-[#C9372C]" : "text-[#2E7D32]"}`}>{formatCents(balance)}</div>
+        {account.balanceMode !== "MANUAL" && <EditAccountButton label="Edit" account={{ id: account.id, name: account.name, type: account.type, openingBalanceCents: account.openingBalanceCents, openingBalanceDate: account.openingBalanceDate ? dateToIso(account.openingBalanceDate) : null, onBudget: account.onBudget }} />}
         <div className="flex w-full gap-2 sm:ml-auto sm:w-auto [&>*]:flex-1 sm:[&>*]:flex-none">
           <Link href={`/import${wsQ}${wsQ ? "&" : "?"}account=${account.id}`} className="btn"><Upload className="size-4" aria-hidden /> Import CSV</Link>
           <AddTransactionButton
@@ -90,6 +93,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
             <CategorySelect transactionId={t.id} current={t.categoryId ?? ""} options={catOptions} needsReview={t.needsReview} />
             <div className="flex flex-wrap items-center gap-2">
               {people.length > 1 && <div className="min-w-0 flex-1"><PersonSelect transactionId={t.id} current={t.personId ?? ""} people={people} /></div>}
+              {t.amountCents < 0 && <TagEditor transactionId={t.id} tags={t.tags} />}
               <ReceiptCell transactionId={t.id} receipt={t.receipt} />
               <form action={deleteTransactionAction} className="ml-auto">
                 <input type="hidden" name="transactionId" value={t.id} />
@@ -102,16 +106,16 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
       </section>
 
       <section className="card hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[920px] border-collapse">
+        <table className="w-full min-w-[1000px] border-collapse">
           <thead className="border-b border-[#E2E8F0] bg-navy-soft dark:border-slate-800 dark:bg-slate-800/50">
             <tr>
               <th className="th">Date</th><th className="th">Payee</th><th className="th">Category</th>
-              <th className="th text-right">Outflow</th><th className="th text-right">Inflow</th><th className="th">Who</th><th className="th">Receipt</th><th className="th"><span className="sr-only">Actions</span></th>
+              <th className="th text-right">Outflow</th><th className="th text-right">Inflow</th><th className="th">Who</th><th className="th">Tags</th><th className="th">Receipt</th><th className="th"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {transactions.length === 0 && (
-              <tr><td colSpan={8} className="td text-slate-500">No transactions yet. Press <span className="kbd">N</span> to add one, or import a CSV.</td></tr>
+              <tr><td colSpan={9} className="td text-slate-500">No transactions yet. Press <span className="kbd">N</span> to add one, or import a CSV.</td></tr>
             )}
             {transactions.map((t) => (
               <tr key={t.id} className="border-b border-[#E2E8F0] last:border-0 dark:border-slate-800">
@@ -124,6 +128,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                 <td className="td nums text-right">{t.amountCents < 0 ? formatCents(-t.amountCents) : ""}</td>
                 <td className="td nums text-right text-[#2E7D32]">{t.amountCents > 0 ? formatCents(t.amountCents) : ""}</td>
                 <td className="td">{people.length > 1 ? <PersonSelect transactionId={t.id} current={t.personId ?? ""} people={people} /> : <span className="text-slate-500">{people[0]?.name}</span>}</td>
+                <td className="td">{t.amountCents < 0 && <TagEditor transactionId={t.id} tags={t.tags} />}</td>
                 <td className="td"><ReceiptCell transactionId={t.id} receipt={t.receipt} /></td>
                 <td className="td text-right">
                   <form action={deleteTransactionAction}>

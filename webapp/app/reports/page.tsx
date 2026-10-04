@@ -8,9 +8,21 @@ import { todayIso } from "@/lib/utils/dates";
 import { PrintButton } from "./print-button";
 import { ExportForm } from "./export-form";
 import { prisma } from "@/lib/prisma";
+import Link from "next/link";
+import { Hourglass } from "lucide-react";
+import { ensureWorkspaces } from "@/lib/workspace";
+import { getBudgetSummary } from "@/lib/budget/summary";
+import { healthFromSummary } from "@/lib/budget/health-from-summary";
+import { startOfMonthUTC } from "@/lib/budget/dates";
+import { describeMonths } from "@/lib/budget/targets";
+import { ExpensesTab } from "./expenses-tab";
+import { AssetsTab } from "./assets-tab";
+import { CashflowTab } from "./cashflow-tab";
+import { ReviewTab } from "./review-tab";
 
 export const dynamic = "force-dynamic";
-type SP = Promise<{ ws?: string; period?: string; from?: string; to?: string }>;
+type SP = Promise<{ ws?: string; period?: string; from?: string; to?: string; tab?: string; by?: string; view?: string; scope?: string; todo?: string }>;
+const TABS = [["pnl", "Overview"], ["expenses", "Expenses"], ["assets", "Assets"], ["cashflow", "Cash flow"], ["review", "Review"]] as const;
 
 function Delta({ cur, prev, goodWhenUp }: { cur: number; prev: number; goodWhenUp: boolean }) {
   if (prev === 0 && cur === 0) return <span className="text-slate-400">—</span>;
@@ -61,6 +73,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
   const wsKey = wsKeyFromParam(sp.ws);
   const ws = await getWorkspace(wsKey);
   const period = resolvePeriod(sp.period, sp.from, sp.to, todayIso());
+  const tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as (typeof TABS)[number][0]) : "pnl";
+  const today = todayIso();
+  const baseQuery = new URLSearchParams({ period: period.preset, from: period.from, to: period.to, ...(wsKey === "business" ? { ws: "business" } : {}) }).toString();
+  const health = tab === "pnl" || tab === "assets" ? healthFromSummary(await getBudgetSummary(ws.id, startOfMonthUTC(new Date())), startOfMonthUTC(new Date())) : null;
+  const scopeAll = sp.scope === "all";
+  const wsIds = scopeAll ? Object.values(await ensureWorkspaces()).map((w) => w.id) : [ws.id];
   const [r, bps, people, accounts] = await Promise.all([
     buildPnl(ws.id, period), taxRateBps(ws.id), byPerson(ws.id, period.from, period.to),
     prisma.account.findMany({ where: { workspaceId: ws.id, isArchived: false }, orderBy: [{ onBudget: "desc" }, { name: "asc" }], select: { id: true, name: true } }),
@@ -76,8 +94,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{ws.name} profit &amp; loss</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-300">{period.label}</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{ws.name} {tab === "pnl" ? "profit & loss" : "reports"}</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300">{tab === "assets" ? "Balances over time" : period.label}</p>
         </div>
         <div className="ml-auto flex gap-2 print:hidden">
           <a href={`/reports/export?${exportQ}&kind=pnl`} className="btn btn-sm"><Download className="size-4" aria-hidden /> CSV</a>
@@ -85,8 +103,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
         </div>
       </div>
 
-      <form method="get" className="card grid grid-cols-2 items-end gap-3 p-4 sm:flex sm:flex-wrap print:hidden" aria-label="Report period">
+      <nav className="grid grid-cols-5 gap-1 print:hidden" role="tablist" aria-label="Report">
+        {TABS.map(([k, l]) => (
+          <Link key={k} role="tab" aria-selected={tab === k} href={`/reports?${baseQuery}&tab=${k}`}
+            className={`rounded-full border px-1 py-2.5 text-center text-xs font-semibold sm:text-sm ${tab === k ? "border-navy bg-navy text-white" : "border-[#E2E8F0] bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"}`}>{l}</Link>
+        ))}
+      </nav>
+
+      {tab !== "assets" && <form method="get" className="card grid grid-cols-2 items-end gap-3 p-4 sm:flex sm:flex-wrap print:hidden" aria-label="Report period">
         {wsKey === "business" && <input type="hidden" name="ws" value="business" />}
+        <input type="hidden" name="tab" value={tab} />
         <div className="col-span-2 sm:col-span-1">
           <label htmlFor="rp-period" className="label">Period</label>
           <select id="rp-period" name="period" defaultValue={period.preset} className="input sm:min-w-44">
@@ -102,7 +128,31 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
           <input id="rp-to" type="date" name="to" defaultValue={period.to} className="input" />
         </div>
         <button type="submit" className="btn btn-primary col-span-2 sm:col-span-1">Update</button>
-      </form>
+      </form>}
+
+      {health && (
+        <section className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3" aria-label="Age of money">
+          <Hourglass className="size-5 text-[#2E6BE6]" aria-hidden />
+          <div className="flex flex-col">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Age of money</span>
+            {health.monthsAhead === null ? (
+              <span className="text-sm text-slate-600 dark:text-slate-300">Set monthly costs on your pockets to see how long your money lasts.</span>
+            ) : (
+              <span className="nums text-xl font-bold text-[#2E6BE6] dark:text-blue-300">{Math.round(health.monthsAhead * 30)} days <span className="text-sm font-medium text-slate-500">· {describeMonths(health.monthsAhead)}</span></span>
+            )}
+          </div>
+          {health.monthsAhead !== null && health.monthsAheadWithRta !== null && (
+            <p className="text-xs text-slate-600 dark:text-slate-300 sm:ml-auto sm:max-w-xs sm:text-right">How long the money in your pockets would cover your monthly costs ({formatCents(health.pocketMoneyCents)} vs {formatCents(health.monthlyCostCents)}/mo). With Ready to assign: {describeMonths(health.monthsAheadWithRta)}.</p>
+          )}
+        </section>
+      )}
+
+      {tab === "expenses" && <ExpensesTab workspaceId={ws.id} from={period.from} to={period.to} by={sp.by ?? "category"} baseQuery={baseQuery} />}
+      {tab === "assets" && <AssetsTab workspaceIds={wsIds} view={sp.view ?? "monthly"} scopeAll={scopeAll} baseQuery={baseQuery} />}
+      {tab === "cashflow" && <CashflowTab workspaceId={ws.id} period={period} today={today} />}
+      {tab === "review" && <ReviewTab workspaceId={ws.id} from={period.from} to={period.to} label={period.label} onlyTodo={sp.todo === "1"} baseQuery={baseQuery} />}
+
+      {tab === "pnl" && (<>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <section className="card p-5" aria-label="Revenue">
@@ -190,6 +240,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
           <li><strong>Schedule C:</strong> totals by IRS line for your preparer or tax software. It&apos;s a planning aid; confirm meals, equipment and home-office items with a tax professional.</li>
         </ul>
       </section>
+      </>)}
     </div>
   );
 }

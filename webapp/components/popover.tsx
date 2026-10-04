@@ -1,11 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /** A small chip that opens a floating panel. Closes on outside click or Esc. Children render server-side. */
-export function Popover({ label, icon, align = "left", children }: { label: ReactNode; icon?: ReactNode; align?: "left" | "right"; children: ReactNode }) {
+export function Popover({ label, icon, align = "left", width = "w-[min(92vw,26rem)]", children }: { label: ReactNode; icon?: ReactNode; align?: "left" | "right"; width?: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const [shift, setShift] = useState(0);
+  // Keep the panel inside the screen: slide it left/right when the chip sits near an edge (phones).
+  useLayoutEffect(() => {
+    if (!open || !panel.current) { setShift(0); return; }
+    const r = panel.current.getBoundingClientRect();
+    const margin = 12, vw = document.documentElement.clientWidth;
+    const base = r.left - shift; // where it would sit with no shift
+    let next = 0;
+    if (base + r.width > vw - margin) next = vw - margin - (base + r.width);
+    if (base + next < margin) next = margin - base;
+    if (Math.abs(next - shift) > 0.5) setShift(next);
+  }, [open, shift]);
   useEffect(() => {
     if (!open) return;
     const down = (e: MouseEvent | TouchEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
@@ -24,7 +37,7 @@ export function Popover({ label, icon, align = "left", children }: { label: Reac
         {icon}{label}
       </button>
       {open && (
-        <div role="dialog" className={`card absolute top-11 z-30 max-h-[70vh] w-[min(92vw,26rem)] overflow-y-auto p-3 shadow-xl ${align === "right" ? "right-0" : "left-0"}`}>
+        <div ref={panel} style={{ transform: shift ? `translateX(${shift}px)` : undefined }} role="dialog" className={`card absolute top-11 z-30 max-h-[70vh] ${width} overflow-y-auto p-3 shadow-xl ${align === "right" ? "right-0" : "left-0"}`}>
           {children}
         </div>
       )}

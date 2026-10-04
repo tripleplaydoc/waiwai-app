@@ -31,6 +31,7 @@ const pocketSchema = z.object({
   isTaxDeductible: z.string().optional(),
   expenseType: z.string().optional(),
   customType: z.string().optional(),
+  incomeKind: z.enum(["EARNED", "PORTFOLIO", "PASSIVE"]).optional(),
 });
 
 /** Creates or edits a pocket (an envelope inside a category). */
@@ -103,6 +104,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
     expenseType = d.expenseType;
   }
 
+  const incomeKind = isIncome ? d.incomeKind ?? "EARNED" : null;
   const deductible = workspace.type === "BUSINESS" && !isIncome && d.isTaxDeductible === "on";
   try {
     if (existing) {
@@ -114,6 +116,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           isTaxDeductible: existing.isSystemManaged ? existing.isTaxDeductible : deductible,
           priorityRank: isIncome ? null : rank,
           dueDay,
+          ...(isIncome ? { incomeKind } : {}),
           expenseType: existing.isSystemManaged ? existing.expenseType : expenseType,
           fundingTargetType: targetType,
           fundingTargetCents: targetCents,
@@ -133,6 +136,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           priorityRank: isIncome ? null : rank,
           dueDay,
           expenseType,
+          incomeKind,
           fundingTargetType: targetType,
           fundingTargetCents: targetCents,
           fundingTargetByDate: targetDate,

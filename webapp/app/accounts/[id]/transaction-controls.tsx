@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { Paperclip } from "lucide-react";
+import { TagChips } from "@/components/tag-picker";
 import { ReceiptField } from "@/components/receipt-field";
 import { attachReceiptAction, createTransactionAction, removeReceiptAction, setTransactionCategoryAction, setTransactionPersonAction } from "@/app/actions/transactions";
 
@@ -108,6 +109,7 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
             <label htmlFor="tx-memo" className="label">Memo</label>
             <input id="tx-memo" name="memo" maxLength={500} className="input" />
           </div>
+          {direction === "outflow" && <TagChips idPrefix="tx-tag" />}
           <ReceiptField id="tx-receipt" />
           <div className="flex flex-wrap gap-x-6">
             <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="cleared" className="size-5" /> Cleared</label>

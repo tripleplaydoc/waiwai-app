@@ -1,15 +1,17 @@
 import Link from "next/link";
-import { CalendarClock, ChevronLeft, ChevronRight, Target } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Droplets, Target } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
 import { getBudgetSummary, type EnvelopeRow } from "@/lib/budget/summary";
-import { budgetHealth, describeMonths, pocketProgress } from "@/lib/budget/targets";
+import { budgetHealth, pocketProgress } from "@/lib/budget/targets";
 import { billStatus } from "@/lib/budget/bills";
 import type { GroupVM, PocketVM } from "@/lib/budget/board-types";
 import { formatCents } from "@/lib/utils/currency";
 import { monthFromParam, monthLabel, monthParam, shiftMonth, todayIso } from "@/lib/utils/dates";
 import { AutoAssignButton } from "./budget-controls";
+import { AssignButton, FlowPanel } from "./flow-controls";
+import { loadFlow } from "@/lib/budget/waterfall-state";
 import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
 import { BillBadge, MarkPaidButton } from "./bill-controls";
@@ -36,7 +38,7 @@ function toVM(r: EnvelopeRow, month: Date, today: string): PocketVM {
     id: r.id, name: r.name, groupId: r.groupId, assignedCents: r.assignedCents, activityCents: r.activityCents,
     availableCents: r.availableCents, isSystemManaged: r.isSystemManaged, isTaxDeductible: r.isTaxDeductible,
     priorityRank: r.priorityRank, targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate,
-    allocationBps: r.allocationBps, dueDay: r.dueDay, manualPaid: r.manualPaid, kind: r.type, expenseType: r.expenseType, progress,
+    allocationBps: r.allocationBps, dueDay: r.dueDay, manualPaid: r.manualPaid, kind: r.type, expenseType: r.expenseType, incomeKind: r.incomeKind, progress,
     bill: r.type === "INCOME" ? null : billStatus({
       dueDay: r.dueDay, monthIso: monthParam(month), todayIso: today, manualPaid: r.manualPaid,
       spentCents: Math.max(0, -r.activityCents), targetCents: r.targetType === "MONTHLY_FUNDING" ? r.targetCents : null,
@@ -69,6 +71,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
     prisma.categoryGroup.findMany({ where: { workspaceId: workspace.id, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
 
+  const { vm: flow } = await loadFlow(workspace.id, month, summary.rows);
   const today = todayIso();
   const rta = summary.readyToAssignCents;
   const incomeRows = summary.rows.filter((r) => r.type === "INCOME").map((r) => toVM(r, month, today));
@@ -158,6 +161,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         <h1 className="text-lg font-bold tracking-tight sm:text-xl">{workspace.name} budget</h1>
         {(allPockets.length > 0 || goals.length > 0) && (
           <div className="flex items-center gap-2">
+            <Popover icon={<Droplets className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={flow.enabled && flow.owedCents > 0 ? <>Flow <span className="rounded-full bg-warn-soft px-1.5 text-warn">owes</span></> : "Flow"}>
+              <FlowPanel workspaceId={workspace.id} month={mp} flow={flow} />
+            </Popover>
             <Popover
               icon={<CalendarClock className="size-3.5 text-[#2E6BE6]" aria-hidden />}
               label={bills.length > 0 ? <>Bills {billsPaid}/{bills.length}{billsOverdue > 0 && <span className="rounded-full bg-neg-soft px-1.5 text-neg">{billsOverdue} overdue</span>}</> : "Bills"}
@@ -183,16 +189,22 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </div>
       </div>
 
-      <section aria-label="Budget summary" className="card grid overflow-hidden grid-cols-2 md:grid-cols-[1.3fr_1fr_1fr]">
+      <section aria-label="Budget summary" className="card grid overflow-hidden grid-cols-1 md:grid-cols-[1.3fr_1fr]">
         {/* Ready to assign */}
-        <div className={`col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 md:col-span-1 ${rta < 0 ? "bg-neg-soft/50" : "bg-pos-soft/60 dark:bg-pos-soft/10"}`}>
+        <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 ${rta < 0 ? "bg-neg-soft/50" : "bg-pos-soft/60 dark:bg-pos-soft/10"}`}>
           <div className="flex flex-col">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">{rta < 0 ? "Over-assigned" : "Ready to assign"}</span>
             <span className={`nums text-2xl font-bold leading-tight tracking-tight ${rta < 0 ? "text-neg" : "text-pos"}`}>{formatCents(rta)}</span>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            <AllocationButton workspaceId={workspace.id} month={mp} groups={boardGroups} readyToAssignCents={rta} />
-            {hasRanked && <AutoAssignButton workspaceId={workspace.id} month={mp} />}
+            {flow.enabled ? (
+              <AssignButton workspaceId={workspace.id} month={mp} disabled={rta <= 0} />
+            ) : (
+              <>
+                <AllocationButton workspaceId={workspace.id} month={mp} groups={boardGroups} readyToAssignCents={rta} />
+                {hasRanked && <AutoAssignButton workspaceId={workspace.id} month={mp} />}
+              </>
+            )}
           </div>
         </div>
 
@@ -209,18 +221,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
           )}
         </div>
 
-        {/* Months ahead */}
-        <div className="flex flex-col justify-center gap-1 border-l border-t border-[#E2E8F0] px-3 py-2 md:border-t-0 dark:border-slate-800" aria-label="Months ahead">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Months ahead</span>
-          {health.monthsAhead === null ? (
-            <p className="text-xs text-slate-600 dark:text-slate-300">Set monthly costs.</p>
-          ) : (
-            <>
-              <div className="nums text-sm font-bold leading-tight text-[#2E6BE6] dark:text-blue-300" title={`${formatCents(health.pocketMoneyCents)} in pockets vs ${formatCents(health.monthlyCostCents)}/mo`}>{health.monthsAhead.toFixed(1)} mo <span className="text-xs font-medium text-slate-500">· {describeMonths(health.monthsAhead)}</span></div>
-              <Meter value={health.monthsAhead / 6} tone="blue" />
-            </>
-          )}
-        </div>
       </section>
 
       {accountCount === 0 && (
