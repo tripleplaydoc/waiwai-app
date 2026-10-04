@@ -31,14 +31,14 @@ export async function fullCsv(workspaceId: string, accountId: string | null, fro
     prisma.transaction.findMany({
       where: { workspaceId, ...(accountId ? { accountId } : {}), date: range(from, to) },
       orderBy: [{ date: "asc" }, { createdAt: "asc" }],
-      include: { payee: true, account: true, splits: true, receipt: { select: { id: true } } },
+      include: { payee: true, account: true, splits: true, receipt: { select: { id: true } }, person: { select: { name: true, email: true } } },
     }),
     prisma.category.findMany({ where: { workspaceId } }),
     prisma.categoryGroup.findMany({ where: { workspaceId } }),
   ]);
   const cat = new Map(cats.map((c) => [c.id, c]));
   const grp = new Map(groups.map((g) => [g.id, g.name]));
-  const lines = [row(["Date", "Account", "Payee", "Category", "Pocket", "Type", "Schedule C line", "Money in", "Money out", "Amount", "Tax deductible", "Cleared", "Memo", "Has receipt"])];
+  const lines = [row(["Date", "Account", "Payee", "Category", "Pocket", "Type", "Schedule C line", "Money in", "Money out", "Amount", "Tax deductible", "Cleared", "Memo", "Has receipt", "Person"])];
   for (const t of txs) {
     const parts = t.splits.length > 0
       ? t.splits.map((s) => ({ categoryId: s.categoryId as string | null, cents: s.amountCents, deductible: s.isTaxDeductible, memo: s.memo ?? t.memo }))
@@ -51,7 +51,7 @@ export async function fullCsv(workspaceId: string, accountId: string | null, fro
         dateToIso(t.date), text(t.account.name), text(t.payee?.name), text(c?.categoryGroupId ? grp.get(c.categoryGroupId) : ""), text(c?.name ?? (t.transferGroupId ? "Transfer" : "Uncategorized")),
         text(typeLabel(key) ?? ""), text(sc ? `Line ${sc.line} ${sc.label}` : ""),
         p.cents > 0 ? centsToInput(p.cents) : "", p.cents < 0 ? centsToInput(-p.cents) : "", centsToInput(p.cents),
-        p.deductible ? "Yes" : "No", t.clearedStatus === "UNCLEARED" ? "No" : "Yes", text(p.memo), t.receipt ? "Yes" : "No",
+        p.deductible ? "Yes" : "No", t.clearedStatus === "UNCLEARED" ? "No" : "Yes", text(p.memo), t.receipt ? "Yes" : "No", text(t.person ? t.person.name || t.person.email : ""),
       ]));
     }
   }

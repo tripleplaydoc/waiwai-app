@@ -2,16 +2,17 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeftRight, ArrowRightLeft, HandCoins, Plus } from "lucide-react";
+import { ArrowLeftRight, ArrowRightLeft, HandCoins, Plus, ShoppingBag } from "lucide-react";
 import { ReceiptField } from "@/components/receipt-field";
 import { MoveForm } from "@/components/move-money";
 import { Modal } from "@/components/modal";
 import { createTransactionAction } from "@/app/actions/transactions";
-import { assignMoreAction } from "@/app/actions/pockets";
+import { assignMoreAction, moveMoneyAction } from "@/app/actions/pockets";
 import { getQuickAddDataAction, type QuickAddData } from "@/app/actions/quick";
-import { centsToInput, formatCents } from "@/lib/utils/currency";
+import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
+import { planPurchase, type AffordResult } from "@/lib/budget/afford";
 
-type Mode = "tx" | "assign" | "move";
+type Mode = "tx" | "assign" | "move" | "afford";
 
 export function QuickAdd() {
   const ws = useSearchParams().get("ws") === "business" ? "business" : "personal";
@@ -41,11 +42,14 @@ export function QuickAdd() {
   const row = "flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800";
   return (
     <>
-      <div ref={box} className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 md:bottom-8 md:right-8">
+      <div ref={box} className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 z-40 md:bottom-8 md:right-8">
         {menu && (
           <div role="menu" className="card absolute bottom-16 right-0 w-60 p-1.5 shadow-xl">
             <button role="menuitem" type="button" className={row} onClick={() => pick("tx")}>
               <span className="flex size-9 items-center justify-center rounded-full bg-blue-50 text-[#2E6BE6] dark:bg-blue-950"><ArrowLeftRight className="size-4" aria-hidden /></span> Add transaction
+            </button>
+            <button role="menuitem" type="button" className={row} onClick={() => pick("afford")}>
+              <span className="flex size-9 items-center justify-center rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950"><ShoppingBag className="size-4" aria-hidden /></span> Can I afford it?
             </button>
             <button role="menuitem" type="button" className={row} onClick={() => pick("assign")}>
               <span className="flex size-9 items-center justify-center rounded-full bg-pos-soft text-pos"><HandCoins className="size-4" aria-hidden /></span> Assign money
@@ -64,13 +68,15 @@ export function QuickAdd() {
       </div>
 
       {mode && (
-        <Modal open onClose={close} title={mode === "tx" ? "Add transaction" : mode === "move" ? "Move money between pockets" : "Assign money"}>
+        <Modal open onClose={close} title={mode === "tx" ? "Add transaction" : mode === "afford" ? "Can I afford it?" : mode === "move" ? "Move money between pockets" : "Assign money"}>
           {loadError ? (
             <p role="alert" className="text-sm text-neg">Couldn&apos;t load your accounts. Please try again.</p>
           ) : !data ? (
             <p className="py-6 text-center text-sm text-slate-500">Loading…</p>
           ) : mode === "tx" ? (
             <TxForm data={data} onDone={done} onCancel={close} />
+          ) : mode === "afford" ? (
+            <AffordForm data={data} onDone={done} onCancel={close} />
           ) : mode === "move" ? (
             <MoveForm
               workspaceId={data.workspaceId} month={data.month} onDone={done} onCancel={close}
@@ -152,6 +158,14 @@ function TxForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => 
           </select>
         </div>
       </div>
+      {data.people.length > 1 && (
+        <div>
+          <label htmlFor="qa-who" className="label">Who</label>
+          <select id="qa-who" name="personId" className="input" defaultValue={data.currentUserId ?? ""}>
+            {data.people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </div>
+      )}
       <div>
         <label htmlFor="qa-payee" className="label">Payee</label>
         <input id="qa-payee" name="payee" list="qa-payees" autoComplete="off" maxLength={200} className="input" />
@@ -218,5 +232,112 @@ function AssignForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: ()
         <button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Assigning…" : "Assign"}</button>
       </div>
     </form>
+  );
+}
+
+function AffordForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => void; onCancel: () => void }) {
+  const pockets = data.categories.filter((c) => c.type === "EXPENSE");
+  const [what, setWhat] = useState("");
+  const [amount, setAmount] = useState("");
+  const [pocketId, setPocketId] = useState(pockets[0]?.id ?? "");
+  const [result, setResult] = useState<AffordResult | null>(null);
+  const [error, setError] = useState<string>();
+  const [applied, setApplied] = useState(false);
+  const [pending, start] = useTransition();
+
+  const pocket = pockets.find((p) => p.id === pocketId);
+  function check(e: React.FormEvent) {
+    e.preventDefault();
+    setError(undefined); setApplied(false);
+    const cents = parseToCents(amount);
+    if (!pocket || cents === null || cents <= 0) { setError("Enter the price, like 89.99, and pick a pocket."); return; }
+    setResult(planPurchase({ amountCents: cents, pocket, pockets: data.categories, readyToAssignCents: data.readyToAssignCents }));
+  }
+  function apply() {
+    if (!result || !pocket) return;
+    setError(undefined);
+    start(async () => {
+      for (const s of result.sources) {
+        const amt = centsToInput(s.cents);
+        const r = s.pocketId === null
+          ? await assignMoreAction(data.workspaceId, pocket.id, data.month, amt)
+          : await moveMoneyAction(data.workspaceId, s.pocketId, pocket.id, data.month, amt);
+        if (!r.ok) { setError(r.error); return; }
+      }
+      setApplied(true);
+    });
+  }
+  const tone = !result ? "" : result.verdict === "yes" ? "border-[#2E7D32] bg-pos-soft text-pos" : result.verdict === "yes_after_moves" ? "border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200" : "border-[#C9372C] bg-neg-soft text-neg";
+
+  return (
+    <div className="space-y-3">
+      <form onSubmit={check} className="space-y-3">
+        <div>
+          <label htmlFor="af-what" className="label">What do you want to buy?</label>
+          <input id="af-what" data-autofocus className="input" placeholder="New running shoes" value={what} onChange={(e) => { setWhat(e.target.value); setResult(null); }} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="af-amount" className="label">Price</label>
+            <input id="af-amount" inputMode="decimal" placeholder="0.00" className="input nums" value={amount} onChange={(e) => { setAmount(e.target.value); setResult(null); }} required />
+          </div>
+          <div>
+            <label htmlFor="af-pocket" className="label">Pocket</label>
+            <select id="af-pocket" className="input" value={pocketId} onChange={(e) => { setPocketId(e.target.value); setResult(null); }}>
+              <CategoryOptions options={pockets} />
+            </select>
+          </div>
+        </div>
+        {!result && (
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>
+            <button type="submit" className="btn btn-primary">Check</button>
+          </div>
+        )}
+        {result && <button type="submit" className="btn w-full">Check again</button>}
+      </form>
+
+      {result && pocket && (
+        <div className="space-y-3" aria-live="polite">
+          <div className={`rounded-xl border px-4 py-3 text-sm ${tone}`}>
+            {result.verdict === "yes" && (<><p className="font-semibold">Yes, {what.trim() || "it"} fits in {pocket.name}.</p><p className="nums mt-1">{formatCents(result.pocketAvailableCents)} available, {formatCents(result.leftAfterCents)} left after.</p></>)}
+            {result.verdict === "yes_after_moves" && (<><p className="font-semibold">Not from {pocket.name} alone. You&apos;re {formatCents(result.shortfallCents)} short, but you can cover it.</p><p className="nums mt-1">{formatCents(result.pocketAvailableCents)} available in {pocket.name}.</p></>)}
+            {result.verdict === "partly" && (<p className="font-semibold">You&apos;re {formatCents(result.shortfallCents)} short and could only find {formatCents(result.coveredCents)} to borrow. That leaves {formatCents(result.stillShortCents)} uncovered.</p>)}
+            {result.verdict === "no" && (<p className="font-semibold">Not right now. {pocket.name} has {formatCents(result.pocketAvailableCents)} and nothing else is free to borrow.</p>)}
+            {result.warning && <p className="mt-1">{result.warning}</p>}
+          </div>
+
+          {result.sources.length > 0 && (
+            <div>
+              <p className="label">{result.verdict === "yes_after_moves" ? "Borrow from, in this order" : "Best you can do"}</p>
+              <ul className="divide-y divide-[#E2E8F0] rounded-xl border border-[#E2E8F0] dark:divide-slate-700 dark:border-slate-700">
+                {result.sources.map((s, i) => (
+                  <li key={i} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
+                    <span><span className="font-semibold">{s.name}</span><span className="block text-xs text-slate-500">{s.note}</span></span>
+                    <span className="nums shrink-0 font-semibold">{formatCents(s.cents)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {error && <p role="alert" className="text-sm text-neg">{error}</p>}
+          {applied ? (
+            <div className="space-y-2">
+              <p className="text-sm text-pos">Done. {pocket.name} now has enough. Record the purchase once you buy it.</p>
+              <div className="flex justify-end"><button type="button" className="btn btn-primary" onClick={onDone}>Close</button></div>
+            </div>
+          ) : (
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn" onClick={onCancel}>{result.verdict === "yes" ? "Close" : "Not now"}</button>
+              {result.sources.length > 0 && result.verdict !== "no" && (
+                <button type="button" className="btn btn-primary" disabled={pending} onClick={apply}>{pending ? "Moving…" : result.verdict === "partly" ? "Move what I can" : "Apply this plan"}</button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {!result && error && <p role="alert" className="text-sm text-neg">{error}</p>}
+    </div>
   );
 }

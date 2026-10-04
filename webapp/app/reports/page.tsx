@@ -1,7 +1,7 @@
 import { Download, TrendingDown, TrendingUp } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
-import { buildPnl, taxRateBps, type PnlTypeRow } from "@/lib/reports/pnl";
+import { buildPnl, byPerson, taxRateBps, type PnlTypeRow } from "@/lib/reports/pnl";
 import { PRESETS, resolvePeriod } from "@/lib/reports/periods";
 import { formatCents } from "@/lib/utils/currency";
 import { todayIso } from "@/lib/utils/dates";
@@ -61,8 +61,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
   const wsKey = wsKeyFromParam(sp.ws);
   const ws = await getWorkspace(wsKey);
   const period = resolvePeriod(sp.period, sp.from, sp.to, todayIso());
-  const [r, bps, accounts] = await Promise.all([
-    buildPnl(ws.id, period), taxRateBps(ws.id),
+  const [r, bps, people, accounts] = await Promise.all([
+    buildPnl(ws.id, period), taxRateBps(ws.id), byPerson(ws.id, period.from, period.to),
     prisma.account.findMany({ where: { workspaceId: ws.id, isArchived: false }, orderBy: [{ onBudget: "desc" }, { name: "asc" }], select: { id: true, name: true } }),
   ]);
   const isBiz = ws.type === "BUSINESS";
@@ -148,6 +148,24 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
           </tfoot>
         </table>
       </section>
+
+      {people.length > 1 && (
+        <section className="card p-5" aria-label="By person">
+          <h2 className="text-base font-bold tracking-tight">By person</h2>
+          <table className="mt-2 w-full text-sm">
+            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1.5 font-semibold">Who</th><th className="py-1.5 text-right font-semibold">Spent</th><th className="py-1.5 text-right font-semibold">Received</th></tr></thead>
+            <tbody>
+              {people.map((p) => (
+                <tr key={p.id ?? "none"} className="border-t border-[#E2E8F0] dark:border-slate-800">
+                  <td className="py-2 font-medium">{p.name}</td>
+                  <td className="nums py-2 text-right">{formatCents(p.spentCents)}</td>
+                  <td className="nums py-2 text-right text-pos">{formatCents(p.receivedCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {isBiz && (
         <section className="card p-5" aria-label="Tax estimate">

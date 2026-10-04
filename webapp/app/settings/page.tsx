@@ -3,13 +3,15 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ProfileForm, PasswordForm } from "./settings-forms";
 import { AddMemberForm, MemberRow } from "./household";
+import { AvatarForm } from "./avatar-form";
+import { avatarUrl } from "@/components/avatar";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true } });
+  const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true, avatarMime: true, updatedAt: true } });
   const ownerId = members[0]?.id;
   const isOwner = ownerId === user.id;
   return (
@@ -20,6 +22,7 @@ export default async function SettingsPage() {
       </div>
       <section className="card p-6" aria-labelledby="profile-h">
         <h2 id="profile-h" className="mb-4 text-base font-semibold">Profile</h2>
+        <div className="mb-5"><AvatarForm name={user.name || user.email} src={avatarUrl(user)} /></div>
         <ProfileForm name={user.name ?? ""} email={user.email} />
       </section>
       <section className="card p-6" aria-labelledby="pw-h">
@@ -36,7 +39,7 @@ export default async function SettingsPage() {
         </p>
         <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-800">
           {members.map((m) => (
-            <MemberRow key={m.id} id={m.id} name={m.name ?? ""} email={m.email} isOwner={m.id === ownerId} isYou={m.id === user.id} canManage={isOwner} />
+            <MemberRow key={m.id} avatar={avatarUrl(m)} id={m.id} name={m.name ?? ""} email={m.email} isOwner={m.id === ownerId} isYou={m.id === user.id} canManage={isOwner} />
           ))}
         </ul>
         {isOwner ? (

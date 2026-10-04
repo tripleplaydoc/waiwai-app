@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { addMemberAction, removeMemberAction, resetMemberPasswordAction } from "@/app/actions/household";
+import { Avatar } from "@/components/avatar";
 import { PasswordField } from "@/components/password-field";
 
 function Notice({ state }: { state: { error?: string; ok?: string } | undefined }) {
@@ -31,13 +32,14 @@ export function AddMemberForm() {
   );
 }
 
-export function MemberRow({ id, name, email, isOwner, isYou, canManage }: { id: string; name: string; email: string; isOwner: boolean; isYou: boolean; canManage: boolean }) {
+export function MemberRow({ id, name, email, isOwner, isYou, canManage, avatar }: { avatar: string | null; id: string; name: string; email: string; isOwner: boolean; isYou: boolean; canManage: boolean }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(resetMemberPasswordAction, undefined);
   return (
     <li className="py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="min-w-0 flex-1 basis-48">
+        <Avatar name={name || email} src={avatar} size={36} />
+        <div className="min-w-0 flex-1 basis-40">
           <div className="truncate text-sm font-semibold">{name || email} {isYou && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 dark:bg-slate-800">you</span>} {isOwner && <span className="ml-1 rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] font-medium text-water dark:bg-cyan-950/60">owner</span>}</div>
           <div className="truncate text-xs text-slate-500">{email}</div>
         </div>

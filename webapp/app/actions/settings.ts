@@ -40,3 +40,24 @@ export async function changePasswordAction(_prev: FormState, formData: FormData)
   await setSessionCookie(updated); // keeps this device signed in; other devices are signed out
   return { ok: "Password changed. Other devices have been signed out." };
 }
+
+const AVATAR_MAX = 400 * 1024;
+
+export async function updateAvatarAction(_prev: FormState, formData: FormData): Promise<{ error?: string; ok?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Please sign in again." };
+  const f = formData.get("avatar");
+  if (!(f instanceof File) || f.size === 0) return { error: "Choose a picture first." };
+  if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) return { error: "Use a JPG, PNG or WebP picture." };
+  if (f.size > AVATAR_MAX) return { error: "That picture is too large. Try a smaller one." };
+  await prisma.user.update({ where: { id: user.id }, data: { avatarData: new Uint8Array(await f.arrayBuffer()), avatarMime: f.type } });
+  revalidatePath("/", "layout");
+  return { ok: "Profile picture updated." };
+}
+
+export async function removeAvatarAction(): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) return;
+  await prisma.user.update({ where: { id: user.id }, data: { avatarData: null, avatarMime: null } });
+  revalidatePath("/", "layout");
+}

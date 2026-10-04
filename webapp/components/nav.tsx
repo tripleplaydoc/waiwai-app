@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Moon, Sun, LogOut, Wallet, Landmark, Upload, Settings, BarChart3 } from "lucide-react";
 import { BrandName } from "@/components/brand";
+import { Avatar } from "@/components/avatar";
 import { logoutAction } from "@/app/actions/auth";
 
 const LINKS = [
@@ -20,7 +21,7 @@ function useWs() {
   return { ws, q: (w: string) => (w === "business" ? "?ws=business" : "") };
 }
 
-function UserMenu({ initial, name, email }: { initial: string; name: string; email: string }) {
+function UserMenu({ initial, name, email, avatar }: { initial: string; name: string; email: string; avatar: string | null }) {
   const [open, setOpen] = useState(false);
   const [dark, setDark] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -49,9 +50,9 @@ function UserMenu({ initial, name, email }: { initial: string; name: string; ema
     <div className="relative" ref={ref}>
       <button
         type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="Account menu"
-        className="flex size-10 items-center justify-center rounded-full bg-[#8ED081] text-sm font-bold text-[#1F2E5A] ring-2 ring-white/20 transition hover:ring-white/50"
+        className="flex size-10 shrink-0 items-center justify-center rounded-full ring-2 ring-white/20 transition hover:ring-white/50"
       >
-        {initial}
+        <Avatar name={name || email || initial} src={avatar} size={40} />
       </button>
       {open && (
         <div role="menu" className="card absolute right-0 top-full z-50 mt-2 w-64 p-2 text-slate-900 shadow-xl dark:text-slate-100">
@@ -74,12 +75,12 @@ function UserMenu({ initial, name, email }: { initial: string; name: string; ema
   );
 }
 
-export function Nav({ initial, name, email }: { initial: string; name: string; email: string }) {
+export function Nav({ initial, name, email, avatar }: { initial: string; name: string; email: string; avatar: string | null }) {
   const pathname = usePathname();
   const { ws, q } = useWs();
   return (
-    <header className="sticky top-0 z-30 bg-navy text-white shadow-[0_8px_24px_-14px_rgba(15,26,56,0.6)]">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+    <header className="sticky top-0 z-30 overflow-x-clip bg-navy pt-[env(safe-area-inset-top)] text-white shadow-[0_8px_24px_-14px_rgba(15,26,56,0.6)]">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 px-3 sm:gap-3 sm:px-6">
         <Link href={`/budget${q(ws)}`} aria-label="WaiWai home" className="mr-1 shrink-0">
           <BrandName light />
         </Link>
@@ -96,20 +97,20 @@ export function Nav({ initial, name, email }: { initial: string; name: string; e
             );
           })}
         </nav>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
           <div role="group" aria-label="Workspace" className="flex rounded-full bg-white/10 p-0.5">
             {(["personal", "business"] as const).map((w) => (
               <Link
                 key={w}
                 href={`${pathname.startsWith("/accounts/") ? "/accounts" : pathname}${q(w)}`}
                 aria-current={ws === w ? "true" : undefined}
-                className={`rounded-full px-3.5 py-1.5 text-sm font-semibold capitalize transition-colors ${ws === w ? "bg-white text-navy shadow-sm" : "text-blue-100/80 hover:text-white"}`}
+                className={`rounded-full px-2.5 py-1.5 text-[13px] font-semibold capitalize sm:px-3.5 sm:text-sm transition-colors ${ws === w ? "bg-white text-navy shadow-sm" : "text-blue-100/80 hover:text-white"}`}
               >
                 {w}
               </Link>
             ))}
           </div>
-          <UserMenu initial={initial} name={name} email={email} />
+          <UserMenu initial={initial} name={name} email={email} avatar={avatar} />
         </div>
       </div>
     </header>
@@ -121,7 +122,7 @@ export function BottomTabs() {
   const pathname = usePathname();
   const { ws, q } = useWs();
   return (
-    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-navy pb-[env(safe-area-inset-bottom)] text-white md:hidden">
+    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-navy pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-1 text-white md:hidden">
       <ul className="mx-auto grid max-w-md grid-cols-4">
         {LINKS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");

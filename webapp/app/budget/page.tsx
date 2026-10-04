@@ -18,6 +18,7 @@ import { IncomeSection } from "./income-section";
 import { MoveMoneyHost } from "./move-money-host";
 import { isCustomKey } from "@/lib/budget/expense-types";
 import { DailyVerse } from "@/components/daily-verse";
+import { Popover } from "@/components/popover";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ function toVM(r: EnvelopeRow, month: Date, today: string): PocketVM {
 function Meter({ value, tone }: { value: number; tone: "pos" | "warn" | "neg" | "blue" }) {
   const color = { pos: "bg-pos", warn: "bg-warn", neg: "bg-neg", blue: "bg-[#2E6BE6]" }[tone];
   return (
-    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="presentation">
+    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="presentation">
       <div className={`h-full rounded-full ${color} transition-[width] duration-500`} style={{ width: `${Math.round(Math.min(1, Math.max(0, value)) * 100)}%` }} />
     </div>
   );
@@ -106,29 +107,90 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const hasRanked = expenseRows.some((r) => r.priorityRank !== null);
   const anyTargets = health.monthlyCostCents > 0 || health.stillNeededCents > 0 || goals.length > 0;
 
+  const billsList = bills.length === 0 ? (
+    <p className="py-1 text-sm text-slate-500">Add a <strong>due day</strong> to a pocket (tap its pencil) to track what&apos;s due and what you&apos;ve paid.</p>
+  ) : (
+    <>
+      <div className="pb-2"><Meter value={billsPaid / bills.length} tone={billsOverdue > 0 ? "neg" : "pos"} /></div>
+      <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-800">
+        {bills.map((p) => (
+          <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2">
+            <div className="flex min-w-0 flex-1 basis-32 flex-col">
+              <span className="break-words text-sm font-semibold">{p.name}</span>
+              <span className="text-xs text-slate-500">Due {shortDate(p.bill!.dueIso)}{billAmount(p) > 0 ? ` · ${formatCents(billAmount(p))}` : ""}</span>
+            </div>
+            <BillBadge status={p.bill!} />
+            <MarkPaidButton workspaceId={workspace.id} categoryId={p.id} month={mp} status={p.bill!} manualPaid={p.manualPaid} size="md" />
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+
+  const goalsList = (
+    <ul className="grid gap-3">
+      {goals.map((p) => {
+        const pr = p.progress;
+        const by = p.targetDate ? new Date(`${p.targetDate}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) : null;
+        return (
+          <li key={p.id}>
+            <div className="mb-1 flex items-baseline justify-between gap-3">
+              <span className="truncate text-sm font-semibold">{p.name}</span>
+              <span className="nums text-xs text-slate-500">{formatCents(Math.max(0, p.availableCents))} / {formatCents(pr.targetCents)}</span>
+            </div>
+            <Meter value={pr.progress} tone={pr.state === "overspent" ? "neg" : pr.stillNeededCents === 0 ? "pos" : "warn"} />
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+              {by ? <>By <strong>{by}</strong>: <strong className="nums">{formatCents(pr.needThisMonthCents)}</strong>/mo{pr.monthsLeft ? ` (${pr.monthsLeft} left)` : ""}. </> : <>Build to <strong className="nums">{formatCents(pr.targetCents)}</strong>. </>}
+              {pr.stillNeededCents > 0 ? <span className="text-warn">Need {formatCents(pr.stillNeededCents)} more this month.</span> : <span className="text-pos">On track.</span>}
+            </p>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  const coverText = health.stillNeededCents === 0 ? "Everything funded" : health.canCover ? "You can cover it" : `Short ${formatCents(health.shortfallCents)}`;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       <DailyVerse />
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{workspace.name} budget</h1>
-        <div className="ml-auto flex items-center gap-1">
-          <Link href={`/budget?month=${monthParam(shiftMonth(month, -1))}${wsQ}`} className="btn size-11 !px-0" aria-label="Previous month"><ChevronLeft className="size-4" aria-hidden /></Link>
-          <span className="min-w-36 text-center text-sm font-semibold">{monthLabel(month)}</span>
-          <Link href={`/budget?month=${monthParam(shiftMonth(month, 1))}${wsQ}`} className="btn size-11 !px-0" aria-label="Next month"><ChevronRight className="size-4" aria-hidden /></Link>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h1 className="text-lg font-bold tracking-tight sm:text-xl">{workspace.name} budget</h1>
+        {(allPockets.length > 0 || goals.length > 0) && (
+          <div className="flex items-center gap-2">
+            <Popover
+              icon={<CalendarClock className="size-3.5 text-[#2E6BE6]" aria-hidden />}
+              label={bills.length > 0 ? <>Bills {billsPaid}/{bills.length}{billsOverdue > 0 && <span className="rounded-full bg-neg-soft px-1.5 text-neg">{billsOverdue} overdue</span>}</> : "Bills"}
+            >
+              <div className="mb-1 flex items-baseline justify-between text-xs text-slate-500">
+                <span className="font-bold text-slate-800 dark:text-slate-100">Bills</span>
+                {billsStillDue > 0 && <span className="nums">≈ {formatCents(billsStillDue)} to pay</span>}
+              </div>
+              {billsList}
+            </Popover>
+            {goals.length > 0 && (
+              <Popover icon={<Target className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={<>Goals {goals.length}</>}>
+                <p className="mb-2 text-xs font-bold text-slate-800 dark:text-slate-100">Goals</p>
+                {goalsList}
+              </Popover>
+            )}
+          </div>
+        )}
+        <div className="ml-auto flex items-center">
+          <Link href={`/budget?month=${monthParam(shiftMonth(month, -1))}${wsQ}`} className="btn size-10 !px-0" aria-label="Previous month"><ChevronLeft className="size-4" aria-hidden /></Link>
+          <span className="min-w-28 text-center text-sm font-semibold">{monthLabel(month)}</span>
+          <Link href={`/budget?month=${monthParam(shiftMonth(month, 1))}${wsQ}`} className="btn size-10 !px-0" aria-label="Next month"><ChevronRight className="size-4" aria-hidden /></Link>
         </div>
       </div>
 
-      <section aria-label="Budget summary" className="card grid overflow-hidden md:grid-cols-[1.15fr_1fr_1fr]">
+      <section aria-label="Budget summary" className="card grid overflow-hidden grid-cols-2 md:grid-cols-[1.3fr_1fr_1fr]">
         {/* Ready to assign */}
-        <div className={`flex flex-col gap-2 p-4 ${rta < 0 ? "bg-neg-soft/50" : "bg-pos-soft/60 dark:bg-pos-soft/10"}`}>
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">{rta < 0 ? "Over-assigned" : "Ready to assign"}</span>
-            <span className={`nums text-3xl font-bold tracking-tight ${rta < 0 ? "text-neg" : "text-pos"}`}>{formatCents(rta)}</span>
+        <div className={`col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 md:col-span-1 ${rta < 0 ? "bg-neg-soft/50" : "bg-pos-soft/60 dark:bg-pos-soft/10"}`}>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">{rta < 0 ? "Over-assigned" : "Ready to assign"}</span>
+            <span className={`nums text-2xl font-bold leading-tight tracking-tight ${rta < 0 ? "text-neg" : "text-pos"}`}>{formatCents(rta)}</span>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-300">
-            {rta < 0 ? "You've assigned more than you've received." : rta === 0 ? "Every dollar has a job." : "Income not yet given to a pocket."}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
             <AllocationButton workspaceId={workspace.id} month={mp} groups={boardGroups} readyToAssignCents={rta} />
             {hasRanked && <AutoAssignButton workspaceId={workspace.id} month={mp} />}
             <MoveMoneyHost workspaceId={workspace.id} month={mp} pockets={allPockets.filter((p) => !p.isSystemManaged).map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents }))} />
@@ -136,105 +198,31 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </div>
 
         {/* Can I cover it */}
-        <div className="flex flex-col justify-center gap-1.5 border-t border-[#E2E8F0] p-4 md:border-l md:border-t-0 dark:border-slate-800" aria-label="Can I cover this month">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Can I cover this month?</span>
+        <div className="flex flex-col justify-center gap-1 border-t border-[#E2E8F0] px-3 py-2 md:border-l md:border-t-0 dark:border-slate-800" aria-label="Can I cover this month">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Cover this month?</span>
           {!anyTargets ? (
-            <p className="text-sm text-slate-600 dark:text-slate-300">Add a <strong>monthly cost</strong> or <strong>goal</strong> to a pocket to see.</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300">Add a monthly cost or goal.</p>
           ) : (
             <>
-              <div className={`text-lg font-bold leading-tight tracking-tight ${health.canCover ? "text-pos" : "text-warn"}`}>
-                {health.stillNeededCents === 0 ? "Everything is funded" : health.canCover ? "Yes, you can cover it" : `Short by ${formatCents(health.shortfallCents)}`}
-              </div>
+              <div className={`text-sm font-bold leading-tight ${health.canCover ? "text-pos" : "text-warn"}`} title={`Still to assign ${formatCents(health.stillNeededCents)} of ${formatCents(health.monthlyCostCents + health.goalPaceCents)} needed`}>{coverText}</div>
               <Meter value={health.stillNeededCents === 0 ? 1 : Math.max(0, rta) / health.stillNeededCents} tone={health.canCover ? "pos" : "warn"} />
-              <p className="nums text-xs text-slate-500">Still to assign {formatCents(health.stillNeededCents)} of {formatCents(health.monthlyCostCents + health.goalPaceCents)} needed</p>
             </>
           )}
         </div>
 
         {/* Months ahead */}
-        <div className="flex flex-col justify-center gap-1.5 border-t border-[#E2E8F0] p-4 md:border-l md:border-t-0 dark:border-slate-800" aria-label="Months ahead">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Months ahead</span>
+        <div className="flex flex-col justify-center gap-1 border-l border-t border-[#E2E8F0] px-3 py-2 md:border-t-0 dark:border-slate-800" aria-label="Months ahead">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Months ahead</span>
           {health.monthsAhead === null ? (
-            <p className="text-sm text-slate-600 dark:text-slate-300">Set monthly costs to see how long your money lasts.</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300">Set monthly costs.</p>
           ) : (
             <>
-              <div className="nums text-lg font-bold leading-tight tracking-tight text-[#2E6BE6] dark:text-blue-300">{health.monthsAhead.toFixed(1)} months <span className="text-xs font-medium text-slate-500">· {describeMonths(health.monthsAhead)}</span></div>
+              <div className="nums text-sm font-bold leading-tight text-[#2E6BE6] dark:text-blue-300" title={`${formatCents(health.pocketMoneyCents)} in pockets vs ${formatCents(health.monthlyCostCents)}/mo`}>{health.monthsAhead.toFixed(1)} mo <span className="text-xs font-medium text-slate-500">· {describeMonths(health.monthsAhead)}</span></div>
               <Meter value={health.monthsAhead / 6} tone="blue" />
-              <p className="nums text-xs text-slate-500">{formatCents(health.pocketMoneyCents)} in pockets vs {formatCents(health.monthlyCostCents)}/mo{rta > 0 && health.monthsAheadWithRta !== null ? ` · ${health.monthsAheadWithRta.toFixed(1)} with Ready to assign` : ""}</p>
             </>
           )}
         </div>
       </section>
-
-      {(allPockets.length > 0 || goals.length > 0) && (
-        <div className="grid items-start gap-3 md:grid-cols-2">
-          <details className="card group" aria-label="Bills and due dates">
-            <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 [&::-webkit-details-marker]:hidden">
-              <CalendarClock className="size-4 text-[#2E6BE6]" aria-hidden />
-              <span className="text-sm font-bold">Bills</span>
-              {bills.length > 0 ? (
-                <>
-                  <span className="text-sm text-slate-600 dark:text-slate-300">{billsPaid} of {bills.length} paid</span>
-                  {billsOverdue > 0 && <span className="rounded-full bg-neg-soft px-2 py-0.5 text-xs font-semibold text-neg">{billsOverdue} overdue</span>}
-                  {billsStillDue > 0 && <span className="nums ml-auto text-xs text-slate-500">≈ {formatCents(billsStillDue)} to pay</span>}
-                </>
-              ) : <span className="text-sm text-slate-500">none with due dates yet</span>}
-              <ChevronRight className="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-90" aria-hidden />
-            </summary>
-            <div className="border-t border-[#E2E8F0] px-4 pb-3 dark:border-slate-800">
-              {bills.length === 0 ? (
-                <p className="py-3 text-sm text-slate-500">Add a <strong>due day</strong> to a pocket (tap its pencil) to track what&apos;s due and what you&apos;ve paid.</p>
-              ) : (
-                <>
-                  <div className="py-2"><Meter value={billsPaid / bills.length} tone={billsOverdue > 0 ? "neg" : "pos"} /></div>
-                  <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-800">
-                    {bills.map((p) => (
-                      <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
-                        <div className="flex min-w-0 flex-1 basis-40 flex-col">
-                          <span className="break-words text-sm font-semibold">{p.name}</span>
-                          <span className="text-xs text-slate-500">Due {shortDate(p.bill!.dueIso)}{billAmount(p) > 0 ? ` · ${formatCents(billAmount(p))}` : ""}</span>
-                        </div>
-                        <BillBadge status={p.bill!} />
-                        <MarkPaidButton workspaceId={workspace.id} categoryId={p.id} month={mp} status={p.bill!} manualPaid={p.manualPaid} size="md" />
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
-          </details>
-
-          {goals.length > 0 && (
-            <details className="card group" aria-label="Goals">
-              <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 [&::-webkit-details-marker]:hidden">
-                <Target className="size-4 text-[#2E6BE6]" aria-hidden />
-                <span className="text-sm font-bold">Goals</span>
-                <span className="text-sm text-slate-600 dark:text-slate-300">{goals.length} active · {goals.filter((p) => p.progress.stillNeededCents === 0).length} on track this month</span>
-                <ChevronRight className="ml-auto size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-90" aria-hidden />
-              </summary>
-              <ul className="grid gap-4 border-t border-[#E2E8F0] px-4 py-3 dark:border-slate-800">
-                {goals.map((p) => {
-                  const pr = p.progress;
-                  const by = p.targetDate ? new Date(`${p.targetDate}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) : null;
-                  return (
-                    <li key={p.id}>
-                      <div className="mb-1.5 flex items-baseline justify-between gap-3">
-                        <span className="truncate text-sm font-semibold">{p.name}</span>
-                        <span className="nums text-xs text-slate-500">{formatCents(Math.max(0, p.availableCents))} / {formatCents(pr.targetCents)}</span>
-                      </div>
-                      <Meter value={pr.progress} tone={pr.state === "overspent" ? "neg" : pr.stillNeededCents === 0 ? "pos" : "warn"} />
-                      <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
-                        {by ? <>Reach by <strong>{by}</strong> — put in <strong className="nums">{formatCents(pr.needThisMonthCents)}</strong> a month{pr.monthsLeft ? ` (${pr.monthsLeft} month${pr.monthsLeft === 1 ? "" : "s"} left)` : ""}. </> : <>Build up to <strong className="nums">{formatCents(pr.targetCents)}</strong>. </>}
-                        {pr.stillNeededCents > 0 ? <span className="text-warn">Still need {formatCents(pr.stillNeededCents)} this month.</span> : <span className="text-pos">On track this month.</span>}
-                      </p>
-                    </li>
-                  );
-                })}
-              </ul>
-            </details>
-          )}
-        </div>
-      )}
 
       {accountCount === 0 && (
         <div className="card p-5 text-sm">

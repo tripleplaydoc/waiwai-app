@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { assertAuthed } from "@/lib/auth";
+import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
 import { isoToDate } from "@/lib/utils/dates";
 import { readReceipt, saveReceipt } from "@/lib/receipts";
@@ -20,6 +20,7 @@ const txSchema = z.object({
   amount: z.string(),
   cleared: z.string().optional(),
   deductible: z.string().optional(),
+  personId: z.string().optional(),
 });
 
 export async function createTransactionAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
@@ -34,6 +35,13 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
 
   const account = await prisma.account.findUnique({ where: { id: d.accountId } });
   if (!account || account.isArchived) return { ok: false, error: "Account not found." };
+
+  let personId: string | null = (await getCurrentUser())?.id ?? null;
+  if (d.personId) {
+    const person = await prisma.user.findUnique({ where: { id: d.personId }, select: { id: true } });
+    if (!person) return { ok: false, error: "That person wasn't found." };
+    personId = person.id;
+  }
 
   const rec = await readReceipt(formData);
   if ("error" in rec) return { ok: false, error: rec.error };
@@ -69,6 +77,7 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
       clearedStatus: d.cleared === "on" ? "CLEARED" : "UNCLEARED",
       isTaxDeductible: deductible,
       needsReview: categoryId === null,
+      personId,
     },
   });
   if (rec.input) await saveReceipt(prisma, account.workspaceId, created.id, rec.input);
@@ -158,6 +167,7 @@ export async function importTransactionsAction(input: unknown): Promise<ImportRe
     };
   });
 
+  const importer = await getCurrentUser();
   const batch = await prisma.importBatch.create({
     data: { workspaceId: account.workspaceId, accountId, fileName, rowCount: rows.length },
   });
@@ -172,6 +182,7 @@ export async function importTransactionsAction(input: unknown): Promise<ImportRe
         date: isoToDate(r.date),
         memo: r.memo || null,
         importBatchId: batch.id,
+        personId: importer?.id ?? null,
         importHash: key,
         needsReview: true,
       })),
@@ -211,4 +222,21 @@ export async function removeReceiptAction(formData: FormData): Promise<void> {
   if (!tx) return;
   await prisma.receipt.deleteMany({ where: { transactionId: id } });
   revalidatePath(`/accounts/${tx.accountId}`);
+}
+
+export async function setTransactionPersonAction(formData: FormData): Promise<void> {
+  await assertAuthed();
+  const id = z.string().min(1).parse(formData.get("transactionId"));
+  const raw = String(formData.get("personId") ?? "");
+  const tx = await prisma.transaction.findUnique({ where: { id } });
+  if (!tx) return;
+  let personId: string | null = null;
+  if (raw) {
+    const p = await prisma.user.findUnique({ where: { id: raw }, select: { id: true } });
+    if (!p) return;
+    personId = p.id;
+  }
+  await prisma.transaction.update({ where: { id }, data: { personId } });
+  revalidatePath("/accounts", "layout");
+  revalidatePath("/reports");
 }

@@ -245,10 +245,14 @@ model User {
   email        String   @unique
   name         String?
   passwordHash String
+  /// Profile picture (square JPEG, resized in the browser).
+  avatarData   Bytes?
+  avatarMime   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  workspaces Workspace[]
+  workspaces   Workspace[]
+  transactions Transaction[] @relation("TransactionPerson")
 
   @@map("users")
 }
@@ -564,6 +568,10 @@ model Transaction {
   importHash    String?
   needsReview   Boolean @default(false)
 
+  /// Which household member made this purchase / received this money.
+  personId String?
+  person   User?   @relation("TransactionPerson", fields: [personId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -574,6 +582,7 @@ model Transaction {
 
   @@unique([accountId, importHash])
   @@index([workspaceId, date])
+  @@index([personId])
   @@index([accountId, date])
   @@index([categoryId])
   @@index([transferGroupId])

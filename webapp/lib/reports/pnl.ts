@@ -69,3 +69,23 @@ export async function taxRateBps(workspaceId: string): Promise<number> {
   const t = await prisma.taxProfile.findUnique({ where: { workspaceId } });
   return Math.round(Number(t?.reserveRatePercent ?? 30) * 100);
 }
+
+export interface PersonRow { id: string | null; name: string; spentCents: number; receivedCents: number; count: number }
+
+/** Spending (money out of expense pockets) and income received, per household member, for the window. */
+export async function byPerson(workspaceId: string, from: string, to: string): Promise<PersonRow[]> {
+  const range = { gte: d(from), lte: d(to) };
+  const [users, spent, received] = await Promise.all([
+    prisma.user.findMany({ select: { id: true, name: true, email: true } }),
+    prisma.transaction.groupBy({ by: ["personId"], where: { workspaceId, date: range, transferGroupId: null, amountCents: { lt: 0 }, OR: [{ category: { type: "EXPENSE" } }, { categoryId: null }, { splits: { some: {} } }] }, _sum: { amountCents: true }, _count: true }),
+    prisma.transaction.groupBy({ by: ["personId"], where: { workspaceId, date: range, transferGroupId: null, amountCents: { gt: 0 }, category: { type: "INCOME" } }, _sum: { amountCents: true } }),
+  ]);
+  const name = new Map(users.map((u) => [u.id, u.name || u.email.split("@")[0]]));
+  const ids = new Set<string | null>([...spent.map((s) => s.personId), ...received.map((s) => s.personId)]);
+  return [...ids].map((id) => ({
+    id, name: id ? name.get(id) ?? "Former member" : "Not assigned",
+    spentCents: -(spent.find((s) => s.personId === id)?._sum.amountCents ?? 0),
+    receivedCents: received.find((s) => s.personId === id)?._sum.amountCents ?? 0,
+    count: spent.find((s) => s.personId === id)?._count ?? 0,
+  })).sort((a, b) => b.spentCents - a.spentCents);
+}

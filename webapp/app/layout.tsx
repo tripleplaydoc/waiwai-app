@@ -4,13 +4,14 @@ import "@fontsource-variable/inter";
 import "./globals.css";
 import { getCurrentUser } from "@/lib/auth";
 import { BottomTabs, Nav } from "@/components/nav";
+import { avatarUrl } from "@/components/avatar";
 import { QuickAdd } from "@/components/quick-add";
 
 export const metadata: Metadata = {
   title: "WaiWai",
   description: "WaiWai — wealth, like water: let it flow with purpose. Zero-based budgeting for Personal and Business.",
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 // Runs before first paint so the saved theme never flashes. Class names match
 // the spec: html.light / html.dark, saved in localStorage.
@@ -29,10 +30,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <div className="wai-bg" aria-hidden />
         {authed && (
           <Suspense fallback={null}>
-            <Nav initial={(user?.name || user?.email || "?").trim().charAt(0).toUpperCase()} name={user?.name ?? ""} email={user?.email ?? ""} />
+            <Nav initial={(user?.name || user?.email || "?").trim().charAt(0).toUpperCase()} name={user?.name ?? ""} email={user?.email ?? ""} avatar={user ? avatarUrl(user) : null} />
           </Suspense>
         )}
-        {authed ? <main className="mx-auto w-full max-w-6xl px-4 pb-32 pt-6 sm:px-6 md:pb-24 md:pt-8">{children}</main> : children}
+        {authed ? <main className="mx-auto w-full max-w-6xl px-4 pb-36 pt-6 sm:px-6 md:pb-24 md:pt-8">{children}</main> : children}
         {authed && (
           <Suspense fallback={null}>
             <BottomTabs />

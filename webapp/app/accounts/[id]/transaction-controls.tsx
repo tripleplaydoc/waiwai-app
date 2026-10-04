@@ -5,7 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { Paperclip } from "lucide-react";
 import { ReceiptField } from "@/components/receipt-field";
-import { attachReceiptAction, createTransactionAction, removeReceiptAction, setTransactionCategoryAction } from "@/app/actions/transactions";
+import { attachReceiptAction, createTransactionAction, removeReceiptAction, setTransactionCategoryAction, setTransactionPersonAction } from "@/app/actions/transactions";
 
 type CatOption = { id: string; name: string; group: string; type: "INCOME" | "EXPENSE" | "SYSTEM" };
 
@@ -24,8 +24,8 @@ function CategoryOptions({ options }: { options: CatOption[] }) {
   );
 }
 
-export function AddTransactionButton({ accountId, accounts, isBusiness, categories, payees, today }: {
-  accountId: string; accounts: { id: string; name: string }[]; isBusiness: boolean; categories: CatOption[]; payees: string[]; today: string;
+export function AddTransactionButton({ accountId, accounts, isBusiness, categories, payees, today, people, currentUserId }: {
+  people: { id: string; name: string }[]; currentUserId: string | null; accountId: string; accounts: { id: string; name: string }[]; isBusiness: boolean; categories: CatOption[]; payees: string[]; today: string;
 }) {
   const [open, setOpen] = useState(false);
   const [direction, setDirection] = useState<"outflow" | "inflow">("outflow");
@@ -84,6 +84,14 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
+          {people.length > 1 && (
+            <div>
+              <label htmlFor="tx-who" className="label">Who</label>
+              <select id="tx-who" name="personId" className="input" defaultValue={currentUserId ?? ""}>
+                {people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label htmlFor="tx-payee" className="label">Payee</label>
             <input id="tx-payee" name="payee" list="payee-list" autoComplete="off" maxLength={200} className="input" />
@@ -177,5 +185,18 @@ export function ReceiptCell({ transactionId, receipt }: { transactionId: string;
         </form>
       )}
     </div>
+  );
+}
+
+export function PersonSelect({ transactionId, current, people }: { transactionId: string; current: string; people: { id: string; name: string }[] }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  return (
+    <form ref={formRef} action={setTransactionPersonAction}>
+      <input type="hidden" name="transactionId" value={transactionId} />
+      <select name="personId" aria-label="Who" defaultValue={current} onChange={() => formRef.current?.requestSubmit()} className="input !min-h-10 !w-auto !min-w-24 !py-1.5">
+        <option value="">—</option>
+        {people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+      </select>
+    </form>
   );
 }

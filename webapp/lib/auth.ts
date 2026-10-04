@@ -52,7 +52,7 @@ export const getCurrentUser = cache(async () => {
   if (dot < 1) return null;
   const id = value.slice(0, dot);
   const mac = value.slice(dot + 1);
-  const user = await prisma.user.findUnique({ where: { id } });
+  const user = await prisma.user.findUnique({ where: { id }, omit: { avatarData: true } });
   if (!user || !isRealHash(user.passwordHash)) return null;
   const expected = sign(user.id, user.passwordHash);
   if (mac.length !== expected.length) return null;
