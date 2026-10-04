@@ -15,6 +15,8 @@ import { BudgetBoard } from "./budget-board";
 import { BillBadge, MarkPaidButton } from "./bill-controls";
 import { shortDate } from "@/lib/budget/bills";
 import { IncomeSection } from "./income-section";
+import { MoveMoneyHost } from "./move-money-host";
+import { DailyVerse } from "@/components/daily-verse";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +34,7 @@ function toVM(r: EnvelopeRow, month: Date, today: string): PocketVM {
     id: r.id, name: r.name, groupId: r.groupId, assignedCents: r.assignedCents, activityCents: r.activityCents,
     availableCents: r.availableCents, isSystemManaged: r.isSystemManaged, isTaxDeductible: r.isTaxDeductible,
     priorityRank: r.priorityRank, targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate,
-    allocationBps: r.allocationBps, dueDay: r.dueDay, manualPaid: r.manualPaid, progress,
+    allocationBps: r.allocationBps, dueDay: r.dueDay, manualPaid: r.manualPaid, kind: r.type, expenseType: r.expenseType, progress,
     bill: r.type === "INCOME" ? null : billStatus({
       dueDay: r.dueDay, monthIso: monthParam(month), todayIso: today, manualPaid: r.manualPaid,
       spentCents: Math.max(0, -r.activityCents), targetCents: r.targetType === "MONTHLY_FUNDING" ? r.targetCents : null,
@@ -104,6 +106,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
 
   return (
     <div className="space-y-6">
+      <DailyVerse />
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{workspace.name} budget</h1>
         <div className="ml-auto flex items-center gap-1">
@@ -124,6 +127,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
           <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
             <AllocationButton workspaceId={workspace.id} month={mp} groups={boardGroups} readyToAssignCents={rta} />
             {hasRanked && <AutoAssignButton workspaceId={workspace.id} month={mp} />}
+            <MoveMoneyHost workspaceId={workspace.id} month={mp} pockets={allPockets.filter((p) => !p.isSystemManaged).map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents }))} />
           </div>
         </section>
 
@@ -239,11 +243,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </section>
       )}
 
-      <BudgetBoard workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />
+      <IncomeSection workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} rows={incomeRows} allGroups={allGroups} />
 
-      {incomeRows.length > 0 && (
-        <IncomeSection workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} rows={incomeRows} allGroups={allGroups} />
-      )}
+      <BudgetBoard workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />
 
       <section className="card px-5 py-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Totals">
         <span className="nums">Totals this month — assigned {formatCents(summary.totalAssignedCents)} · activity {formatCents(summary.totalActivityCents)} · available {formatCents(summary.totalAvailableCents)}</span>

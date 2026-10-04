@@ -2,14 +2,16 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeftRight, HandCoins, Plus } from "lucide-react";
+import { ArrowLeftRight, ArrowRightLeft, HandCoins, Plus } from "lucide-react";
+import { ReceiptField } from "@/components/receipt-field";
+import { MoveForm } from "@/components/move-money";
 import { Modal } from "@/components/modal";
 import { createTransactionAction } from "@/app/actions/transactions";
 import { assignMoreAction } from "@/app/actions/pockets";
 import { getQuickAddDataAction, type QuickAddData } from "@/app/actions/quick";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
 
-type Mode = "tx" | "assign";
+type Mode = "tx" | "assign" | "move";
 
 export function QuickAdd() {
   const ws = useSearchParams().get("ws") === "business" ? "business" : "personal";
@@ -48,6 +50,9 @@ export function QuickAdd() {
             <button role="menuitem" type="button" className={row} onClick={() => pick("assign")}>
               <span className="flex size-9 items-center justify-center rounded-full bg-pos-soft text-pos"><HandCoins className="size-4" aria-hidden /></span> Assign money
             </button>
+            <button role="menuitem" type="button" className={row} onClick={() => pick("move")}>
+              <span className="flex size-9 items-center justify-center rounded-full bg-cyan-50 text-water dark:bg-cyan-950"><ArrowRightLeft className="size-4" aria-hidden /></span> Move money
+            </button>
           </div>
         )}
         <button
@@ -59,13 +64,18 @@ export function QuickAdd() {
       </div>
 
       {mode && (
-        <Modal open onClose={close} title={mode === "tx" ? "Add transaction" : "Assign money"}>
+        <Modal open onClose={close} title={mode === "tx" ? "Add transaction" : mode === "move" ? "Move money between pockets" : "Assign money"}>
           {loadError ? (
             <p role="alert" className="text-sm text-neg">Couldn&apos;t load your accounts. Please try again.</p>
           ) : !data ? (
             <p className="py-6 text-center text-sm text-slate-500">Loading…</p>
           ) : mode === "tx" ? (
             <TxForm data={data} onDone={done} onCancel={close} />
+          ) : mode === "move" ? (
+            <MoveForm
+              workspaceId={data.workspaceId} month={data.month} onDone={done} onCancel={close}
+              pockets={data.categories.filter((c) => c.type === "EXPENSE").map((c) => ({ id: c.id, name: c.name, group: c.group, availableCents: c.availableCents }))}
+            />
           ) : (
             <AssignForm data={data} onDone={done} onCancel={close} />
           )}
@@ -151,6 +161,7 @@ function TxForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => 
         <label htmlFor="qa-memo" className="label">Memo</label>
         <input id="qa-memo" name="memo" maxLength={500} className="input" />
       </div>
+      <ReceiptField id="qa-receipt" />
       {data.isBusiness && direction === "outflow" && (
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" /> Tax-deductible</label>
       )}

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { assertAuthed } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
 import { isoToDate } from "@/lib/utils/dates";
+import { readReceipt, saveReceipt } from "@/lib/receipts";
 import type { ActionResult } from "./types";
 
 const txSchema = z.object({
@@ -34,6 +35,9 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
   const account = await prisma.account.findUnique({ where: { id: d.accountId } });
   if (!account || account.isArchived) return { ok: false, error: "Account not found." };
 
+  const rec = await readReceipt(formData);
+  if ("error" in rec) return { ok: false, error: rec.error };
+
   let categoryId: string | null = null;
   let deductible = false;
   if (d.categoryId) {
@@ -53,7 +57,7 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
     payeeId = p.id;
   }
 
-  await prisma.transaction.create({
+  const created = await prisma.transaction.create({
     data: {
       workspaceId: account.workspaceId,
       accountId: account.id,
@@ -67,6 +71,7 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
       needsReview: categoryId === null,
     },
   });
+  if (rec.input) await saveReceipt(prisma, account.workspaceId, created.id, rec.input);
   revalidatePath("/budget");
   revalidatePath("/accounts");
   revalidatePath(`/accounts/${account.id}`);
@@ -183,4 +188,28 @@ export async function importTransactionsAction(input: unknown): Promise<ImportRe
     await prisma.importBatch.update({ where: { id: batch.id }, data: { status: "FAILED" } });
     return { ok: false, error: "The import failed and nothing was saved. Try again." };
   }
+}
+
+/** Attaches (or replaces) the receipt on an existing transaction. */
+export async function attachReceiptAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
+  await assertAuthed();
+  const id = z.string().min(1).safeParse(formData.get("transactionId"));
+  if (!id.success) return { ok: false, error: "Bad request." };
+  const tx = await prisma.transaction.findUnique({ where: { id: id.data } });
+  if (!tx) return { ok: false, error: "Transaction not found." };
+  const rec = await readReceipt(formData);
+  if ("error" in rec) return { ok: false, error: rec.error };
+  if (!rec.input) return { ok: false, error: "Choose a photo or PDF first." };
+  await saveReceipt(prisma, tx.workspaceId, tx.id, rec.input);
+  revalidatePath(`/accounts/${tx.accountId}`);
+  return { ok: true };
+}
+
+export async function removeReceiptAction(formData: FormData): Promise<void> {
+  await assertAuthed();
+  const id = z.string().min(1).parse(formData.get("transactionId"));
+  const tx = await prisma.transaction.findUnique({ where: { id } });
+  if (!tx) return;
+  await prisma.receipt.deleteMany({ where: { transactionId: id } });
+  revalidatePath(`/accounts/${tx.accountId}`);
 }

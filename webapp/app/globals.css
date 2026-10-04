@@ -14,6 +14,8 @@
   --c-warn-soft: #FBEFB8;
   --c-neg: #B3261E;
   --c-neg-soft: #F9D5D1;
+  --c-income: #14663F;
+  --c-water: #0E7C86;
 }
 html.dark {
   --c-canvas: #0B1220;
@@ -26,6 +28,8 @@ html.dark {
   --c-warn-soft: #3A2E0B;
   --c-neg: #FF8F86;
   --c-neg-soft: #4A1B18;
+  --c-income: #166B45;
+  --c-water: #35B6C2;
 }
 
 @theme {
@@ -40,6 +44,8 @@ html.dark {
   --color-warn-soft: var(--c-warn-soft);
   --color-neg: var(--c-neg);
   --color-neg-soft: var(--c-neg-soft);
+  --color-income: var(--c-income);
+  --color-water: var(--c-water);
   /* Re-point the "indigo" scale at a YNAB-style blue so every existing indigo class follows. */
   --color-indigo-50: #EEF4FF; --color-indigo-100: #DCE8FF; --color-indigo-200: #BBD1FF;
   --color-indigo-300: #8FB1FA; --color-indigo-400: #5F8EF2; --color-indigo-500: #2E6BE6;
@@ -81,3 +87,14 @@ html.dark {
   .td { @apply px-4 py-2.5 text-sm; }
   .kbd { @apply rounded border border-slate-300 bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300; }
 }
+
+/* Water theme: soft waves rising from the bottom of every page. */
+.wai-bg {
+  position: fixed; inset: auto 0 0 0; height: 46vh; z-index: -1; pointer-events: none; opacity: .9;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath fill='%230E7C86' fill-opacity='.07' d='M0 224l60-26.7C120 171 240 117 360 122.7c120 5.3 240 69.3 360 80s240-32 360-58.7 240-37.3 300-42.6l60-5.4V320H0z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath fill='%232E6BE6' fill-opacity='.06' d='M0 256l60-21.3C120 213 240 171 360 170.7c120 .3 240 42.3 360 58.6s240-5.3 360-32 240-58.7 300-72l60-13.3V320H0z'/%3E%3C/svg%3E");
+  background-size: 100% 100%, 100% 80%; background-position: bottom, bottom; background-repeat: no-repeat;
+}
+html.dark .wai-bg { opacity: .55; }
+@media print { .wai-bg { display: none; } }

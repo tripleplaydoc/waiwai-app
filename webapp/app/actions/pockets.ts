@@ -8,7 +8,9 @@ import { assertAuthed } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
 import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
 import { addMonthsUTC } from "@/lib/budget/dates";
+import { getCategoryAvailableBalance } from "@/lib/budget/category-balance";
 import { bpsProblem, planAllocation, type AllocGroup } from "@/lib/budget/allocation";
+import { isTypeKey, typesFor } from "@/lib/budget/expense-types";
 import type { ActionResult } from "./types";
 
 const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
@@ -27,6 +29,7 @@ const pocketSchema = z.object({
   priorityRank: z.string().optional(),
   dueDay: z.string().optional(),
   isTaxDeductible: z.string().optional(),
+  expenseType: z.string().optional(),
 });
 
 /** Creates or edits a pocket (an envelope inside a category). */
@@ -81,6 +84,14 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
     if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) return { ok: false, error: "Due day must be a number from 1 to 31." };
   }
 
+  let expenseType: string | null = null;
+  if (d.expenseType && d.expenseType.trim() !== "") {
+    if (!isTypeKey(d.expenseType)) return { ok: false, error: "Pick a type from the list." };
+    const allowed = typesFor(isIncome ? "INCOME" : "EXPENSE").some((t) => t.key === d.expenseType);
+    if (!allowed) return { ok: false, error: isIncome ? "Pick an income type." : "Pick an expense type." };
+    expenseType = d.expenseType;
+  }
+
   const deductible = workspace.type === "BUSINESS" && !isIncome && d.isTaxDeductible === "on";
   try {
     if (existing) {
@@ -92,6 +103,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           isTaxDeductible: existing.isSystemManaged ? existing.isTaxDeductible : deductible,
           priorityRank: isIncome ? null : rank,
           dueDay,
+          expenseType: existing.isSystemManaged ? existing.expenseType : expenseType,
           fundingTargetType: targetType,
           fundingTargetCents: targetCents,
           fundingTargetByDate: targetDate,
@@ -109,6 +121,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           isTaxDeductible: deductible,
           priorityRank: isIncome ? null : rank,
           dueDay,
+          expenseType,
           fundingTargetType: targetType,
           fundingTargetCents: targetCents,
           fundingTargetByDate: targetDate,
@@ -352,4 +365,39 @@ export async function assignMoreAction(workspaceId: string, categoryId: string, 
   await prisma.budgetAssignment.create({ data: { categoryId, month: monthDate, amountCents: cents, source: "MANUAL" } });
   revalidatePath("/budget");
   return { ok: true };
+}
+
+/**
+ * Moves already-assigned money from one pocket to another. The ledger is
+ * append-only, so this writes two offsetting rows in one transaction (minus
+ * from the source, plus to the destination); Ready to Assign is unchanged.
+ */
+export async function moveMoneyAction(workspaceId: string, fromId: string, toId: string, month: string, amount: string): Promise<ActionResult> {
+  await assertAuthed();
+  const m = monthSchema.safeParse(month);
+  if (!m.success) return { ok: false, error: "Bad request." };
+  if (!fromId || !toId) return { ok: false, error: "Pick both pockets." };
+  if (fromId === toId) return { ok: false, error: "Pick two different pockets." };
+  const cents = parseToCents(amount);
+  if (cents === null || cents <= 0) return { ok: false, error: "Enter an amount like 50.00" };
+
+  const [from, to] = await Promise.all([
+    prisma.category.findFirst({ where: { id: fromId, workspaceId, isArchived: false } }),
+    prisma.category.findFirst({ where: { id: toId, workspaceId, isArchived: false } }),
+  ]);
+  if (!from || !to) return { ok: false, error: "Pocket not found." };
+  if (from.type === "INCOME" || to.type === "INCOME") return { ok: false, error: "Income sources don't hold money. Pick spending pockets." };
+  if (from.isSystemManaged || to.isSystemManaged) return { ok: false, error: "The tax reserve is managed automatically. Use the tax rebalance instead." };
+
+  const monthDate = new Date(`${m.data}-01T00:00:00.000Z`);
+  const available = await getCategoryAvailableBalance(prisma, from.id, monthDate);
+  if (cents > available) {
+    return { ok: false, error: `${from.name} only has ${(Math.max(0, available) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} available.` };
+  }
+  await prisma.$transaction([
+    prisma.budgetAssignment.create({ data: { categoryId: from.id, month: monthDate, amountCents: -cents, source: "MANUAL", note: `Moved to ${to.name}` } }),
+    prisma.budgetAssignment.create({ data: { categoryId: to.id, month: monthDate, amountCents: cents, source: "MANUAL", note: `Moved from ${from.name}` } }),
+  ]);
+  revalidatePath("/budget");
+  return { ok: true, message: `Moved to ${to.name}.` };
 }

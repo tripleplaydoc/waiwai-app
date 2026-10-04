@@ -418,6 +418,8 @@ model Category {
   /// BUSINESS and type = EXPENSE.
   isTaxDeductible   Boolean            @default(false)
   scheduleCLineItem ScheduleCLineItem?
+  /// WaiWai classification key (lib/budget/expense-types.ts), e.g. ADVERTISING.
+  expenseType       String?
 
   /// True for app-managed envelopes (e.g. "Estimated Tax Reserve") the UI
   /// should prevent users from freely renaming, deleting, or repurposing.
@@ -679,6 +681,9 @@ model Receipt {
   fileUrl        String?
   mimeType       String
   fileSizeBytes  Int?
+  /// Receipt bytes (images are downscaled in the browser first).
+  fileData       Bytes?
+  fileName       String?
 
   status       ReceiptStatus @default(PENDING_UPLOAD)
   merchantName String?

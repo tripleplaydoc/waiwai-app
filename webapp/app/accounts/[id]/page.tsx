@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/utils/currency";
 import { dateToIso, formatShortDate, todayIso } from "@/lib/utils/dates";
 import { deleteTransactionAction } from "@/app/actions/transactions";
-import { AddTransactionButton, CategorySelect, ConfirmDeleteButton } from "./transaction-controls";
+import { AddTransactionButton, CategorySelect, ConfirmDeleteButton, ReceiptCell } from "./transaction-controls";
 
 export const dynamic = "force-dynamic";
 const LIMIT = 300;
@@ -22,7 +22,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
       where: { accountId: id },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: LIMIT,
-      include: { payee: true },
+      include: { payee: true, receipt: { select: { id: true, fileName: true } } },
     }),
     prisma.transaction.aggregate({ where: { accountId: id }, _sum: { amountCents: true } }),
     prisma.category.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
@@ -56,16 +56,16 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
       </div>
 
       <section className="card overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse">
+        <table className="w-full min-w-[820px] border-collapse">
           <thead className="border-b border-[#E2E8F0] bg-navy-soft dark:border-slate-800 dark:bg-slate-800/50">
             <tr>
               <th className="th">Date</th><th className="th">Payee</th><th className="th">Category</th>
-              <th className="th text-right">Outflow</th><th className="th text-right">Inflow</th><th className="th"><span className="sr-only">Actions</span></th>
+              <th className="th text-right">Outflow</th><th className="th text-right">Inflow</th><th className="th">Receipt</th><th className="th"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {transactions.length === 0 && (
-              <tr><td colSpan={6} className="td text-slate-500">No transactions yet. Press <span className="kbd">N</span> to add one, or import a CSV.</td></tr>
+              <tr><td colSpan={7} className="td text-slate-500">No transactions yet. Press <span className="kbd">N</span> to add one, or import a CSV.</td></tr>
             )}
             {transactions.map((t) => (
               <tr key={t.id} className="border-b border-[#E2E8F0] last:border-0 dark:border-slate-800">
@@ -77,6 +77,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
                 <td className="td"><CategorySelect transactionId={t.id} current={t.categoryId ?? ""} options={catOptions} needsReview={t.needsReview} /></td>
                 <td className="td nums text-right">{t.amountCents < 0 ? formatCents(-t.amountCents) : ""}</td>
                 <td className="td nums text-right text-[#2E7D32]">{t.amountCents > 0 ? formatCents(t.amountCents) : ""}</td>
+                <td className="td"><ReceiptCell transactionId={t.id} receipt={t.receipt} /></td>
                 <td className="td text-right">
                   <form action={deleteTransactionAction}>
                     <input type="hidden" name="transactionId" value={t.id} />

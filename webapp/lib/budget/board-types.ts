@@ -17,6 +17,8 @@ export interface PocketVM {
   allocationBps: number | null;
   dueDay: number | null;
   manualPaid: boolean;
+  kind: "INCOME" | "EXPENSE" | "SYSTEM";
+  expenseType: string | null;
   bill: BillStatus | null;
   progress: PocketProgress;
 }

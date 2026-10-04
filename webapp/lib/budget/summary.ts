@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { addMonthsUTC } from "@/lib/budget/dates";
 import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
+import { effectiveType } from "@/lib/budget/expense-types";
 
 export interface EnvelopeRow {
   id: string;
@@ -21,6 +22,7 @@ export interface EnvelopeRow {
   allocationBps: number | null;
   dueDay: number | null;
   manualPaid: boolean;
+  expenseType: string | null;
 }
 
 export interface GroupRow {
@@ -95,6 +97,7 @@ export async function getBudgetSummary(workspaceId: string, month: Date): Promis
       allocationBps: c.allocationBps,
       dueDay: c.dueDay,
       manualPaid: paidSet.has(c.id),
+      expenseType: effectiveType(c),
     };
   });
 

@@ -1,0 +1,162 @@
+import { Download, TrendingDown, TrendingUp } from "lucide-react";
+import { requireAuth } from "@/lib/auth";
+import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
+import { buildPnl, taxRateBps, type PnlTypeRow } from "@/lib/reports/pnl";
+import { PRESETS, resolvePeriod } from "@/lib/reports/periods";
+import { formatCents } from "@/lib/utils/currency";
+import { todayIso } from "@/lib/utils/dates";
+import { PrintButton } from "./print-button";
+
+export const dynamic = "force-dynamic";
+type SP = Promise<{ ws?: string; period?: string; from?: string; to?: string }>;
+
+function Delta({ cur, prev, goodWhenUp }: { cur: number; prev: number; goodWhenUp: boolean }) {
+  if (prev === 0 && cur === 0) return <span className="text-slate-400">—</span>;
+  if (prev === 0) return <span className="text-slate-400">new</span>;
+  const pct = Math.round(((cur - prev) / Math.abs(prev)) * 100);
+  if (pct === 0) return <span className="text-slate-400">0%</span>;
+  const good = (pct > 0) === goodWhenUp;
+  return <span className={good ? "text-pos" : "text-neg"}>{pct > 0 ? "▲" : "▼"} {Math.abs(pct)}%</span>;
+}
+
+function Section({ title, rows, total, prevTotal, goodWhenUp, tone }: { title: string; rows: PnlTypeRow[]; total: number; prevTotal: number; goodWhenUp: boolean; tone: string }) {
+  return (
+    <tbody>
+      <tr className={tone}>
+        <th scope="colgroup" colSpan={4} className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-white">{title}</th>
+      </tr>
+      {rows.length === 0 && <tr><td colSpan={4} className="td text-slate-500">Nothing recorded in this period.</td></tr>}
+      {rows.map((r) => (
+        <tr key={r.key} className="border-b border-[#E2E8F0] align-top dark:border-slate-800">
+          <td className="td" colSpan={1}>
+            <details>
+              <summary className="cursor-pointer select-none font-medium">{r.label}</summary>
+              <ul className="mt-1 space-y-0.5 pl-1 text-xs text-slate-500">
+                {r.pockets.map((p) => (
+                  <li key={p.id} className="flex justify-between gap-4"><span>{p.name}{p.deductible && <span className="ml-1 text-[10px] text-water">deductible</span>}</span><span className="nums">{formatCents(p.cents)}</span></li>
+                ))}
+              </ul>
+            </details>
+          </td>
+          <td className="td nums text-right font-medium">{formatCents(r.cents)}</td>
+          <td className="td nums hidden text-right text-slate-500 sm:table-cell">{formatCents(r.prevCents)}</td>
+          <td className="td nums hidden text-right text-xs sm:table-cell"><Delta cur={r.cents} prev={r.prevCents} goodWhenUp={goodWhenUp} /></td>
+        </tr>
+      ))}
+      <tr className="border-b-2 border-[#CBD5E1] bg-navy-soft font-bold dark:border-slate-700 dark:bg-slate-800/50">
+        <td className="td">Total {title.toLowerCase()}</td>
+        <td className="td nums text-right">{formatCents(total)}</td>
+        <td className="td nums hidden text-right text-slate-500 sm:table-cell">{formatCents(prevTotal)}</td>
+        <td className="td nums hidden text-right text-xs sm:table-cell"><Delta cur={total} prev={prevTotal} goodWhenUp={goodWhenUp} /></td>
+      </tr>
+    </tbody>
+  );
+}
+
+export default async function ReportsPage({ searchParams }: { searchParams: SP }) {
+  await requireAuth();
+  const sp = await searchParams;
+  const wsKey = wsKeyFromParam(sp.ws);
+  const ws = await getWorkspace(wsKey);
+  const period = resolvePeriod(sp.period, sp.from, sp.to, todayIso());
+  const [r, bps] = await Promise.all([buildPnl(ws.id, period), taxRateBps(ws.id)]);
+  const isBiz = ws.type === "BUSINESS";
+  const margin = r.revenueCents > 0 ? Math.round((r.netCents / r.revenueCents) * 1000) / 10 : null;
+  const taxableCents = Math.max(0, r.revenueCents - r.deductibleCents);
+  const estTaxCents = Math.round((taxableCents * bps) / 10_000);
+  const exportQ = new URLSearchParams({ period: period.preset, from: period.from, to: period.to, ...(wsKey === "business" ? { ws: "business" } : {}) });
+  const maxBar = Math.max(r.revenueCents, r.expenseCents, 1);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{ws.name} profit &amp; loss</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300">{period.label}</p>
+        </div>
+        <div className="ml-auto flex gap-2 print:hidden">
+          <a href={`/reports/export?${exportQ}`} className="btn btn-sm"><Download className="size-4" aria-hidden /> CSV</a>
+          <PrintButton />
+        </div>
+      </div>
+
+      <form method="get" className="card flex flex-wrap items-end gap-3 p-4 print:hidden" aria-label="Report period">
+        {wsKey === "business" && <input type="hidden" name="ws" value="business" />}
+        <div>
+          <label htmlFor="rp-period" className="label">Period</label>
+          <select id="rp-period" name="period" defaultValue={period.preset} className="input min-w-44">
+            {PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="rp-from" className="label">From (custom)</label>
+          <input id="rp-from" type="date" name="from" defaultValue={period.from} className="input" />
+        </div>
+        <div>
+          <label htmlFor="rp-to" className="label">To (custom)</label>
+          <input id="rp-to" type="date" name="to" defaultValue={period.to} className="input" />
+        </div>
+        <button type="submit" className="btn btn-primary">Update</button>
+      </form>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <section className="card p-5" aria-label="Revenue">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500"><TrendingUp className="size-4 text-income" aria-hidden /> Revenue</div>
+          <div className="nums mt-1 text-3xl font-bold tracking-tight text-income dark:text-pos">{formatCents(r.revenueCents)}</div>
+          <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-income" style={{ width: `${(r.revenueCents / maxBar) * 100}%` }} /></div>
+        </section>
+        <section className="card p-5" aria-label="Expenses">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500"><TrendingDown className="size-4 text-neg" aria-hidden /> Expenses</div>
+          <div className="nums mt-1 text-3xl font-bold tracking-tight">{formatCents(r.expenseCents)}</div>
+          <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-neg" style={{ width: `${(r.expenseCents / maxBar) * 100}%` }} /></div>
+        </section>
+        <section className={`card p-5 ${r.netCents < 0 ? "!border-red-300" : ""}`} aria-label="Net income">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Net income</div>
+          <div className={`nums mt-1 text-3xl font-bold tracking-tight ${r.netCents < 0 ? "text-neg" : "text-water"}`}>{formatCents(r.netCents)}</div>
+          <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">{margin === null ? "No revenue in this period." : `${margin}% of revenue kept.`}</p>
+        </section>
+      </div>
+
+      {r.uncategorizedCount > 0 && (
+        <p className="rounded-xl border border-amber-300 bg-warn-soft px-4 py-2.5 text-sm text-warn dark:border-amber-700">
+          {r.uncategorizedCount} transaction{r.uncategorizedCount === 1 ? "" : "s"} ({formatCents(Math.abs(r.uncategorizedCents))}) in this period {r.uncategorizedCount === 1 ? "has" : "have"} no pocket yet, so {r.uncategorizedCount === 1 ? "it isn't" : "they aren't"} counted below.
+        </p>
+      )}
+
+      <section className="card overflow-hidden" aria-label="Profit and loss statement">
+        <table className="w-full border-collapse">
+          <thead className="border-b border-[#E2E8F0] bg-navy-soft dark:border-slate-800 dark:bg-slate-800/50">
+            <tr>
+              <th className="th">Type</th><th className="th text-right">This period</th>
+              <th className="th hidden text-right sm:table-cell">Previous</th><th className="th hidden text-right sm:table-cell">Change</th>
+            </tr>
+          </thead>
+          <Section title="Revenue" rows={r.revenue} total={r.revenueCents} prevTotal={r.prevRevenueCents} goodWhenUp tone="bg-income" />
+          <Section title="Expenses" rows={r.expenses} total={r.expenseCents} prevTotal={r.prevExpenseCents} goodWhenUp={false} tone="bg-group" />
+          <tfoot>
+            <tr className="bg-water/10 text-base font-bold">
+              <td className="td">Net income</td>
+              <td className={`td nums text-right ${r.netCents < 0 ? "text-neg" : "text-income dark:text-pos"}`}>{formatCents(r.netCents)}</td>
+              <td className="td nums hidden text-right text-slate-500 sm:table-cell">{formatCents(r.prevNetCents)}</td>
+              <td className="td nums hidden text-right text-xs sm:table-cell"><Delta cur={r.netCents} prev={r.prevNetCents} goodWhenUp /></td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>
+
+      {isBiz && (
+        <section className="card p-5" aria-label="Tax estimate">
+          <h2 className="text-base font-bold tracking-tight">Tax set-aside estimate</h2>
+          <dl className="nums mt-3 grid grid-cols-[1fr_auto] gap-y-1.5 text-sm">
+            <dt className="text-slate-500">Revenue</dt><dd className="text-right">{formatCents(r.revenueCents)}</dd>
+            <dt className="text-slate-500">Tax-deductible expenses</dt><dd className="text-right">− {formatCents(r.deductibleCents)}</dd>
+            <dt className="font-medium">Net taxable income</dt><dd className="text-right font-medium">{formatCents(taxableCents)}</dd>
+            <dt className="text-slate-500">Reserve at {bps / 100}%</dt><dd className="text-right font-semibold text-warn">{formatCents(estTaxCents)}</dd>
+            <dt className="text-slate-500">Estimated tax already paid</dt><dd className="text-right">{formatCents(r.taxPaymentsCents)}</dd>
+          </dl>
+          <p className="mt-3 text-xs text-slate-500">An estimate for planning, not tax advice. Mark pockets tax-deductible on the budget page to include them.</p>
+        </section>
+      )}
+    </div>
+  );
+}

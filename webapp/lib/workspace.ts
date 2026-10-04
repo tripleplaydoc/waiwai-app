@@ -46,10 +46,14 @@ export async function ensureWorkspaces(): Promise<{ personal: Workspace; busines
 async function seedCategories(workspaceId: string, type: "PERSONAL" | "BUSINESS"): Promise<string | undefined> {
   const income = await prisma.categoryGroup.create({ data: { workspaceId, name: "Income", sortOrder: 0 } });
   await prisma.category.create({
-    data: { workspaceId, categoryGroupId: income.id, name: type === "BUSINESS" ? "Business Revenue" : "Paycheck", type: "INCOME" },
+    data: { workspaceId, categoryGroupId: income.id, name: type === "BUSINESS" ? "Business Revenue" : "Paycheck", type: "INCOME", expenseType: type === "BUSINESS" ? "SALES" : "PAYCHECK" },
   });
 
   if (type === "PERSONAL") {
+    const kinds: Record<string, string> = {
+      "Rent / Mortgage": "HOUSING", Utilities: "UTILITIES", "Phone & Internet": "UTILITIES", Insurance: "INSURANCE",
+      Groceries: "FOOD", "Gas & Transportation": "TRANSPORT", "Dining Out": "DINING", "Emergency Fund": "SAVINGS",
+    };
     const groups: [string, string[]][] = [
       ["Bills", ["Rent / Mortgage", "Utilities", "Phone & Internet", "Insurance"]],
       ["Everyday", ["Groceries", "Gas & Transportation", "Dining Out"]],
@@ -60,7 +64,7 @@ async function seedCategories(workspaceId: string, type: "PERSONAL" | "BUSINESS"
       const g = await prisma.categoryGroup.create({ data: { workspaceId, name: gName, sortOrder: order++ } });
       let i = 0;
       for (const name of cats) {
-        await prisma.category.create({ data: { workspaceId, categoryGroupId: g.id, name, sortOrder: i++ } });
+        await prisma.category.create({ data: { workspaceId, categoryGroupId: g.id, name, sortOrder: i++, expenseType: kinds[name] } });
       }
     }
     return undefined;

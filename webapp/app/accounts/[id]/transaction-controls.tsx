@@ -3,7 +3,9 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/modal";
-import { createTransactionAction, setTransactionCategoryAction } from "@/app/actions/transactions";
+import { Paperclip } from "lucide-react";
+import { ReceiptField } from "@/components/receipt-field";
+import { attachReceiptAction, createTransactionAction, removeReceiptAction, setTransactionCategoryAction } from "@/app/actions/transactions";
 
 type CatOption = { id: string; name: string; group: string; type: "INCOME" | "EXPENSE" | "SYSTEM" };
 
@@ -93,6 +95,7 @@ export function AddTransactionButton({ accountId, isBusiness, categories, payees
             <label htmlFor="tx-memo" className="label">Memo</label>
             <input id="tx-memo" name="memo" maxLength={500} className="input" />
           </div>
+          <ReceiptField id="tx-receipt" />
           <div className="flex flex-wrap gap-x-6">
             <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="cleared" className="size-5" /> Cleared</label>
             {isBusiness && direction === "outflow" && (
@@ -141,5 +144,33 @@ export function ConfirmDeleteButton() {
     >
       <Trash2 className="size-3.5" aria-hidden />
     </button>
+  );
+}
+
+/** Paperclip on a transaction row: view the receipt, or attach one. */
+export function ReceiptCell({ transactionId, receipt }: { transactionId: string; receipt: { id: string; fileName: string | null } | null }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, action] = useActionState(attachReceiptAction, undefined);
+  return (
+    <div className="flex items-center gap-1">
+      {receipt && (
+        <>
+          <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener" className="btn btn-sm !min-h-9" aria-label={`View receipt${receipt.fileName ? ` ${receipt.fileName}` : ""}`}>
+            <Paperclip className="size-3.5 text-pos" aria-hidden /> <span className="hidden sm:inline">Receipt</span>
+          </a>
+          <form action={removeReceiptAction}>
+            <input type="hidden" name="transactionId" value={transactionId} />
+            <button type="submit" className="btn btn-sm !min-h-9 !px-2" aria-label="Remove receipt" onClick={(e) => { if (!window.confirm("Remove this receipt?")) e.preventDefault(); }}>✕</button>
+          </form>
+        </>
+      )}
+      {!receipt && (
+        <form ref={formRef} action={action}>
+          <input type="hidden" name="transactionId" value={transactionId} />
+          <ReceiptField id={`rc-${transactionId}`} compact onReady={() => formRef.current?.requestSubmit()} />
+          {state && !state.ok && <p role="alert" className="mt-1 text-xs text-neg">{state.error}</p>}
+        </form>
+      )}
+    </div>
   );
 }

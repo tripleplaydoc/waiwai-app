@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun, LogOut, Wallet, Landmark, Upload, Settings } from "lucide-react";
+import { Moon, Sun, LogOut, Wallet, Landmark, Upload, Settings, BarChart3 } from "lucide-react";
 import { BrandName } from "@/components/brand";
 import { logoutAction } from "@/app/actions/auth";
 
 const LINKS = [
   { href: "/budget", label: "Budget", icon: Wallet },
   { href: "/accounts", label: "Accounts", icon: Landmark },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/import", label: "Import", icon: Upload },
 ];
 
@@ -79,7 +80,7 @@ export function Nav({ initial, name, email }: { initial: string; name: string; e
   return (
     <header className="sticky top-0 z-30 bg-navy text-white shadow-[0_8px_24px_-14px_rgba(15,26,56,0.6)]">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
-        <Link href={`/budget${q(ws)}`} aria-label="Financial Tracker home" className="mr-1 shrink-0">
+        <Link href={`/budget${q(ws)}`} aria-label="WaiWai home" className="mr-1 shrink-0">
           <BrandName light />
         </Link>
         <nav className="ml-3 hidden items-center gap-1 md:flex" aria-label="Main">
@@ -121,7 +122,7 @@ export function BottomTabs() {
   const { ws, q } = useWs();
   return (
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-navy pb-[env(safe-area-inset-bottom)] text-white md:hidden">
-      <ul className="mx-auto grid max-w-md grid-cols-3">
+      <ul className="mx-auto grid max-w-md grid-cols-4">
         {LINKS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (

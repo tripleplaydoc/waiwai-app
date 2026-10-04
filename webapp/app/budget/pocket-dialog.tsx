@@ -6,6 +6,7 @@ import { archivePocketAction, saveGroupAction, savePocketAction } from "@/app/ac
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 import { monthsBetweenInclusive } from "@/lib/budget/dates";
 import type { PocketVM } from "@/lib/budget/board-types";
+import { typesFor } from "@/lib/budget/expense-types";
 
 type TT = "NONE" | "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE";
 
@@ -24,13 +25,14 @@ export function PocketDialog({
   monthIso: string; kindOfNew?: "EXPENSE" | "INCOME";
 }) {
   const editing = pocket !== null;
-  const isIncome = editing ? false : kindOfNew === "INCOME";
+  const isIncome = editing ? pocket.kind === "INCOME" : kindOfNew === "INCOME";
   const realGroups = groups.filter((g) => g.id !== "__none");
   const [state, action, pending] = useActionState(savePocketAction, undefined);
   const [groupChoice, setGroupChoice] = useState(pocket?.groupId ?? defaultGroupId ?? realGroups[0]?.id ?? "__new");
   const [kind, setKind] = useState<TT>(pocket?.targetType ?? "NONE");
   const [amount, setAmount] = useState(pocket?.targetCents ? centsToInput(pocket.targetCents) : "");
   const [date, setDate] = useState(pocket?.targetDate ?? "");
+  const [etype, setEtype] = useState(pocket?.expenseType ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, startDelete] = useTransition();
   const [deleteError, setDeleteError] = useState<string>();
@@ -77,6 +79,22 @@ export function PocketDialog({
           <div>
             <label htmlFor="pk-newgroup" className="label">New category name</label>
             <input id="pk-newgroup" name="newGroupName" maxLength={80} className="input" />
+          </div>
+        )}
+
+        {!system && (
+          <div>
+            <label htmlFor="pk-type" className="label">Type <span className="font-normal text-slate-400">(for your P&amp;L)</span></label>
+            <select id="pk-type" name="expenseType" className="input" value={etype} onChange={(e) => setEtype(e.target.value)}>
+              <option value="">Not classified</option>
+              {isIncome ? typesFor("INCOME").map((t) => <option key={t.key} value={t.key}>{t.label}</option>) : (
+                (isBusiness ? (["Business", "Personal"] as const) : (["Personal", "Business"] as const)).map((g) => (
+                  <optgroup key={g} label={g === "Business" ? "Business expenses" : "Personal & everyday"}>
+                    {typesFor("EXPENSE").filter((t) => t.group === g).map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                  </optgroup>
+                ))
+              )}
+            </select>
           </div>
         )}
 

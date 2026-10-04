@@ -13,6 +13,8 @@ import { AssignedInput } from "./budget-controls";
 import { GroupDialog, PocketDialog } from "./pocket-dialog";
 import { archiveGroupAction, renameGroupAction, renamePocketAction, reorderAction } from "@/app/actions/pockets";
 import { InlineName } from "@/components/inline-name";
+import { typeLabel } from "@/lib/budget/expense-types";
+import { openMoveMoney } from "./move-money-host";
 import { BillBadge, MarkPaidButton } from "./bill-controls";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
 import type { GroupVM, PocketVM } from "@/lib/budget/board-types";
@@ -92,6 +94,7 @@ function PocketRowView({
               className="break-words text-[15px] font-semibold leading-snug md:text-sm md:font-medium"
             />
           )}
+          {typeLabel(p.expenseType) && <span className="rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] font-medium text-water dark:bg-cyan-950/60">{typeLabel(p.expenseType)}</span>}
           {p.priorityRank !== null && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-[#1E4FBF] dark:bg-blue-950 dark:text-blue-300">P{p.priorityRank}</span>}
           {p.isSystemManaged && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800">system</span>}
           {p.allocationBps !== null && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800">{p.allocationBps / 100}%</span>}
@@ -106,7 +109,12 @@ function PocketRowView({
       </div>
 
       <div className="col-start-3 row-start-1 text-right md:order-5 md:col-auto md:row-auto">
-        <span className={`nums inline-block min-w-[4.75rem] rounded-full px-2.5 py-1 text-right text-sm font-semibold md:min-w-20 md:px-3 ${pill(p)}`}>{formatCents(p.availableCents)}</span>
+        {p.isSystemManaged || overlay ? (
+          <span className={`nums inline-block min-w-[4.75rem] rounded-full px-2.5 py-1 text-right text-sm font-semibold md:min-w-20 md:px-3 ${pill(p)}`}>{formatCents(p.availableCents)}</span>
+        ) : (
+          <button type="button" onClick={() => openMoveMoney(p.id)} title="Move money out of this pocket" aria-label={`${p.name}: ${formatCents(p.availableCents)} available. Move money`}
+            className={`nums inline-block min-w-[4.75rem] cursor-pointer rounded-full px-2.5 py-1 text-right text-sm font-semibold hover:ring-2 hover:ring-water/40 md:min-w-20 md:px-3 ${pill(p)}`}>{formatCents(p.availableCents)}</button>
+        )}
       </div>
 
       <div className="col-span-2 col-start-2 row-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 md:contents">

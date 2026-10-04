@@ -7,8 +7,8 @@ import { BottomTabs, Nav } from "@/components/nav";
 import { QuickAdd } from "@/components/quick-add";
 
 export const metadata: Metadata = {
-  title: "Financial Tracker",
-  description: "Zero-based budgeting for Personal and Business finances",
+  title: "WaiWai",
+  description: "WaiWai — wealth, like water: let it flow with purpose. Zero-based budgeting for Personal and Business.",
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
@@ -26,6 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
+        <div className="wai-bg" aria-hidden />
         {authed && (
           <Suspense fallback={null}>
             <Nav initial={(user?.name || user?.email || "?").trim().charAt(0).toUpperCase()} name={user?.name ?? ""} email={user?.email ?? ""} />

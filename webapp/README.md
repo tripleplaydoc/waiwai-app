@@ -1,4 +1,4 @@
-# Financial Tracker
+# WaiWai
 
 Zero-based (envelope) budgeting with separate **Personal** and **Business**
 workspaces. Next.js (App Router) + Prisma 7 + Supabase Postgres, hosted on
@@ -45,3 +45,10 @@ site shows "Database not reachable", open the Supabase dashboard and click
 Restore project (or use `/status`).
 
 <!-- redeploy marker: picks up APP_PASSWORD (2026-10-03) -->
+
+## WaiWai features (Oct 2026)
+- Income sits at the top of the budget; each pocket has a **type** (Advertising, Auto expense, Housing…) used by the P&L.
+- **Reports** page: profit & loss by type with prior-period comparison, CSV export, print, and (Business) a tax set-aside estimate.
+- **Receipts** attach to any transaction (photo or PDF, stored in the database, shown behind login only).
+- **Move money** between pockets from the + button, the budget page, or by tapping a pocket's available amount.
+- A daily rotating verse / saying from `webapp/lib/verses.ts`.
