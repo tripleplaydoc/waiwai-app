@@ -127,7 +127,11 @@ export async function runWaterfallAutoAssign(
     );
   }
 
-  const pool = Math.max(0, await getReadyToAssign(db, workspaceId, monthStart));
+  // Pool = Ready to Assign as of the LAST day of the month, the same figure the
+  // budget screen shows. (Using the 1st of the month here ignored every
+  // paycheck received after the 1st, so auto-assign found nothing to give.)
+  const monthEnd = new Date(addMonthsUTC(monthStart, 1).getTime() - 1);
+  const pool = Math.max(0, await getReadyToAssign(db, workspaceId, monthEnd));
 
   // Pass 1: compute what every ranked category needs, independent of pool size.
   const shortfalls = await Promise.all(

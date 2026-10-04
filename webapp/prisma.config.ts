@@ -1,20 +1,22 @@
 import "dotenv/config";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
-// Prisma 7 moved CLI-facing connection config out of schema.prisma and into
-// this file. Only `generate`, `migrate`, and other CLI commands read this —
-// the running app's PrismaClient gets its own connection from the driver
-// adapter constructed in lib/prisma.ts, not from here.
+// Prisma 7 keeps CLI connection settings here instead of schema.prisma.
 //
-// Uses DIRECT_URL (the unpooled connection) rather than DATABASE_URL,
-// because migrations need a direct connection to the database — Supabase's
-// pooler doesn't support the session-level features migrations rely on.
+// IMPORTANT: `prisma generate` runs automatically on every install/build
+// (see the postinstall script) and it does NOT need a real database. The old
+// version of this file used env("DIRECT_URL"), which throws when the variable
+// is missing, so a missing DIRECT_URL killed the whole Netlify build. This
+// version falls back to DATABASE_URL, then to a harmless placeholder, so
+// building never depends on database settings. Migrations (`prisma migrate`)
+// still need a real DIRECT_URL, which is why it is preferred when present.
+const url =
+  process.env.DIRECT_URL ||
+  process.env.DATABASE_URL ||
+  "postgresql://placeholder:placeholder@localhost:5432/placeholder";
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
-  migrations: {
-    path: "prisma/migrations",
-  },
-  datasource: {
-    url: env("DIRECT_URL"),
-  },
+  migrations: { path: "prisma/migrations" },
+  datasource: { url },
 });

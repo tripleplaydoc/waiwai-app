@@ -1,49 +1,45 @@
 # Financial Tracker
 
-Zero-based budgeting app — Personal + Business workspaces, priority-waterfall
-envelope funding, receipt scanning, and savings/cashflow analysis. Built with
-Next.js (App Router), Prisma, and Supabase Postgres.
+Zero-based (envelope) budgeting with separate **Personal** and **Business**
+workspaces. Next.js (App Router) + Prisma 7 + Supabase Postgres, hosted on
+Netlify.
 
-## Status
+## What works now
 
-This is early-stage: the data model and the priority-waterfall auto-assign
-engine are built and the database is live. There is no budget UI yet — `/`
-is a deployment status page that confirms the database connection works.
+- Password-protected (set `APP_PASSWORD`); nothing is public.
+- Budget screen: Ready to Assign, envelopes with Assigned / Activity / Available,
+  inline editing of assigned amounts, month navigation, priority "Auto-assign".
+- Accounts with balances; add transactions (keyboard: **N** opens the form,
+  **Esc** closes, full Tab order); inline re-categorizing.
+- CSV bank-statement import with preview, three column layouts, and
+  duplicate protection (safe to re-import the same file).
+- Light/dark mode; all money stored as integer cents.
+
+Not built yet: Business tax-reserve automation (30% holdback, deduction
+rebalance, quarterly payments), transfers, split transactions, receipts, net worth.
+
+## Environment variables (Netlify: Site configuration → Environment variables)
+
+| Name | Required | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | yes | Supabase pooled connection string (Connect button → Transaction pooler) |
+| `APP_PASSWORD` | yes | 8+ characters. You type this on the login screen |
+| `DIRECT_URL` | no | Only needed to run Prisma migrations from your computer |
+| `APP_TIMEZONE` | no | Defaults to `Pacific/Honolulu` |
 
 ## Local setup
 
-1. `npm install` (this also runs `prisma generate` via postinstall)
-2. Copy `.env.example` to `.env` and fill in the real `DATABASE_URL` /
-   `DIRECT_URL` — get the password from the Supabase dashboard:
-   Project Settings → Database → Connection string (project ref
-   `sljrmufxtkurvqekijnt`).
+1. `npm install`
+2. Copy `.env.example` to `.env` and fill it in
 3. `npm run dev`
 
 ## Database
 
-The schema lives in `prisma/schema.prisma`. The initial migration
-(`prisma/migrations/0_init/migration.sql`) has already been applied directly
-to the live Supabase database. Once you can run Prisma's CLI normally (this
-was built in a network-restricted sandbox that couldn't reach Prisma's
-engine binaries), baseline your local migration history against it:
+The schema is `prisma/schema.prisma`; `prisma/migrations/0_init/migration.sql`
+is already applied to the live Supabase database, with Row Level Security
+enabled on every table (the app connects straight to Postgres, so it is not
+affected, but Supabase's public API can no longer read your data).
 
-```
-npx prisma migrate resolve --applied "0_init"
-```
-
-From then on, `npx prisma migrate dev` will diff from this point forward
-instead of trying to recreate these tables.
-
-## Deploying
-
-See `netlify.toml`. Required environment variables in Netlify's site
-settings (Site configuration → Environment variables): `DATABASE_URL`,
-`DIRECT_URL`.
-
-## Known open item
-
-Row Level Security is disabled on all tables in Supabase (flagged as a
-critical advisory). Not currently exploitable — this app talks to Postgres
-through Prisma's direct connection, not Supabase's client-side SDK/anon key
-— but worth deciding on deliberately (enable RLS + policies) before adding
-anything that does use the anon key client-side (Storage, Realtime, etc.).
+**Supabase free projects pause after about a week without activity.** If the
+site shows "Database not reachable", open the Supabase dashboard and click
+Restore project (or use `/status`).

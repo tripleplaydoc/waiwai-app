@@ -1,0 +1,13 @@
+# Netlify config (repo root). The app lives in the "webapp" folder.
+# No "publish" setting on purpose: the Next.js runtime plugin sets the
+# correct output folder itself. The old explicit path pointed at a folder
+# that did not exist (Netlify reads "publish" relative to the base folder).
+[build]
+  base = "webapp"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
