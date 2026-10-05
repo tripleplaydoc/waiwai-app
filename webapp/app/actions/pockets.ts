@@ -530,3 +530,14 @@ export async function releaseToReadyAction(workspaceId: string, fromId: string, 
   revalidatePath("/reports");
   return { ok: true, message: "Moved back to the pool." };
 }
+
+/** One-tap fix from the "Deductions to check" panel: count this business pocket's spending as tax-deductible. */
+export async function markPocketDeductibleAction(workspaceId: string, id: string): Promise<ActionResult> {
+  await assertAuthed();
+  const c = await prisma.category.findFirst({ where: { id, workspaceId, isArchived: false, type: "EXPENSE", isSystemManaged: false }, include: { workspace: { select: { type: true } } } });
+  if (!c || c.workspace.type !== "BUSINESS") return { ok: false, error: "Pocket not found." };
+  await prisma.category.update({ where: { id: c.id }, data: { isTaxDeductible: true } });
+  revalidatePath("/reports");
+  revalidatePath("/budget");
+  return { ok: true };
+}

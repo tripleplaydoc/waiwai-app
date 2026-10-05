@@ -6,7 +6,8 @@ import { archivePocketAction, saveGroupAction, savePocketAction } from "@/app/ac
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 import { monthsBetweenInclusive } from "@/lib/budget/dates";
 import type { PocketVM } from "@/lib/budget/board-types";
-import { typesFor, typeLabel } from "@/lib/budget/expense-types";
+import { TYPE_DEFS, typesFor, typeLabel } from "@/lib/budget/expense-types";
+import { matchRule } from "@/lib/budget/suggest";
 import { AssignedInput } from "./budget-controls";
 import { useFunding } from "./funding-view";
 
@@ -38,6 +39,8 @@ export function PocketDialog({
   const [date, setDate] = useState(pocket?.targetDate ?? "");
   const [ahead, setAhead] = useState(String(pocket?.monthsAhead ?? 0));
   const [etype, setEtype] = useState(pocket?.expenseType ?? "");
+  const [name, setName] = useState(pocket?.name ?? "");
+  const [deduct, setDeduct] = useState(pocket?.isTaxDeductible ?? false);
   const [ikind, setIkind] = useState<string>(pocket?.incomeKind ?? "EARNED");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, startDelete] = useTransition();
@@ -58,6 +61,10 @@ export function PocketDialog({
     }
   }
   const system = pocket?.isSystemManaged ?? false;
+  // Suggest a Type (and deductibility) from the pocket's name, until one is chosen or the suggestion has been taken.
+  const rule = !system && !isIncome && name.trim().length >= 2 ? matchRule(name) : null;
+  const ruleDef = rule ? TYPE_DEFS.find((t) => t.key === rule.type && t.kind === "EXPENSE") ?? null : null;
+  const tip = ruleDef && (etype !== ruleDef.key || (isBusiness && ruleDef.group === "Business" && !deduct)) ? { def: ruleDef } : null;
 
   return (
     <Modal open={open} onClose={onClose} title={editing ? `Edit ${pocket.name}` : isIncome ? "Add income source" : "Add pocket"}>
@@ -82,7 +89,7 @@ export function PocketDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="pk-name" className="label">Name</label>
-            <input id="pk-name" name="name" required maxLength={80} defaultValue={pocket?.name ?? ""} disabled={system} className="input" />
+            <input id="pk-name" name="name" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} disabled={system} className="input" />
             {system && <input type="hidden" name="name" value={pocket?.name} />}
           </div>
           <div>
@@ -123,6 +130,17 @@ export function PocketDialog({
           </div>
         )}
 
+        {tip && (
+          <div className="rounded-xl bg-blue-50 px-3 py-2.5 text-sm text-[#1E4FBF] dark:bg-blue-950/40 dark:text-blue-200" role="status">
+            <p>
+              Looks like <strong>{tip.def.label}</strong>
+              {isBusiness && tip.def.group === "Business" && <> · usually tax-deductible{tip.def.key === "MEALS" ? " (only 50% for meals)" : ""}</>}.
+            </p>
+            <button type="button" className="btn btn-sm mt-1.5" onClick={() => { setEtype(tip.def.key); if (isBusiness && tip.def.group === "Business") setDeduct(true); }}>
+              Use {tip.def.label}{isBusiness && tip.def.group === "Business" ? " and mark deductible" : ""}
+            </button>
+          </div>
+        )}
         {!system && (
           <div>
             <label htmlFor="pk-type" className="label">Type <span className="font-normal text-slate-400">(for your P&amp;L)</span></label>
@@ -214,7 +232,7 @@ export function PocketDialog({
             </div>
             {isBusiness && (
               <label className="flex min-h-11 items-center gap-3 self-end text-sm">
-                <input type="checkbox" name="isTaxDeductible" defaultChecked={pocket?.isTaxDeductible} className="size-5" /> Tax-deductible
+                <input type="checkbox" name="isTaxDeductible" checked={deduct} onChange={(e) => setDeduct(e.target.checked)} className="size-5" /> Tax-deductible
               </label>
             )}
           </div>

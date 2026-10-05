@@ -137,4 +137,17 @@ In **Add transaction**, Payee and Memo now sit at the top. As you type, up to th
 2. **Built-in vendor and keyword rules** (Zoom, Adobe → Software; airlines, hotels → Travel; ads, shipping, insurance, fees and so on), matched to your pockets by their Type. The longest keyword wins, whole words only.
 3. **A pocket whose own name appears in the text.**
 
-On a business budget each suggestion shows **Deductible · saves $X**, where X is the amount × your tax reserve rate (the waterfall's tax % when it is on, otherwise the tax profile rate, 30% by default). Tapping a suggestion fills the Pocket and ticks Tax-deductible; the checkbox also shows how much less tax reserve you'll need. If a vendor looks like a type you have no pocket for (say Office expense), it says so and you pick the closest pocket. The app's own tax reserve pocket is never suggested. These are starting points, not tax advice: confirm unclear ones with your CPA. Not yet covered: suggestions for imported CSV rows, asking about business-use percentage or meals, and a sweep for missed deductions.
+On a business budget each suggestion shows **Deductible · saves $X**, where X is the amount × your tax reserve rate (the waterfall's tax % when it is on, otherwise the tax profile rate, 30% by default). Tapping a suggestion fills the Pocket and ticks Tax-deductible; the checkbox also shows how much less tax reserve you'll need. If a vendor looks like a type you have no pocket for (say Office expense), it says so and you pick the closest pocket. The app's own tax reserve pocket is never suggested. These are starting points, not tax advice: confirm unclear ones with your CPA.
+
+### Also when adding or editing a pocket
+Type a pocket's name (say "Zoom") and a blue box says **Looks like Software & subscriptions · usually tax-deductible**, with one button that sets the Type and ticks Tax-deductible. It also shows when a pocket is typed as a business cost but not marked deductible.
+
+### CSV import
+After you paste or pick a statement, each money-out row gets a suggested pocket (same history and rules as Quick Add). **Auto-categorize N rows** is on by default and you can change any of the first 25 rows with its Pocket menu; the rest use their suggestion. The bar shows how many are deductible and the estimated tax saved. Rows you categorize are not flagged for review; the rest still are.
+
+### Meals and business use (Quick Add, business budget)
+- **Meals** ask for a business purpose (who and why), saved in the memo. Meals count **50%** toward deductions: the savings shown, the Reports tax estimate and the P&L deductible total all use half.
+- **Shared costs** (utilities, auto, rent, equipment, insurance, software) ask **how much is for the business**. Under 100% splits the purchase: the business part stays in the pocket you chose, the personal part goes to an auto-created **Owner's draw (personal use)** pocket (type OWNER_DRAW), which the P&L leaves out of expenses so profit isn't understated. The memo gets "(70% business)". That pocket will show as spent beyond what you assigned until you assign it money; that is the owner's draw.
+
+### Deductions to check (Reports → Overview, business)
+Lists spending in the period that looks like a business cost but is not counted: uncategorized purchases, purchases in non-deductible pockets, and business-type pockets not marked deductible (**Mark deductible** in one tap), each with the estimated tax saved at your rate. Guidance only, based on payee and memo wording.

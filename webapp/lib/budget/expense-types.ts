@@ -6,6 +6,12 @@
 export type TypeKind = "EXPENSE" | "INCOME";
 export interface TypeDef { key: string; label: string; kind: TypeKind; group: "Business" | "Personal" | "Income" }
 
+export const OWNER_DRAW = "OWNER_DRAW";
+/** Types where part of the cost is often personal (home office, phone, car...). */
+export const MIXED_USE_TYPES = ["UTILITIES", "AUTO", "RENT", "EQUIPMENT", "INSURANCE", "SOFTWARE"];
+/** Share of a cost that is deductible for tax, in basis points (meals are generally 50%). */
+export const deductibleShareBps = (type: string | null | undefined) => (type === "MEALS" ? 5000 : 10000);
+
 export const TYPE_DEFS: TypeDef[] = [
   // Business expenses (Schedule C style)
   { key: "ADVERTISING", label: "Advertising", kind: "EXPENSE", group: "Business" },
@@ -40,6 +46,8 @@ export const TYPE_DEFS: TypeDef[] = [
   { key: "GIVING", label: "Giving & tithing", kind: "EXPENSE", group: "Personal" },
   { key: "DEBT", label: "Debt payment", kind: "EXPENSE", group: "Personal" },
   { key: "SAVINGS", label: "Savings & investing", kind: "EXPENSE", group: "Personal" },
+  /** The personal share of a mixed-use purchase. Not a business expense, so the P&L leaves it out. */
+  { key: OWNER_DRAW, label: "Owner\u2019s draw (personal use)", kind: "EXPENSE", group: "Personal" },
   // Income
   { key: "SALES", label: "Sales / revenue", kind: "INCOME", group: "Income" },
   { key: "SERVICES", label: "Service income", kind: "INCOME", group: "Income" },

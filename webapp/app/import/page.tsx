@@ -11,6 +11,11 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
   const wsKey = wsKeyFromParam(sp.ws);
   const workspace = await getWorkspace(wsKey);
   const accounts = await prisma.account.findMany({ where: { workspaceId: workspace.id, isArchived: false }, orderBy: { name: "asc" } });
+  const pockets = await prisma.category.findMany({
+    where: { workspaceId: workspace.id, isArchived: false, isSystemManaged: false, type: "EXPENSE" },
+    include: { categoryGroup: { select: { name: true } } },
+    orderBy: [{ categoryGroup: { sortOrder: "asc" } }, { name: "asc" }],
+  });
   const initial = accounts.find((a) => a.id === sp.account)?.id ?? accounts[0]?.id ?? "";
   return (
     <div className="space-y-5">
@@ -18,7 +23,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
       {accounts.length === 0 ? (
         <div className="card p-5 text-sm">Add an account first (Accounts page), then come back to import into it.</div>
       ) : (
-        <ImportClient accounts={accounts.map((a) => ({ id: a.id, name: a.name }))} initialAccountId={initial} workspaceLabel={workspace.name} wsQuery={wsKey === "business" ? "?ws=business" : ""} />
+        <ImportClient accounts={accounts.map((a) => ({ id: a.id, name: a.name }))} initialAccountId={initial} pockets={pockets.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroup?.name ?? "Other" }))} workspaceLabel={workspace.name} wsQuery={wsKey === "business" ? "?ws=business" : ""} />
       )}
     </div>
   );

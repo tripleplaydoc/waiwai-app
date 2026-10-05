@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { MIXED_USE_TYPES, OWNER_DRAW, deductibleShareBps } from "./expense-types";
 import { matchRule, rankSuggestions, taxSavingCents, type SuggestPocket } from "./suggest";
 
 const P = (id: string, name: string, expenseType: string | null, extra: Partial<SuggestPocket> = {}): SuggestPocket => ({ id, name, group: "OPEX", expenseType, isTaxDeductible: false, isSystemManaged: false, ...extra });
@@ -32,4 +33,7 @@ r = rankSuggestions({ text: "monthly software tool", isBusiness: true, pockets, 
 assert.equal(r.suggestions[0].categoryId, "sw");
 assert.equal(rankSuggestions({ text: "a", isBusiness: true, pockets, history: [] }).suggestions.length, 0);
 assert.equal(taxSavingCents(9000, 3000), 2700, "$90 at 30% saves $27"); assert.equal(taxSavingCents(-5, 3000), 0);
+assert.equal(deductibleShareBps("MEALS"), 5000, "meals are generally 50% deductible");
+assert.equal(deductibleShareBps("SOFTWARE"), 10000); assert.equal(deductibleShareBps(null), 10000);
+assert.ok(MIXED_USE_TYPES.includes("UTILITIES") && !MIXED_USE_TYPES.includes("MEALS")); assert.equal(OWNER_DRAW, "OWNER_DRAW");
 console.log("suggest: ok");

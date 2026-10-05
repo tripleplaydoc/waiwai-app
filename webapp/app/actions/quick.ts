@@ -7,7 +7,9 @@ import { addMonthsUTC } from "@/lib/budget/dates";
 import { getBudgetSummary } from "@/lib/budget/summary";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
 import { currentMonthIso, todayIso } from "@/lib/utils/dates";
-import { rankSuggestions, type HistoryHit, type RuleHint, type Suggestion } from "@/lib/budget/suggest";
+import { effectiveType } from "@/lib/budget/expense-types";
+import { rankSuggestions, type RuleHint, type Suggestion } from "@/lib/budget/suggest";
+import { historyForTexts } from "@/lib/budget/suggest-history";
 
 export interface QuickAddData {
   workspaceId: string;
@@ -16,7 +18,7 @@ export interface QuickAddData {
   month: string;
   readyToAssignCents: number;
   accounts: { id: string; name: string }[];
-  categories: { id: string; name: string; group: string; type: "INCOME" | "EXPENSE" | "SYSTEM"; availableCents: number; targetType: "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE" | null; targetCents: number | null; dueDay: number | null; isSystemManaged: boolean; paidFromId: string | null }[];
+  categories: { id: string; name: string; group: string; type: "INCOME" | "EXPENSE" | "SYSTEM"; availableCents: number; targetType: "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE" | null; targetCents: number | null; dueDay: number | null; isSystemManaged: boolean; paidFromId: string | null; expenseType: string | null }[];
   payees: string[];
   people: { id: string; name: string }[];
   currentUserId: string | null;
@@ -47,11 +49,43 @@ export async function getQuickAddDataAction(wsParam: string): Promise<QuickAddDa
     month,
     readyToAssignCents: rta,
     accounts: accounts.map((a) => ({ id: a.id, name: a.name })),
-    categories: categories.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroupId ? groupName.get(c.categoryGroupId) ?? "Other" : "Other", type: c.type, availableCents: rowById.get(c.id)?.availableCents ?? 0, targetType: rowById.get(c.id)?.targetType ?? null, targetCents: rowById.get(c.id)?.targetCents ?? null, dueDay: rowById.get(c.id)?.dueDay ?? null, isSystemManaged: c.isSystemManaged, paidFromId: c.paidFromAccountId })),
+    categories: categories.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroupId ? groupName.get(c.categoryGroupId) ?? "Other" : "Other", type: c.type, availableCents: rowById.get(c.id)?.availableCents ?? 0, targetType: rowById.get(c.id)?.targetType ?? null, targetCents: rowById.get(c.id)?.targetCents ?? null, dueDay: rowById.get(c.id)?.dueDay ?? null, isSystemManaged: c.isSystemManaged, paidFromId: c.paidFromAccountId, expenseType: effectiveType(c) })),
     payees: payees.map((p) => p.name),
     people: people.map((u) => ({ id: u.id, name: u.name || u.email.split("@")[0] })),
     currentUserId: me?.id ?? null,
   };
+}
+
+/** One suggested pocket per imported row (null = no confident suggestion). */
+export interface ImportSuggestion { categoryId: string; name: string; reason: string; deductible: boolean; source: "history" | "rule" | "name" }
+export interface ImportSuggestData { suggestions: (ImportSuggestion | null)[]; taxBps: number; isBusiness: boolean }
+
+/** Top suggestion for each statement row (money out only), from this workspace's history and the built-in vendor rules. */
+export async function suggestForImportAction(accountId: string, rows: { payee: string; memo: string; amountCents: number }[]): Promise<ImportSuggestData> {
+  await assertAuthed();
+  const acct = await prisma.account.findUnique({ where: { id: accountId }, select: { workspaceId: true } });
+  if (!acct) return { suggestions: rows.map(() => null), taxBps: 3000, isBusiness: false };
+  const [ws, cats, cfg, profile] = await Promise.all([
+    prisma.workspace.findUniqueOrThrow({ where: { id: acct.workspaceId }, select: { type: true } }),
+    prisma.category.findMany({ where: { workspaceId: acct.workspaceId, isArchived: false, type: "EXPENSE" }, include: { categoryGroup: { select: { name: true } } } }),
+    prisma.waterfallConfig.findUnique({ where: { workspaceId: acct.workspaceId }, select: { taxBps: true, enabled: true } }),
+    prisma.taxProfile.findUnique({ where: { workspaceId: acct.workspaceId }, select: { reserveRatePercent: true } }),
+  ]);
+  const taxBps = cfg?.enabled ? cfg.taxBps : Math.round(Number(profile?.reserveRatePercent ?? 30) * 100);
+  const pockets = cats.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroup?.name ?? "Other", expenseType: c.expenseType, isTaxDeductible: c.isTaxDeductible, isSystemManaged: c.isSystemManaged }));
+  const hist = await historyForTexts(acct.workspaceId, rows.map((r) => r.payee));
+  const cache = new Map<string, ImportSuggestion | null>();
+  const suggestions = rows.map((r) => {
+    if (r.amountCents >= 0) return null;
+    const text = `${r.payee} ${r.memo}`.trim();
+    const key = `${r.payee}|${text}`;
+    if (cache.has(key)) return cache.get(key)!;
+    const top = rankSuggestions({ text, isBusiness: ws.type === "BUSINESS", pockets, history: hist.get(r.payee.trim()) ?? [], max: 1 }).suggestions[0];
+    const v = top ? { categoryId: top.categoryId, name: top.name, reason: top.reason, deductible: top.deductible, source: top.source } : null;
+    cache.set(key, v);
+    return v;
+  });
+  return { suggestions, taxBps, isBusiness: ws.type === "BUSINESS" };
 }
 
 export interface SuggestData {
@@ -72,23 +106,7 @@ export async function suggestPocketsAction(wsParam: string, text: string): Promi
     prisma.taxProfile.findUnique({ where: { workspaceId: ws.id }, select: { reserveRatePercent: true } }),
   ]);
   const taxBps = cfg?.enabled ? cfg.taxBps : Math.round(Number(profile?.reserveRatePercent ?? 30) * 100);
-  const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
-  const q = clean(text);
-  const matched = q.length < 2 ? [] : payees.filter((p) => { const n = clean(p.name); return n.length >= 2 && (n === q || q.includes(n) || n.includes(q)); });
-  const history: HistoryHit[] = [];
-  if (matched.length > 0) {
-    const rows = await prisma.transaction.groupBy({
-      by: ["payeeId", "categoryId"],
-      where: { workspaceId: ws.id, payeeId: { in: matched.map((p) => p.id) }, categoryId: { not: null }, amountCents: { lt: 0 } },
-      _count: { _all: true },
-    });
-    const byPayee = new Map(matched.map((p) => [p.id, p]));
-    for (const r of rows) {
-      const p = byPayee.get(r.payeeId!);
-      if (p && r.categoryId) history.push({ categoryId: r.categoryId, count: r._count._all, exact: clean(p.name) === q, payee: p.name });
-    }
-    for (const p of matched) if (p.defaultCategoryId && !history.some((h) => h.categoryId === p.defaultCategoryId)) history.push({ categoryId: p.defaultCategoryId, count: 1, exact: clean(p.name) === q, payee: p.name });
-  }
+  const history = (await historyForTexts(ws.id, [text])).get(text.trim()) ?? [];
   const r = rankSuggestions({
     text, isBusiness: ws.type === "BUSINESS", history,
     pockets: cats.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroup?.name ?? "Other", expenseType: c.expenseType, isTaxDeductible: c.isTaxDeductible, isSystemManaged: c.isSystemManaged })),

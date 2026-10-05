@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { effectiveType, typeLabel } from "@/lib/budget/expense-types";
+import { OWNER_DRAW, deductibleShareBps, effectiveType, typeLabel } from "@/lib/budget/expense-types";
 
 export interface PnlPocket { id: string; name: string; cents: number; deductible: boolean }
 export interface PnlTypeRow { key: string; label: string; cents: number; prevCents: number; pockets: PnlPocket[] }
@@ -43,6 +43,7 @@ export async function buildPnl(workspaceId: string, p: { from: string; to: strin
     if (c.type === "SYSTEM") { taxPaymentsCents += -a; continue; }
     const isIncome = c.type === "INCOME";
     const sign = isIncome ? 1 : -1; // expenses are stored negative; refunds net against them
+    if (!isIncome && c.expenseType === OWNER_DRAW) continue; // personal use is not a business expense
     const key = effectiveType(c) ?? (isIncome ? "UNCLASSIFIED_INCOME" : "UNCLASSIFIED");
     const label = typeLabel(key) ?? (isIncome ? "Unclassified income" : "Unclassified");
     const map = isIncome ? rev : exp;
@@ -51,7 +52,7 @@ export async function buildPnl(workspaceId: string, p: { from: string; to: strin
     if (a !== 0) row.pockets.push({ id: c.id, name: c.name, cents: sign * a, deductible: c.isTaxDeductible });
     map.set(key, row);
     if (isIncome) prevRevenue += b; else prevExpense += -b;
-    if (!isIncome && c.isTaxDeductible) deductibleCents += -a;
+    if (!isIncome && c.isTaxDeductible) deductibleCents += Math.round((-a * deductibleShareBps(key)) / 10000);
   }
   const sorted = (m: Map<string, PnlTypeRow>) => [...m.values()].map((r) => ({ ...r, pockets: r.pockets.sort((x, y) => y.cents - x.cents) })).sort((x, y) => y.cents - x.cents);
   const revenue = sorted(rev), expenses = sorted(exp);

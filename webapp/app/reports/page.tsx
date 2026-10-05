@@ -19,6 +19,8 @@ import { ExpensesTab } from "./expenses-tab";
 import { AssetsTab } from "./assets-tab";
 import { CashflowTab } from "./cashflow-tab";
 import { ReviewTab } from "./review-tab";
+import { MissedPanel } from "./missed-panel";
+import { missedDeductions } from "@/lib/reports/missed";
 
 export const dynamic = "force-dynamic";
 type SP = Promise<{ ws?: string; period?: string; from?: string; to?: string; tab?: string; by?: string; view?: string; scope?: string; todo?: string }>;
@@ -84,6 +86,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
     prisma.account.findMany({ where: { workspaceId: ws.id, isArchived: false }, orderBy: [{ onBudget: "desc" }, { name: "asc" }], select: { id: true, name: true } }),
   ]);
   const isBiz = ws.type === "BUSINESS";
+  const missed = isBiz && tab === "pnl" ? await missedDeductions(ws.id, period.from, period.to, bps) : [];
   const margin = r.revenueCents > 0 ? Math.round((r.netCents / r.revenueCents) * 1000) / 10 : null;
   const taxableCents = Math.max(0, r.revenueCents - r.deductibleCents);
   const estTaxCents = Math.round((taxableCents * bps) / 10_000);
@@ -230,6 +233,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
           <p className="mt-3 text-xs text-slate-500">An estimate for planning, not tax advice. Mark pockets tax-deductible on the budget page to include them.</p>
         </section>
       )}
+
+      {isBiz && <MissedPanel items={missed} workspaceId={ws.id} reviewHref={`/reports?${baseQuery}&tab=review`} />}
 
       <section className="card p-5 print:hidden" aria-labelledby="ex-h">
         <h2 id="ex-h" className="text-base font-bold tracking-tight">Export for QuickBooks &amp; taxes</h2>

@@ -13,6 +13,7 @@ import { getQuickAddDataAction, suggestPocketsAction, type QuickAddData, type Su
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 import { planPurchase, type AffordResult } from "@/lib/budget/afford";
 import { taxSavingCents } from "@/lib/budget/suggest";
+import { MIXED_USE_TYPES, deductibleShareBps } from "@/lib/budget/expense-types";
 
 type Mode = "tx" | "afford";
 
@@ -126,6 +127,12 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
     return () => { live = false; clearTimeout(t); };
   }, [typed, direction, data.isBusiness]);
   const amountCents = parseToCents(amountText) ?? 0;
+  const chosenType = data.categories.find((c) => c.id === category)?.expenseType ?? null;
+  const askUse = data.isBusiness && direction === "outflow" && !!chosenType && MIXED_USE_TYPES.includes(chosenType);
+  const askMeal = data.isBusiness && direction === "outflow" && chosenType === "MEALS";
+  const [bizPct, setBizPct] = useState("100");
+  const pctNum = Math.min(100, Math.max(1, Math.round(Number(bizPct) || 100)));
+  const deductibleCents = Math.round((amountCents * (askUse ? pctNum : 100) / 100) * deductibleShareBps(chosenType) / 10000);
   const chooseSuggestion = (id: string, deductibleToo: boolean) => { pickCategory(id); if (deductibleToo && data.isBusiness) setDeductible(true); };
   const [state, action, pending] = useActionState(createTransactionAction, undefined);
   useEffect(() => { if (state?.ok) setSaved(direction); // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,7 +186,7 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Suggested pocket</p>
           {suggest.suggestions.map((sg) => {
             const on = category === sg.categoryId;
-            const saves = sg.deductible && amountCents > 0 ? taxSavingCents(amountCents, suggest.taxBps) : 0;
+            const saves = sg.deductible && amountCents > 0 ? taxSavingCents(Math.round(amountCents * deductibleShareBps(data.categories.find((c) => c.id === sg.categoryId)?.expenseType) / 10000), suggest.taxBps) : 0;
             return (
               <button key={sg.categoryId} type="button" aria-pressed={on} onClick={() => chooseSuggestion(sg.categoryId, sg.deductible)}
                 className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left ${on ? "border-[#2E6BE6] bg-blue-50 dark:bg-blue-950/40" : "border-[#E2E8F0] hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`}>
@@ -223,8 +230,25 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
       )}
       {direction === "outflow" && <TagChips idPrefix="qa-tag" />}
       <ReceiptField id="qa-receipt" />
+      {askUse && (
+        <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+          <label htmlFor="qa-biz" className="label">How much of this is for the business?</label>
+          <div className="flex items-center gap-2">
+            <input id="qa-biz" name="bizPct" inputMode="numeric" className="input nums w-24" value={bizPct} onChange={(e) => setBizPct(e.target.value.replace(/[^0-9]/g, "").slice(0, 3))} />
+            <span className="text-sm">% business</span>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">Only the business part is deductible. The rest is filed as Owner&apos;s draw (personal use) so your profit isn&apos;t understated. Phone, internet, car and home-office costs are usually shared.</p>
+        </div>
+      )}
+      {askMeal && (
+        <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+          <label htmlFor="qa-purpose" className="label">Who was it with, and why? (business purpose)</label>
+          <input id="qa-purpose" name="purpose" maxLength={200} className="input" placeholder="Client lunch to review the renewal" />
+          <p className="mt-1 text-xs text-slate-500">Business meals are generally only 50% deductible, and the IRS expects a note of who and why.</p>
+        </div>
+      )}
       {data.isBusiness && direction === "outflow" && (
-        <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" checked={deductible} onChange={(e) => setDeductible(e.target.checked)} /> Tax-deductible{deductible && amountCents > 0 && data.isBusiness ? <span className="nums text-xs text-slate-500">· about {formatCents(taxSavingCents(amountCents, suggest?.taxBps ?? 3000))} less tax reserve needed</span> : null}</label>
+        <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" checked={deductible} onChange={(e) => setDeductible(e.target.checked)} /> Tax-deductible{deductible && amountCents > 0 && data.isBusiness ? <span className="nums text-xs text-slate-500">· about {formatCents(taxSavingCents(deductibleCents, suggest?.taxBps ?? 3000))} less tax reserve needed{chosenType === "MEALS" ? " (meals count 50%)" : ""}</span> : null}</label>
       )}
       {state && !state.ok && <p role="alert" className="text-sm text-neg">{state.error}</p>}
       <div className="flex justify-end gap-2 pt-1">

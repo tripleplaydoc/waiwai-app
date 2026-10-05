@@ -9,6 +9,7 @@ import { parseToCents } from "@/lib/utils/currency";
 import { isoToDate } from "@/lib/utils/dates";
 import { readReceipt, saveReceipt } from "@/lib/receipts";
 import { parseTags } from "@/lib/budget/expense-tags";
+import { MIXED_USE_TYPES, OWNER_DRAW, effectiveType } from "@/lib/budget/expense-types";
 import type { ActionResult } from "./types";
 
 const txSchema = z.object({
@@ -22,6 +23,10 @@ const txSchema = z.object({
   cleared: z.string().optional(),
   deductible: z.string().optional(),
   personId: z.string().optional(),
+  /** Business use % (1-100) for mixed-use costs; the rest is personal. */
+  bizPct: z.string().optional(),
+  /** Meals: who/what the meal was for, kept with the transaction. */
+  purpose: z.string().trim().max(200).optional(),
 });
 
 export async function createTransactionAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
@@ -49,12 +54,26 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
 
   let categoryId: string | null = null;
   let deductible = false;
+  let chosenType: string | null = null;
   if (d.categoryId) {
     const cat = await prisma.category.findFirst({ where: { id: d.categoryId, workspaceId: account.workspaceId, isArchived: false } });
     if (!cat) return { ok: false, error: "Category not found in this workspace." };
     categoryId = cat.id;
+    chosenType = effectiveType(cat);
     deductible = d.deductible === "on" && signed < 0;
   }
+
+  // Business-use share for mixed-use costs: the business part stays in the chosen pocket, the rest goes to Owner's draw.
+  let memo = d.memo || "";
+  let personalCents = 0;
+  const wsRow = await prisma.workspace.findUnique({ where: { id: account.workspaceId }, select: { type: true } });
+  const pct = d.bizPct ? Math.round(Number(d.bizPct)) : 100;
+  if (d.bizPct && (!Number.isFinite(pct) || pct < 1 || pct > 100)) return { ok: false, error: "Business use must be between 1 and 100%." };
+  if (wsRow?.type === "BUSINESS" && signed < 0 && categoryId && chosenType && MIXED_USE_TYPES.includes(chosenType) && pct < 100) {
+    personalCents = Math.round((Math.abs(signed) * (100 - pct)) / 100);
+    memo = `${memo ? memo + " " : ""}(${pct}% business)`.slice(0, 500);
+  }
+  if (wsRow?.type === "BUSINESS" && signed < 0 && chosenType === "MEALS" && d.purpose) memo = `${memo ? memo + " " : ""}(Business purpose: ${d.purpose})`.slice(0, 500);
 
   let payeeId: string | null = null;
   if (d.payee) {
@@ -74,7 +93,7 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
       payeeId,
       amountCents: signed,
       date: isoToDate(d.date),
-      memo: d.memo || null,
+      memo: memo || null,
       clearedStatus: d.cleared === "on" ? "CLEARED" : "UNCLEARED",
       isTaxDeductible: deductible,
       needsReview: categoryId === null,
@@ -82,10 +101,29 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
       tags: parseTags(formData.getAll("tags")),
     },
   });
+  if (personalCents > 0 && categoryId) {
+    const draw = await ownerDrawPocket(account.workspaceId);
+    await prisma.transactionSplit.createMany({ data: [
+      { transactionId: created.id, categoryId, amountCents: signed + personalCents, memo: "Business part", isTaxDeductible: deductible },
+      { transactionId: created.id, categoryId: draw, amountCents: -personalCents, memo: "Personal part", isTaxDeductible: false },
+    ] });
+  }
   if (rec.input) await saveReceipt(prisma, account.workspaceId, created.id, rec.input);
   revalidatePath("/budget");
   revalidatePath("/accounts", "layout");
   return { ok: true };
+}
+
+/** The pocket that holds the personal share of mixed-use purchases; created on first use. */
+async function ownerDrawPocket(workspaceId: string): Promise<string> {
+  const have = await prisma.category.findFirst({ where: { workspaceId, expenseType: OWNER_DRAW, isArchived: false }, select: { id: true } });
+  if (have) return have.id;
+  let group = await prisma.categoryGroup.findFirst({ where: { workspaceId, name: "Owner" }, select: { id: true } });
+  if (!group) {
+    const top = await prisma.categoryGroup.aggregate({ where: { workspaceId }, _max: { sortOrder: true } });
+    group = await prisma.categoryGroup.create({ data: { workspaceId, name: "Owner", sortOrder: (top._max.sortOrder ?? 0) + 1 }, select: { id: true } });
+  }
+  return (await prisma.category.create({ data: { workspaceId, categoryGroupId: group.id, name: "Owner\u2019s draw (personal use)", type: "EXPENSE", expenseType: OWNER_DRAW, isTaxDeductible: false } })).id;
 }
 
 export async function setTransactionTagsAction(transactionId: string, tags: string[]): Promise<ActionResult> {
@@ -138,6 +176,8 @@ const importSchema = z.object({
         payee: z.string().max(200),
         memo: z.string().max(500),
         amountCents: z.number().int().min(-2_000_000_000).max(2_000_000_000),
+        /** Optional pocket chosen (or suggested) for this row. */
+        categoryId: z.string().max(64).nullable().optional(),
       })
     )
     .min(1, "Nothing to import")
@@ -150,7 +190,7 @@ export type ImportResult = { ok: true; imported: number; duplicates: number; acc
  * Commits previewed CSV rows. Re-importing the same statement is safe: each
  * row gets a hash of (account, date, amount, payee, memo, occurrence number)
  * and the database's unique index on (accountId, importHash) skips repeats.
- * Imported rows land uncategorized and flagged for review.
+ * Rows land flagged for review unless a pocket was chosen for them (suggested pockets the user accepted).
  */
 export async function importTransactionsAction(input: unknown): Promise<ImportResult> {
   await assertAuthed();
@@ -171,14 +211,21 @@ export async function importTransactionsAction(input: unknown): Promise<ImportRe
   const payees = await prisma.payee.findMany({ where: { workspaceId: account.workspaceId, name: { in: names } } });
   const payeeId = new Map(payees.map((p) => [p.name, p.id]));
 
+  const wanted = [...new Set(rows.map((r) => r.categoryId).filter((x): x is string => !!x))];
+  const cats = wanted.length ? await prisma.category.findMany({ where: { id: { in: wanted }, workspaceId: account.workspaceId, isArchived: false, isSystemManaged: false } }) : [];
+  const catById = new Map(cats.map((c) => [c.id, c]));
+  const isBiz = (await prisma.workspace.findUnique({ where: { id: account.workspaceId }, select: { type: true } }))?.type === "BUSINESS";
+
   const seen = new Map<string, number>();
   const data = rows.map((r) => {
     const key = `${accountId}|${r.date}|${r.amountCents}|${r.payee}|${r.memo}`;
     const n = seen.get(key) ?? 0;
     seen.set(key, n + 1);
+    const cat = r.categoryId ? catById.get(r.categoryId) ?? null : null;
     return {
       key: createHash("sha256").update(`${key}|${n}`).digest("hex"),
       r,
+      cat,
     };
   });
 
@@ -189,7 +236,7 @@ export async function importTransactionsAction(input: unknown): Promise<ImportRe
   try {
     const created = await prisma.transaction.createMany({
       skipDuplicates: true,
-      data: data.map(({ key, r }) => ({
+      data: data.map(({ key, r, cat }) => ({
         workspaceId: account.workspaceId,
         accountId,
         payeeId: r.payee ? payeeId.get(r.payee) ?? null : null,
@@ -199,7 +246,9 @@ export async function importTransactionsAction(input: unknown): Promise<ImportRe
         importBatchId: batch.id,
         personId: importer?.id ?? null,
         importHash: key,
-        needsReview: true,
+        categoryId: cat?.id ?? null,
+        isTaxDeductible: !!cat && isBiz && cat.isTaxDeductible && r.amountCents < 0,
+        needsReview: !cat,
       })),
     });
     await prisma.importBatch.update({
