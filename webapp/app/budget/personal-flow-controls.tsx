@@ -37,7 +37,7 @@ export function PersonalFlowPanel({ workspaceId, flow }: { workspaceId: string; 
       <div className="space-y-2 text-sm">
         <p className="font-bold">Give · Save · Live</p>
         <p className="text-xs text-slate-600 dark:text-slate-300">
-          One <strong>Assign</strong> button splits Ready to assign into Give 20%, Save 10% and Live 70% (you can change every percentage).
+          One <strong>Assign</strong> button splits the money in the pool into Give 20%, Save 10% and Live 70% (you can change every percentage).
           This adds a Give, a Save and a Live category to your budget.
         </p>
         <button type="button" className="btn btn-primary" disabled={pending} onClick={() => start(async () => { const r = await setupPersonalFlowAction(workspaceId); setMsg(r.ok ? { ok: true, text: r.message ?? "Done." } : { ok: false, text: r.error }); })}>

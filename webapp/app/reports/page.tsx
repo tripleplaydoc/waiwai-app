@@ -142,7 +142,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
             )}
           </div>
           {health.monthsAhead !== null && health.monthsAheadWithRta !== null && (
-            <p className="text-xs text-slate-600 dark:text-slate-300 sm:ml-auto sm:max-w-xs sm:text-right">How long the money in your pockets would cover your monthly costs ({formatCents(health.pocketMoneyCents)} vs {formatCents(health.monthlyCostCents)}/mo). With Ready to assign: {describeMonths(health.monthsAheadWithRta)}.</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300 sm:ml-auto sm:max-w-xs sm:text-right">How long the money in your pockets would cover your monthly costs ({formatCents(health.pocketMoneyCents)} vs {formatCents(health.monthlyCostCents)}/mo). With Money in pool: {describeMonths(health.monthsAheadWithRta)}.</p>
           )}
         </section>
       )}

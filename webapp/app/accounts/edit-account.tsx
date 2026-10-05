@@ -60,7 +60,7 @@ export function EditAccountButton({ account, label, members = [] }: { account: E
             <input id={`ea-date-${account.id}`} name="openingDate" type="date" defaultValue={account.openingBalanceDate ?? ""} className="input" />
           </div>
           <p className="text-xs text-slate-500">The balance is the starting balance plus every transaction. Changing the starting balance never touches your transactions. Use a minus sign for money you owe.</p>
-          {flips && <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">Switching between on-budget and off-budget changes your Ready to assign.</p>}
+          {flips && <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">Switching between on-budget and off-budget changes your money in pool.</p>}
           {state && !state.ok && <p role="alert" className="text-sm text-[#C9372C]">{state.error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel <span className="kbd">Esc</span></button>

@@ -55,7 +55,7 @@ export function ReadyAmount({ rtaCents }: { rtaCents: number }) {
   const split = hasSeveralStewards(cash) && rtaCents > 0 ? readyBySteward(cash) : [];
   return (
     <div className="flex flex-col">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">{rtaCents < 0 ? "Over-assigned" : "Ready to assign"}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">{rtaCents < 0 ? "Over-assigned" : "Money in pool"}</span>
       <span className={`nums text-2xl font-bold leading-tight tracking-tight ${rtaCents < 0 ? "text-neg" : "text-pos"}`}>{formatCents(rtaCents)}</span>
       {split.length > 1 && <span className="nums text-[11px] text-slate-600 dark:text-slate-300">{split.map((s) => `${s.name} ${formatCents(s.cents)}`).join(" · ")}</span>}
     </div>

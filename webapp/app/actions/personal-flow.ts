@@ -95,7 +95,7 @@ export async function assignPersonalFlowAction(workspaceId: string, month: strin
   const summary = await getBudgetSummary(workspaceId, md);
   const { vm, cfg, input } = await loadPersonalFlow(workspaceId, md, summary.rows);
   if (!cfg?.enabled) return { ok: false, error: "Set up Give / Save / Live first." };
-  if (summary.readyToAssignCents <= 0) return { ok: false, error: "Nothing to assign — Ready to assign is $0.00." };
+  if (summary.readyToAssignCents <= 0) return { ok: false, error: "Nothing to assign — the pool is $0.00." };
 
   const plan = planPersonalAssign({
     readyCents: summary.readyToAssignCents,
@@ -108,7 +108,7 @@ export async function assignPersonalFlowAction(workspaceId: string, month: strin
   const flowRows = await fundRows(prisma, workspaceId, endOfMonth(md), plan.moves.map((mv) => ({ categoryId: mv.categoryId, month: md, amountCents: mv.cents, source: "WATERFALL" as const, note: `Flow → ${label[mv.bucket]}` })));
   await prisma.budgetAssignment.createMany({ data: flowRows });
   const parts = vm.buckets.filter((b) => plan.totals[b.key] > 0).map((b) => `${formatCents(plan.totals[b.key])} ${b.label}`);
-  const left = plan.leftoverCents > 0 ? ` ${formatCents(plan.leftoverCents)} stays in Ready to assign (a bucket has no pockets yet).` : "";
+  const left = plan.leftoverCents > 0 ? ` ${formatCents(plan.leftoverCents)} stays in the pool (a bucket has no pockets yet).` : "";
   revalidatePath("/budget");
   return { ok: true, message: `Assigned: ${parts.join(" · ")}.${left}` };
 }

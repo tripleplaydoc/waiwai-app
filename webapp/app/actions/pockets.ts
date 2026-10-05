@@ -186,7 +186,7 @@ async function removePockets(workspaceId: string, workspaceType: "PERSONAL" | "B
   const balances = await Promise.all(pockets.map((c) => getCategoryAvailableBalance(prisma, c.id, month)));
   const release = pockets.map((c, i) => ({ c, cents: balances[i] })).filter((x) => x.cents > 0);
   const live = pockets.map((c) => c.id);
-  const releaseRowsAll = (await Promise.all(release.map((x) => releaseRows(prisma, { workspaceId, categoryId: x.c.id, month, cents: x.cents, source: "CORRECTION", note: "Released back to Ready to assign (pocket deleted)" })))).flat();
+  const releaseRowsAll = (await Promise.all(release.map((x) => releaseRows(prisma, { workspaceId, categoryId: x.c.id, month, cents: x.cents, source: "CORRECTION", note: "Released back to the pool (pocket deleted)" })))).flat();
   await prisma.$transaction([
     prisma.budgetAssignment.createMany({ data: releaseRowsAll }),
     prisma.category.updateMany({ where: { id: { in: live } }, data: { isArchived: true } }),
@@ -233,7 +233,7 @@ export async function archiveGroupAction(workspaceId: string, id: string): Promi
   revalidatePath("/budget");
   revalidatePath("/reports");
   const n = pockets.length;
-  return { ok: true, message: `Deleted “${g.name}”${n ? ` and its ${n} pocket${n === 1 ? "" : "s"}` : ""}.${r.releasedCents > 0 ? ` ${formatCents(r.releasedCents)} is back in Ready to assign.` : ""}` };
+  return { ok: true, message: `Deleted “${g.name}”${n ? ` and its ${n} pocket${n === 1 ? "" : "s"}` : ""}.${r.releasedCents > 0 ? ` ${formatCents(r.releasedCents)} is back in the pool.` : ""}` };
 }
 
 /** Deletes a pocket (history keeps its reference). Money in it returns to Ready to assign. */
@@ -247,7 +247,7 @@ export async function archivePocketAction(workspaceId: string, id: string): Prom
   await unlinkFlows(workspaceId, [], [id]);
   revalidatePath("/budget");
   revalidatePath("/reports");
-  return { ok: true, message: `Deleted “${c.name}”.${r.releasedCents > 0 ? ` ${formatCents(r.releasedCents)} is back in Ready to assign.` : ""}` };
+  return { ok: true, message: `Deleted “${c.name}”.${r.releasedCents > 0 ? ` ${formatCents(r.releasedCents)} is back in the pool.` : ""}` };
 }
 
 const reorderSchema = z.object({
@@ -352,8 +352,8 @@ export async function previewAllocationAction(workspaceId: string, month: string
   let pool = rta;
   if (amount.trim() !== "") {
     const c = parseToCents(amount);
-    if (c === null || c <= 0) return { ok: false, error: "Enter an amount like 2500.00, or leave it blank to use Ready to Assign." };
-    if (c > rta) return { ok: false, error: "That's more than your Ready to Assign amount." };
+    if (c === null || c <= 0) return { ok: false, error: "Enter an amount like 2500.00, or leave it blank to use all the money in the pool." };
+    if (c > rta) return { ok: false, error: "That's more than your money in pool." };
     pool = c;
   }
   const { groups, names } = await loadAllocGroups(workspaceId);
@@ -442,13 +442,13 @@ export async function assignMoreAction(workspaceId: string, categoryId: string, 
   const asOf = endOfMonth(monthDate);
   const rta = await getReadyToAssign(prisma, workspaceId, asOf);
   const money = (n: number) => (Math.max(0, n) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
-  if (cents > rta) return { ok: false, error: `Only ${money(rta)} is ready to assign.` };
+  if (cents > rta) return { ok: false, error: `Only ${money(rta)} is in the pool.` };
   let prefer: string | undefined;
   if (fromAccountId) {
     const acct = await prisma.account.findFirst({ where: { id: fromAccountId, workspaceId, onBudget: true, isArchived: false } });
     if (!acct) return { ok: false, error: "Pick one of your accounts." };
     const pool = (await loadPools(prisma, workspaceId, asOf)).get(acct.id) ?? 0;
-    if (cents > pool) return { ok: false, error: `${acct.name} only has ${money(pool)} ready to assign.` };
+    if (cents > pool) return { ok: false, error: `${acct.name} only has ${money(pool)} in the pool.` };
     prefer = acct.id;
   }
   const rows = await fundRows(prisma, workspaceId, asOf, [{ categoryId, month: monthDate, amountCents: cents, source: "MANUAL" }], prefer);
@@ -508,9 +508,9 @@ export async function releaseToReadyAction(workspaceId: string, fromId: string, 
   if (cents > available) {
     return { ok: false, error: `${from.name} only has ${(Math.max(0, available) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} available.` };
   }
-  const rows = await releaseRows(prisma, { workspaceId, categoryId: from.id, month: monthDate, cents, source: "MANUAL", note: "Moved back to Ready to assign" });
+  const rows = await releaseRows(prisma, { workspaceId, categoryId: from.id, month: monthDate, cents, source: "MANUAL", note: "Moved back to the pool" });
   await prisma.budgetAssignment.createMany({ data: rows });
   revalidatePath("/budget");
   revalidatePath("/reports");
-  return { ok: true, message: "Moved back to Ready to assign." };
+  return { ok: true, message: "Moved back to the pool." };
 }

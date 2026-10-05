@@ -64,7 +64,7 @@ export async function coverCardShortfallAction(_prev: ActionResult | undefined, 
   const rows: { categoryId: string; amountCents: number }[] = status.parts.map((p) => ({ categoryId: p.categoryId, amountCents: p.cents }));
   if (source === "RTA") {
     const rta = await getReadyToAssign(prisma, card.workspaceId, new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0)));
-    if (rta < total) return { ok: false, error: `Ready to Assign only has ${(Math.max(0, rta) / 100).toFixed(2)} and ${(total / 100).toFixed(2)} is needed. Pick a pocket to take it from instead.` };
+    if (rta < total) return { ok: false, error: `Money in pool only has ${(Math.max(0, rta) / 100).toFixed(2)} and ${(total / 100).toFixed(2)} is needed. Pick a pocket to take it from instead.` };
   } else {
     const summary = await getBudgetSummary(card.workspaceId, month);
     const src = summary.rows.find((r) => r.id === source && r.type !== "INCOME");

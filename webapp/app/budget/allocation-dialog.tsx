@@ -102,13 +102,13 @@ function AllocationDialog({ onClose, workspaceId, month, groups, readyToAssignCe
       <div className="space-y-4">
         <p className="text-sm text-slate-600 dark:text-slate-300">
           Give each <strong>category</strong> a share of your money, then split that share between its <strong>pockets</strong>.
-          Anything you don&apos;t allocate stays in Ready to Assign.
+          Anything you don&apos;t allocate stays in the pool.
         </p>
 
         <div className="flex flex-wrap items-end gap-3 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
           <div className="min-w-48 flex-1">
             <label htmlFor="al-amount" className="label">Amount to split</label>
-            <input id="al-amount" inputMode="decimal" className={`input nums ${amountInvalid ? "!border-[#C9372C]" : ""}`} placeholder={`All of Ready to Assign (${formatCents(rta)})`} value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <input id="al-amount" inputMode="decimal" className={`input nums ${amountInvalid ? "!border-[#C9372C]" : ""}`} placeholder={`All of the money in pool (${formatCents(rta)})`} value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
           <div className="text-right">
             <div className="text-xs text-slate-500 dark:text-slate-400">Splitting</div>

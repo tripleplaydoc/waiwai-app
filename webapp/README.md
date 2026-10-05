@@ -7,7 +7,7 @@ Netlify.
 ## What works now
 
 - Password-protected (set `APP_PASSWORD`); nothing is public.
-- Budget screen: Ready to Assign, envelopes with Assigned / Activity / Available,
+- Budget screen: Money in pool, envelopes with Assigned / Activity / Available,
   inline editing of assigned amounts, month navigation, priority "Auto-assign".
 - Accounts with balances; add transactions (keyboard: **N** opens the form,
   **Esc** closes, full Tab order); inline re-categorizing.
@@ -50,7 +50,7 @@ Restore project (or use `/status`).
 - Income sits at the top of the budget; each pocket has a **type** (Advertising, Auto expense, Housing…) used by the P&L.
 - **Reports** page: profit & loss by type with prior-period comparison, CSV export, print, and (Business) a tax set-aside estimate.
 - **Receipts** attach to any transaction (photo or PDF, stored in the database, shown behind login only). On a phone, **Scan receipt** opens the camera, finds the paper's edges, straightens it and cleans it to black & white, all on the device.
-- **Can I buy this?** (the + menu): enter what you want, the price and the pocket; it says yes or no and suggests where to borrow (Ready to assign, then free pockets, then spare bill money, then goals), with one tap to apply.
+- **Can I buy this?** (the + menu): enter what you want, the price and the pocket; it says yes or no and suggests where to borrow (Money in pool, then free pockets, then spare bill money, then goals), with one tap to apply.
 - **People**: every transaction records who made it; filter by person on an account, see a By person report, and a Person column in exports. Profile pictures are set in Settings.
 - **Move money** between pockets from the + button, the budget page, or by tapping a pocket's available amount.
 - A daily rotating verse / saying from `webapp/lib/verses.ts`.
@@ -59,7 +59,7 @@ Restore project (or use `/status`).
 - **Exports** (Reports): QuickBooks Online bank CSV, full transactions CSV, Schedule C summary, P&L.
 
 ## Cashflow waterfall, tags, reviews and reports (Oct 2026, round 5)
-- **Assign button** (budget page, after "Flow → Set up the waterfall"): Ready to assign is repaid to any reserve it was pulled from first, then split 30% Taxes / 70% OPEX; OPEX pockets fill to their monthly costs; overflow fills Reservoir 1 (months × monthly OPEX, default 3); then it splits 50/50 to Reservoir 2 (default 3 months) and Cash; once both reservoirs are full everything goes to Cash, shared by each Cash pocket's %. All settings are in Flow → Settings. Pure math: `lib/budget/cashflow-waterfall.ts` (tests: `npx tsx lib/budget/cashflow-waterfall.test.ts`).
+- **Assign button** (budget page, after "Flow → Set up the waterfall"): Money in pool is repaid to any reserve it was pulled from first, then split 30% Taxes / 70% OPEX; OPEX pockets fill to their monthly costs; overflow fills Reservoir 1 (months × monthly OPEX, default 3); then it splits 50/50 to Reservoir 2 (default 3 months) and Cash; once both reservoirs are full everything goes to Cash, shared by each Cash pocket's %. All settings are in Flow → Settings. Pure math: `lib/budget/cashflow-waterfall.ts` (tests: `npx tsx lib/budget/cashflow-waterfall.test.ts`).
 - **Cover from reserves**: overspent OPEX pockets are covered 50/50 from Taxes and Reservoir 1, then Reservoir 2; each pull is a `ReserveDraw` that the next Assign pays back first.
 - **Expense tags** (Cultivate, Preserve, Support, Regenerate, Leakage; several per expense) on the transaction forms and the Tag button on each expense. Wording lives in `lib/budget/expense-tags.ts`.
 - **Reports tabs**: Overview (P&L + Age of money), Expenses (ring by category/type/tag), Assets (growth, monthly/quarterly/annual, optional Personal + Business), Cash flow (Cashflow-game style statement; tag income pockets earned/portfolio/passive via the pocket pencil), Review (the three monthly questions per expense).
@@ -68,7 +68,7 @@ Restore project (or use `/status`).
 
 ### Personal flow: Give / Save / Live (Oct 2026)
 
-On the **Personal** workspace the Flow chip sets up a three-way split. **Assign** sends Ready to assign to Give 20% / Save 10% / Live 70% (all adjustable, must add to 100%). Each bucket pays into one or more categories; inside a bucket, pockets with a monthly cost or goal fill first (proportionally if short), and what is left is shared by each pocket's "share of what's left" (if none is set, the bucket's first pocket takes it). A bucket with no pockets leaves its money in Ready to assign. Setup reuses existing categories named Give/Giving, Save/Savings and Live/Bills/Everyday, and creates what is missing. Engine: `lib/budget/personal-flow.ts` (tested with `npx tsx lib/budget/personal-flow.test.ts`). Dialogs now render in a portal so they are never clipped by the Flow popover.
+On the **Personal** workspace the Flow chip sets up a three-way split. **Assign** sends Money in pool to Give 20% / Save 10% / Live 70% (all adjustable, must add to 100%). Each bucket pays into one or more categories; inside a bucket, pockets with a monthly cost or goal fill first (proportionally if short), and what is left is shared by each pocket's "share of what's left" (if none is set, the bucket's first pocket takes it). A bucket with no pockets leaves its money in Money in pool. Setup reuses existing categories named Give/Giving, Save/Savings and Live/Bills/Everyday, and creates what is missing. Engine: `lib/budget/personal-flow.ts` (tested with `npx tsx lib/budget/personal-flow.test.ts`). Dialogs now render in a portal so they are never clipped by the Flow popover.
 
 ## Live prices, vehicles and loans (assets & liabilities)
 - **Crypto and stocks/funds**: open the holding and add each coin (symbol + how many) or ticker (+ shares). Prices come from free public feeds (Coinbase, then CoinGecko for coins; Yahoo Finance, then Stooq for stocks; optional `FINNHUB_API_KEY` / `COINGECKO_API_KEY`). They refresh when the app opens, every 10 minutes while it's open, and on the refresh button. Each refresh saves one value snapshot per day, so the Assets report shows growth. Prices are held as exact decimals; only the final value is rounded to cents.
@@ -79,7 +79,7 @@ On the **Personal** workspace the Flow chip sets up a three-way split. **Assign*
 
 ## Credit cards
 - Spending on a card comes out of the pocket you pick, exactly like cash. A card's status is computed (no extra pockets): **set aside** = what you owe minus the **short** part, where short = pockets overspent because of card charges + card spending with no pocket yet (never more than is owed).
-- The card page shows the status in plain words, **Pay card** (a two-sided transfer, not spending), **Cover the shortfall** (from Ready to Assign or another pocket), and interest rate / minimum payment (feeds the Debt payoff plan and creates an "Interest & fees" pocket). The Accounts list and Budget screen flag any short card.
+- The card page shows the status in plain words, **Pay card** (a two-sided transfer, not spending), **Cover the shortfall** (from Money in pool or another pocket), and interest rate / minimum payment (feeds the Debt payoff plan and creates an "Interest & fees" pocket). The Accounts list and Budget screen flag any short card.
 - When adding a card, type what you owe as a plain number; deleting one half of a payment removes both halves.
 - **Statement date and due date**: on the card page, "Dates, interest rate & minimum payment" takes the day of the month the statement closes and the day the payment is due (1 to 31; short months use their last day). The card page shows the next dates, the Accounts list says "Payment due in N days", and the Budget screen shows a banner when you owe money and the payment is due within 5 days.
 
@@ -87,14 +87,17 @@ On the **Personal** workspace the Flow chip sets up a three-way split. **Assign*
 The **Bills** chip on the Budget screen opens a month calendar (it follows the month you're viewing). Each day with a bill is colored by status: green = paid, amber = due soon (within 7 days), red = overdue, grey = upcoming; a day with several bills takes its most urgent color. Tap a day to see its bills with amount, status and **Mark paid** / **Undo**. Credit cards with a balance and a due day also appear on their due date, with an **Open card** button.
 
 ## Adding money to a pocket
-Tap a pocket's amount on the Budget screen to open **Pocket money**. **Add money** (the default tab) takes an amount from Ready to Assign and adds it on top of what's already assigned, showing the new assigned and available totals before you confirm; **All ready** fills in everything that's unassigned. The **Move money** tab moves money out of the pocket into another one.
+Tap a pocket's amount on the Budget screen to open **Pocket money**. **Add money** (the default tab) takes an amount from Money in pool and adds it on top of what's already assigned, showing the new assigned and available totals before you confirm; **All ready** fills in everything that's in the pool. If the pocket has a target (or is overspent), a yellow line shows what it still needs, with **Fill what's needed** (or **Use what's there** when the pool is short) to fill in the amount for you. The **Move money** tab moves money out of the pocket into another one.
 
 ## Stewards (whose money is it?)
-Every bank account has a **steward**: the household member who looks after it (set when you add the account, or with the pencil on the Accounts page; shown under the account's name). Every dollar of Ready to Assign sits in a bank account, so it belongs to that account's steward. When you assign money to a pocket, the account (and so the steward) goes with it. **Add money** lets you choose which account to take from and starts on one of your own accounts.
+Every bank account has a **steward**: the household member who looks after it (set when you add the account, or with the pencil on the Accounts page; shown under the account's name). Every dollar of Money in pool sits in a bank account, so it belongs to that account's steward. When you assign money to a pocket, the account (and so the steward) goes with it. **Add money** lets you choose which account to take from and starts on one of your own accounts.
 
-With two or more stewards, the Ready to assign number shows each person's share underneath, and tapping a pocket shows "Rent was funded by Mike $1,200 · Sarah $300". Moving money between pockets, back to Ready to assign, and covering shortfalls all carry the steward along, and a purchase comes out of the account that paid for it first. Older money assigned before accounts were tracked shows as "Not credited". With only one steward nothing extra is shown.
+With two or more stewards, the Money in pool number shows each person's share underneath, and tapping a pocket shows "Rent was funded by Mike $1,200 · Sarah $300". Moving money between pockets, back to Money in pool, and covering shortfalls all carry the steward along, and a purchase comes out of the account that paid for it first. Older money assigned before accounts were tracked shows as "Not credited". With only one steward nothing extra is shown.
 
 **Transfer** (Accounts page) moves cash from one of your bank accounts to another. It isn't spending, so no pocket changes, and deleting either half removes both. If the sending account has less free cash than you move, the pocket money credited to it moves along to the receiving account (shown in the confirmation).
 
-### Moving money back to Ready to assign
-Tap a pocket, open the **Move money** tab, and leave **Move to** on "↩ Ready to assign" (the default). Enter an amount (or **All**) and tap **Move to Ready to assign**. Only money that is still available in the pocket can be moved; the account it came from goes back with it.
+### Moving money back to Money in pool
+Tap a pocket, open the **Move money** tab, and leave **Move to** on "↩ Money in pool" (the default). Enter an amount (or **All**) and tap **Move to the pool**. Only money that is still available in the pocket can be moved; the account it came from goes back with it.
+
+
+> "Ready to assign" is now called **Money in pool** everywhere in the app.

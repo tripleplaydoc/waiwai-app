@@ -60,7 +60,7 @@ export function FlowPanel({ workspaceId, month, flow }: { workspaceId: string; m
       <div className="space-y-2 text-sm">
         <p className="font-bold">Cashflow waterfall</p>
         <p className="text-xs text-slate-600 dark:text-slate-300">
-          One <strong>Assign</strong> button sends Ready to assign down a chain: {pct(flow.taxBps)}% to taxes, the rest to OPEX, then Reservoir 1, then Reservoir 2 and Cash.
+          One <strong>Assign</strong> button sends the money in the pool down a chain: {pct(flow.taxBps)}% to taxes, the rest to OPEX, then Reservoir 1, then Reservoir 2 and Cash.
           This adds a Reserves category (Reservoir 1 &amp; 2) and a Cash category (Sinking Funds, Future Investments, Distributions) to your budget.
         </p>
         <button type="button" className="btn btn-primary" disabled={pending} onClick={() => run(() => setupWaterfallAction(workspaceId))}>
@@ -171,7 +171,7 @@ function SettingsDialog({ workspaceId, flow, onClose }: { workspaceId: string; f
             <input className="input flex-1" placeholder="New cash pocket (e.g. Vacation)" value={newName} onChange={(e) => setNewName(e.target.value)} />
             <button type="button" className="btn" disabled={pending || !newName.trim()} onClick={addPocket}><Plus className="size-4" aria-hidden /> Add</button>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">Whatever percentage isn&apos;t given to a pocket stays in Ready to assign.</p>
+          <p className="mt-1 text-[11px] text-slate-500">Whatever percentage isn&apos;t given to a pocket stays in the pool.</p>
         </div>
         {err && <p role="alert" className="text-xs text-neg">{err}</p>}
         <div className="flex justify-end gap-2">

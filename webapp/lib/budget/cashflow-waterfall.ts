@@ -36,7 +36,7 @@ export interface AssignPlan {
   moves: Move[];                       // each > 0
   repayments: { drawId: string; cents: number }[];
   totals: { repay: number; taxes: number; opex: number; reservoir1: number; reservoir2: number; cash: number };
-  leftoverCents: number;               // stays in Ready to assign
+  leftoverCents: number;               // stays in the pool
   opexFilled: boolean;
   reservoir1Filled: boolean;
   reservoir2Filled: boolean;

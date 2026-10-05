@@ -5,7 +5,7 @@ import { assignMoreAction, moveMoneyAction, releaseToReadyAction } from "@/app/a
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 
 const READY = "__ready__";
-export interface MovePocket { id: string; name: string; group: string; availableCents: number; assignedCents?: number }
+export interface MovePocket { id: string; name: string; group: string; availableCents: number; assignedCents?: number; /** What it still takes to cover this pocket (its target for the month, or an overspend). 0 = covered. */ needCents?: number }
 
 /** Shared "move money between pockets" form (used from the + button and the budget page). */
 export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, onCancel }: {
@@ -46,7 +46,7 @@ export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, o
       <div>
         <label htmlFor="mv-to" className="label">Move to</label>
         <select id="mv-to" className="input" value={toId} onChange={(e) => setToId(e.target.value)}>
-          <option value={READY}>↩ Ready to assign</option>
+          <option value={READY}>↩ Money in pool</option>
           {options(fromId)}
         </select>
       </div>
@@ -61,7 +61,7 @@ export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, o
       {error && <p role="alert" className="text-sm text-neg">{error}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>
-        <button type="submit" className="btn btn-primary" disabled={pending || !toId}>{pending ? "Moving…" : toId === READY ? "Move to Ready to assign" : "Move money"}</button>
+        <button type="submit" className="btn btn-primary" disabled={pending || !toId}>{pending ? "Moving…" : toId === READY ? "Move to the pool" : "Move money"}</button>
       </div>
     </form>
   );
@@ -100,7 +100,7 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
       }}
     >
       <div className="rounded-xl bg-pos-soft px-3 py-2 text-sm">
-        <span className="text-slate-600 dark:text-slate-300">Ready to assign{chosen ? ` in ${chosen.name}` : ""}</span>{" "}
+        <span className="text-slate-600 dark:text-slate-300">Money in pool{chosen ? ` in ${chosen.name}` : ""}</span>{" "}
         <span className="nums font-bold text-pos">{formatCents(chosen ? chosen.readyCents : readyToAssignCents)}</span>
       </div>
       {initialId && pocket ? (
@@ -137,7 +137,19 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
             {" · "}available {formatCents(pocket.availableCents)}{adding > 0 && <> → <strong className="text-slate-800 dark:text-slate-100">{formatCents(pocket.availableCents + adding)}</strong></>}
           </p>
         )}
-        {adding > ready && <p className="mt-1 text-xs text-warn">That&apos;s more than the {formatCents(ready)} ready to assign.</p>}
+        {pocket && (pocket.needCents ?? 0) > 0 && (
+          <div className="mt-2 flex items-center gap-2 rounded-xl bg-warn-soft px-3 py-2">
+            <p className="nums min-w-0 flex-1 text-xs text-warn">
+              Needs <strong>{formatCents(pocket.needCents!)}</strong> more to be covered
+              {ready < pocket.needCents! && <> · only {formatCents(ready)} in the pool</>}
+            </p>
+            <button type="button" className="btn btn-sm shrink-0" disabled={ready <= 0} onClick={() => setAmount(centsToInput(Math.min(pocket.needCents!, ready)))}>
+              {ready < pocket.needCents! ? "Use what's there" : "Fill what's needed"}
+            </button>
+          </div>
+        )}
+        {pocket && pocket.needCents === 0 && <p className="mt-2 text-xs font-medium text-pos">Already covered ✓</p>}
+        {adding > ready && <p className="mt-1 text-xs text-warn">That&apos;s more than the {formatCents(ready)} in the pool.</p>}
       </div>
       {error && <p role="alert" className="text-sm text-neg">{error}</p>}
       <div className="flex justify-end gap-2 pt-1">

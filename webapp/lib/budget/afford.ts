@@ -48,7 +48,7 @@ export function planPurchase(input: { amountCents: number; pocket: AffordPocket;
   const shortfall = amountCents - have;
   const sources: Source[] = [];
   const ready = Math.min(Math.max(0, input.readyToAssignCents), shortfall);
-  if (ready > 0) sources.push({ pocketId: null, name: "Ready to assign", cents: ready, tier: "ready", note: "Unassigned income. Nothing else is touched." });
+  if (ready > 0) sources.push({ pocketId: null, name: "Money in pool", cents: ready, tier: "ready", note: "Unassigned income. Nothing else is touched." });
 
   const candidates: (Source & { room: number })[] = [];
   for (const p of input.pockets) {

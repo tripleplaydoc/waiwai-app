@@ -134,7 +134,7 @@ export async function assignWaterfallAction(workspaceId: string, month: string):
   const summary = await getBudgetSummary(workspaceId, md);
   const { vm, cfg, opexInput, outstanding } = await loadFlow(workspaceId, md, summary.rows);
   if (!cfg?.enabled || !vm.tax || !vm.reservoir1 || !vm.reservoir2) return { ok: false, error: "Set up the cashflow waterfall first." };
-  if (summary.readyToAssignCents <= 0) return { ok: false, error: "Nothing to assign — Ready to assign is $0.00." };
+  if (summary.readyToAssignCents <= 0) return { ok: false, error: "Nothing to assign — the pool is $0.00." };
 
   const plan = planAssign({
     readyCents: summary.readyToAssignCents, taxBps: vm.taxBps, opex: opexInput, monthlyOpexCents: vm.monthlyOpexCents, taxId: vm.tax.id,
@@ -156,7 +156,7 @@ export async function assignWaterfallAction(workspaceId: string, month: string):
     t.repay > 0 && `${formatCents(t.repay)} paid back to reserves`, t.taxes > 0 && `${formatCents(t.taxes)} taxes`, t.opex > 0 && `${formatCents(t.opex)} OPEX`,
     t.reservoir1 > 0 && `${formatCents(t.reservoir1)} Reservoir 1`, t.reservoir2 > 0 && `${formatCents(t.reservoir2)} Reservoir 2`, t.cash > 0 && `${formatCents(t.cash)} cash`,
   ].filter(Boolean);
-  const left = plan.leftoverCents > 0 ? ` ${formatCents(plan.leftoverCents)} stays in Ready to assign (cash percentages add up to less than 100%).` : "";
+  const left = plan.leftoverCents > 0 ? ` ${formatCents(plan.leftoverCents)} stays in the pool (cash percentages add up to less than 100%).` : "";
   revalidatePath("/budget");
   return { ok: true, message: `Assigned: ${parts.join(" · ")}.${left}` };
 }

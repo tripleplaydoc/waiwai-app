@@ -52,7 +52,7 @@ function CoverDialog({ card, pockets, onClose }: { card: CardStatus; pockets: { 
       <div>
         <label htmlFor="cover-src" className="label">Take {formatCents(total)} from</label>
         <select id="cover-src" name="source" className="input" defaultValue="RTA">
-          <option value="RTA">Ready to Assign</option>
+          <option value="RTA">Money in pool</option>
           {pockets.filter((p) => p.availableCents >= total && !card.parts.some((x) => x.categoryId === p.id)).map((p) => <option key={p.id} value={p.id}>{p.name} ({formatCents(p.availableCents)} available)</option>)}
         </select>
       </div>

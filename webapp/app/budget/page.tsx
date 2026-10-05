@@ -211,7 +211,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         <div className="card p-5 text-sm">
           <strong>Start here:</strong> add an account (checking, savings, card…) on the{" "}
           <Link className="font-medium text-[#2E6BE6] underline dark:text-blue-300" href={`/accounts${wsKey === "business" ? "?ws=business" : ""}`}>Accounts</Link>{" "}
-          page, then record your first paycheck as an inflow in an Income category. It will appear above as Ready to assign.
+          page, then record your first paycheck as an inflow in an Income category. It will appear above as Money in pool.
           {needsReview > 0 && null}
         </div>
       )}
@@ -231,7 +231,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </Link>
       )}
 
-      <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} readyToAssignCents={rta} pockets={allPockets.filter((p) => !p.isSystemManaged).map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents, assignedCents: p.assignedCents }))} />
+      <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} readyToAssignCents={rta} pockets={allPockets.filter((p) => !p.isSystemManaged).map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents, assignedCents: p.assignedCents, needCents: p.progress.hasTarget || p.availableCents < 0 ? Math.max(p.progress.stillNeededCents, p.availableCents < 0 ? -p.availableCents : 0) : undefined }))} />
 
 
       <BudgetBoard customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />

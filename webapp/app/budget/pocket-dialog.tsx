@@ -203,7 +203,7 @@ export function PocketDialog({
           {editing && (!system || !isBusiness) && (
             confirmDelete ? (
               <span className="mr-auto flex flex-wrap items-center gap-2 text-sm">
-                Delete this pocket?{pocket.availableCents > 0 && <span className="text-xs text-slate-500">{formatCents(pocket.availableCents)} goes back to Ready to assign.</span>}
+                Delete this pocket?{pocket.availableCents > 0 && <span className="text-xs text-slate-500">{formatCents(pocket.availableCents)} goes back to the pool.</span>}
                 <button
                   type="button" className="btn btn-sm !border-[#C9372C] !text-[#C9372C]" disabled={deleting}
                   onClick={() => startDelete(async () => {
@@ -248,7 +248,7 @@ export function GroupDialog({
           {group && onDelete && (
             confirm ? (
               <span className="mr-auto flex flex-wrap items-center gap-2 text-sm">
-                Delete this category{pocketCount > 0 ? ` and its ${pocketCount} pocket${pocketCount === 1 ? "" : "s"}` : ""}?{releaseCents > 0 && <span className="text-xs text-slate-500">{formatCents(releaseCents)} goes back to Ready to assign.</span>}
+                Delete this category{pocketCount > 0 ? ` and its ${pocketCount} pocket${pocketCount === 1 ? "" : "s"}` : ""}?{releaseCents > 0 && <span className="text-xs text-slate-500">{formatCents(releaseCents)} goes back to the pool.</span>}
                 <button type="button" className="btn btn-sm !border-[#C9372C] !text-[#C9372C]" onClick={async () => { const e = await onDelete(); if (e) setError(e); else onClose(); }}>Yes, delete</button>
                 <button type="button" className="btn btn-sm" onClick={() => setConfirm(false)}>Keep</button>
               </span>
