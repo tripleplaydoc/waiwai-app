@@ -169,6 +169,15 @@ export function loanStatus(t: LoanTerms, todayIso: string, thisMonthPaid: boolea
   };
 }
 
+/** How many payments clear `balanceCents` at `paymentCents` a month (0% = balance ÷ payment, rounded up). null = the payment never clears it. */
+export function paymentsFor(balanceCents: number, paymentCents: number, aprBps: number): number | null {
+  if (balanceCents <= 0) return 0;
+  if (paymentCents <= 0) return null;
+  if (aprBps <= 0) return Math.ceil(balanceCents / paymentCents);
+  const r = amortize({ balanceCents, aprBps, paymentCents });
+  return r.never ? null : r.months;
+}
+
 /** Estimated balance after `paid` payments (interest-free when the rate is 0). */
 export function balanceAfter(t: LoanTerms, paid: number): number {
   const p = Math.max(0, Math.min(t.numPayments, paid));

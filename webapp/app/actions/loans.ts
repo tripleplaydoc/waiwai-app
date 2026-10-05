@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { assertAuthed } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
 import { isoToDate, todayIso } from "@/lib/utils/dates";
-import { balanceAfter, loanStatus, suggestPayment } from "@/lib/loans";
+import { balanceAfter, loanStatus, paymentsFor, suggestPayment } from "@/lib/loans";
 import { holdingOf, holdingSide } from "@/lib/holdings";
 import type { ActionResult } from "./types";
 
@@ -15,9 +15,12 @@ const schema = z.object({
   accountId: z.string().optional(),
   name: z.string().trim().min(1, "Name the loan.").max(80),
   original: z.string().optional(),
-  numPayments: z.string(),
+  /** "start": the loan's original terms. "now": where it stands today (balance owed, payments left, next due date). */
+  mode: z.enum(["start", "now"]).default("start"),
+  balance: z.string().optional(),
+  numPayments: z.string().optional(),
   payment: z.string().optional(),
-  firstDue: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the first payment's due date."),
+  firstDue: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the due date."),
   rate: z.string().optional(),
   groupId: z.string().optional(),
   paidFromId: z.string().optional(),
@@ -31,20 +34,43 @@ export async function saveLoanAction(_prev: ActionResult | undefined, formData: 
   const p = schema.safeParse(Object.fromEntries(formData));
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Check the form." };
   const d = p.data;
-  const n = Number(d.numPayments.replace(/,/g, ""));
-  if (!Number.isInteger(n) || n < 1 || n > 600) return { ok: false, error: "Number of payments should be a whole number, like 6 or 12." };
+  const now = d.mode === "now";
   const rateText = (d.rate ?? "").replace(/%/g, "").trim();
   if (rateText !== "" && !(/^\d{1,3}(\.\d{1,2})?$/.test(rateText) && Number(rateText) <= 100)) return { ok: false, error: "Interest rate should look like 6.25 (a yearly percentage). Use 0 for none." };
   const aprBps = rateText === "" ? 0 : Math.round(Number(rateText) * 100);
-  const orig = d.original?.trim() ? parseToCents(d.original) : null;
-  if (d.original?.trim() && (orig === null || orig <= 0)) return { ok: false, error: "Loan amount should look like 1200.00." };
-  let pay = d.payment?.trim() ? parseToCents(d.payment) : null;
-  if (d.payment?.trim() && (pay === null || pay <= 0)) return { ok: false, error: "Payment should look like 150.00." };
-  if (pay === null) {
-    if (orig === null) return { ok: false, error: "Enter the loan amount or the payment amount." };
-    pay = suggestPayment(orig, n, aprBps);
+  const money = (t: string | undefined, label: string): { v: number | null } | { error: string } => {
+    if (!t?.trim()) return { v: null };
+    const c = parseToCents(t);
+    return c === null || c <= 0 ? { error: `${label} should look like 150.00.` } : { v: c };
+  };
+  const origIn = money(d.original, "Loan amount"), balIn = money(d.balance, "Balance still owed"), payIn = money(d.payment, "Payment");
+  for (const r of [origIn, balIn, payIn]) if ("error" in r) return { ok: false, error: r.error };
+  const orig = (origIn as { v: number | null }).v, bal = (balIn as { v: number | null }).v;
+  let pay = (payIn as { v: number | null }).v;
+  const nText = (d.numPayments ?? "").replace(/,/g, "").trim();
+  let n = nText === "" ? NaN : Number(nText);
+  if (nText !== "" && (!Number.isInteger(n) || n < 1 || n > 600)) return { ok: false, error: now ? "Payments left should be a whole number, like 4." : "Number of payments should be a whole number, like 6 or 12." };
+  let originalCents: number;
+  if (now) {
+    if (bal === null) return { ok: false, error: "Enter the balance still owed." };
+    if (pay === null) {
+      if (!Number.isFinite(n)) return { ok: false, error: "Enter the payment, or how many payments are left." };
+      pay = suggestPayment(bal, n, aprBps);
+    }
+    if (!Number.isFinite(n)) {
+      const est = paymentsFor(bal, pay, aprBps);
+      if (est === null || est < 1 || est > 600) return { ok: false, error: "That payment doesn't pay the balance off. Check the payment and rate." };
+      n = est;
+    }
+    originalCents = bal; // the schedule starts from where the loan stands now
+  } else {
+    if (!Number.isFinite(n)) return { ok: false, error: "Enter the number of payments." };
+    if (pay === null) {
+      if (orig === null) return { ok: false, error: "Enter the loan amount or the payment amount." };
+      pay = suggestPayment(orig, n, aprBps);
+    }
+    originalCents = orig ?? pay * n;
   }
-  const originalCents = orig ?? pay * n;
   const first = isoToDate(d.firstDue);
   const workspace = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
   if (!workspace) return { ok: false, error: "Workspace not found." };
@@ -95,7 +121,7 @@ export async function saveLoanAction(_prev: ActionResult | undefined, formData: 
   const day = +d.firstDue.slice(8, 10);
   const today = todayIso();
   // Money owed on a brand-new loan: what the schedule says is left today (payments due in earlier months count as paid).
-  const startOwed = balanceAfter(terms, loanStatus(terms, today, false).paymentsDone);
+  const startOwed = now ? bal! : balanceAfter(terms, loanStatus(terms, today, false).paymentsDone);
 
   const result = await prisma.$transaction(async (tx) => {
     if (!account) {
@@ -108,9 +134,17 @@ export async function saveLoanAction(_prev: ActionResult | undefined, formData: 
       });
     } else {
       await tx.account.update({ where: { id: account.id }, data: { name: d.name, monthlyCashflowCents: pay } });
+      if (now && account.balanceMode === "MANUAL") {
+        // "Balance still owed" is the loan's balance in net worth: record it when it differs from what is on file.
+        const latest = await tx.manualBalanceEntry.findFirst({ where: { accountId: account.id }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] });
+        if (!latest || latest.balanceCents !== -bal!) {
+          await tx.manualBalanceEntry.deleteMany({ where: { accountId: account.id, asOfDate: isoToDate(today) } });
+          await tx.manualBalanceEntry.create({ data: { accountId: account.id, asOfDate: isoToDate(today), balanceCents: -bal! } });
+        }
+      }
     }
-    const fields = { interestRateBps: aprBps, termMonths: n, originalAmountCents: originalCents, loanStartDate: first, firstPaymentDate: first, dueDay: day };
-    await tx.holdingDetail.upsert({ where: { accountId: account.id }, create: { accountId: account.id, ...fields }, update: fields });
+    const fields = { interestRateBps: aprBps, termMonths: n, originalAmountCents: originalCents, firstPaymentDate: first, dueDay: day };
+    await tx.holdingDetail.upsert({ where: { accountId: account.id }, create: { accountId: account.id, loanStartDate: first, ...fields }, update: now ? fields : { ...fields, loanStartDate: first } });
 
     const existing = await tx.category.findUnique({ where: { loanAccountId: account.id } });
     const pocketData = { name: d.name, categoryGroupId: groupId, fundingTargetType: "MONTHLY_FUNDING" as const, fundingTargetCents: pay, dueDay: day, paidFromAccountId: paidFromId, isArchived: false };
@@ -134,7 +168,7 @@ export async function saveLoanAction(_prev: ActionResult | undefined, formData: 
   revalidatePath("/holdings");
   revalidatePath("/accounts", "layout");
   revalidatePath("/reports");
-  return { ok: true, message: `${d.name}: ${n} payments of ${(pay / 100).toFixed(2)}, first due ${d.firstDue}.` };
+  return { ok: true, message: `${d.name}: ${n} payment${n === 1 ? "" : "s"} of ${(pay / 100).toFixed(2)}${now ? " left" : ""}, ${now ? "next" : "first"} due ${d.firstDue}.` };
 }
 
 /** Takes a loan's payment off the budget (the loan itself and its terms stay in net worth). */

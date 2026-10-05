@@ -6,7 +6,7 @@ import { Landmark, Pencil, Plus } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { removeLoanFromBudgetAction, saveLoanAction } from "@/app/actions/loans";
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
-import { loanDueIso, suggestPayment } from "@/lib/loans";
+import { loanDueIso, paymentsFor, suggestPayment } from "@/lib/loans";
 import { shortDate } from "@/lib/budget/bills";
 import type { AssetChoice, LoanVM, PocketChoice } from "@/lib/budget/loans-types";
 
@@ -17,23 +17,34 @@ function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, 
   const router = useRouter();
   const [state, action, pending] = useActionState(saveLoanAction, undefined);
   const [name, setName] = useState(loan?.name ?? "");
+  const [mode, setMode] = useState<"now" | "start">("now");
+  // "Where it stands now": balance owed, payments left, next due date. "From the start": original amount, count, first due date.
+  const [balance, setBalance] = useState(loan?.balanceOwedCents ? centsToInput(loan.balanceOwedCents) : "");
+  const [left, setLeft] = useState(loan?.onBudget && loan.paymentsLeft ? String(loan.paymentsLeft) : "");
+  const [next, setNext] = useState(loan?.onBudget ? loan.nextDueIso ?? "" : "");
   const [original, setOriginal] = useState(loan?.originalCents ? centsToInput(loan.originalCents) : "");
   const [count, setCount] = useState(loan?.numPayments ? String(loan.numPayments) : "");
-  const [payment, setPayment] = useState(loan?.paymentCents ? centsToInput(loan.paymentCents) : "");
   const [first, setFirst] = useState(loan?.firstDueIso ?? "");
+  const [payment, setPayment] = useState(loan?.paymentCents ? centsToInput(loan.paymentCents) : "");
   const [rate, setRate] = useState(loan && loan.aprBps ? String(loan.aprBps / 100) : "");
   const [pocketId, setPocketId] = useState("");
   const [removing, startRemove] = useTransition();
   const [removeError, setRemoveError] = useState<string>();
   useEffect(() => { if (state?.ok) { onClose(); router.refresh(); } }, [state, onClose, router]);
 
-  const orig = parseToCents(original), n = Math.round(Number(count)), pay = parseToCents(payment);
   const apr = Math.round(Number(rate.replace(/%/g, "") || 0) * 100);
-  const validN = Number.isInteger(n) && n > 0;
-  const suggested = orig && orig > 0 && validN ? suggestPayment(orig, n, apr) : 0;
+  const pay = parseToCents(payment);
+  const bal = parseToCents(balance), orig = parseToCents(original);
+  const nIn = Math.round(Number(mode === "now" ? left : count));
+  const nGiven = Number.isInteger(nIn) && nIn > 0;
+  const baseCents = mode === "now" ? bal : orig;
+  const suggested = baseCents && baseCents > 0 && nGiven ? suggestPayment(baseCents, nGiven ? nIn : 0, apr) : 0;
   const effPay = pay && pay > 0 ? pay : suggested;
-  const total = effPay && validN ? effPay * n : 0;
-  const last = /^\d{4}-\d{2}-\d{2}$/.test(first) && validN ? loanDueIso(first, n - 1) : null;
+  const est = mode === "now" && !nGiven && bal && bal > 0 && effPay > 0 ? paymentsFor(bal, effPay, apr) : null;
+  const n = nGiven ? nIn : est ?? 0;
+  const anchor = mode === "now" ? next : first;
+  const last = /^\d{4}-\d{2}-\d{2}$/.test(anchor) && n > 0 ? loanDueIso(anchor, n - 1) : null;
+  const total = effPay && n ? effPay * n : 0;
 
   return (
     <Modal open={open} onClose={onClose} title={loan ? (loan.onBudget ? `Edit ${loan.name}` : `Put ${loan.name} on the budget`) : "Add a loan"}>
@@ -44,29 +55,67 @@ function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, 
           <label htmlFor="ln-name" className="label">Loan name</label>
           <input id="ln-name" name="name" required maxLength={80} className="input" placeholder="Affirm - Priceline" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="ln-orig" className="label">Loan amount</label>
-            <input id="ln-orig" name="original" inputMode="decimal" className="input nums" placeholder="0.00" value={original} onChange={(e) => setOriginal(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="ln-count" className="label">Number of payments</label>
-            <input id="ln-count" name="numPayments" required inputMode="numeric" className="input nums" placeholder="6" value={count} onChange={(e) => setCount(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="ln-pay" className="label">Payment each month</label>
-            <input id="ln-pay" name="payment" inputMode="decimal" className="input nums" placeholder={suggested ? centsToInput(suggested) : "0.00"} value={payment} onChange={(e) => setPayment(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="ln-rate" className="label">Interest rate <span className="font-normal text-slate-400">(% a year)</span></label>
-            <input id="ln-rate" name="rate" inputMode="decimal" className="input nums" placeholder="0" value={rate} onChange={(e) => setRate(e.target.value)} />
-          </div>
+        <div role="tablist" aria-label="What you know" className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+          {([["now", "Where it stands now"], ["start", "From the start"]] as const).map(([m, label]) => (
+            <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => setMode(m)}
+              className={`min-h-10 flex-1 rounded-lg text-sm font-semibold ${mode === m ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white" : "text-slate-600 dark:text-slate-300"}`}>{label}</button>
+          ))}
         </div>
-        <div>
-          <label htmlFor="ln-first" className="label">First payment due</label>
-          <input id="ln-first" name="firstDue" type="date" required className="input" value={first} onChange={(e) => setFirst(e.target.value)} />
-          <p className="mt-1 text-xs text-slate-500">Later payments fall on the same day each month. For a loan you already started, use its original first due date and the paid-off payments are counted for you.</p>
-        </div>
+        <input type="hidden" name="mode" value={mode} />
+        {mode === "now" ? (
+          <>
+            <p className="text-xs text-slate-500">Already partway through? You don&apos;t need the original amount. Enter what you owe today and when the next payment is due. If you don&apos;t know how many payments are left, leave it blank and it&apos;s worked out from the balance and payment.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="ln-bal" className="label">Balance still owed</label>
+                <input id="ln-bal" name="balance" inputMode="decimal" className="input nums" placeholder="0.00" value={balance} onChange={(e) => setBalance(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="ln-left" className="label">Payments left <span className="font-normal text-slate-400">(optional)</span></label>
+                <input id="ln-left" name="numPayments" inputMode="numeric" className="input nums" placeholder={est ? `about ${est}` : "4"} value={left} onChange={(e) => setLeft(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="ln-pay" className="label">Payment each month</label>
+                <input id="ln-pay" name="payment" inputMode="decimal" className="input nums" placeholder={suggested ? centsToInput(suggested) : "0.00"} value={payment} onChange={(e) => setPayment(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="ln-rate" className="label">Interest rate <span className="font-normal text-slate-400">(% a year)</span></label>
+                <input id="ln-rate" name="rate" inputMode="decimal" className="input nums" placeholder="0" value={rate} onChange={(e) => setRate(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="ln-next" className="label">Next payment due</label>
+              <input id="ln-next" name="firstDue" type="date" required className="input" value={next} onChange={(e) => setNext(e.target.value)} />
+              <p className="mt-1 text-xs text-slate-500">If this month&apos;s payment is already made, use next month&apos;s date. Later payments fall on the same day each month. Come back and edit this any time the numbers drift from your lender&apos;s.</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="ln-orig" className="label">Loan amount</label>
+                <input id="ln-orig" name="original" inputMode="decimal" className="input nums" placeholder="0.00" value={original} onChange={(e) => setOriginal(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="ln-count" className="label">Number of payments</label>
+                <input id="ln-count" name="numPayments" required inputMode="numeric" className="input nums" placeholder="6" value={count} onChange={(e) => setCount(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="ln-pay" className="label">Payment each month</label>
+                <input id="ln-pay" name="payment" inputMode="decimal" className="input nums" placeholder={suggested ? centsToInput(suggested) : "0.00"} value={payment} onChange={(e) => setPayment(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="ln-rate" className="label">Interest rate <span className="font-normal text-slate-400">(% a year)</span></label>
+                <input id="ln-rate" name="rate" inputMode="decimal" className="input nums" placeholder="0" value={rate} onChange={(e) => setRate(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="ln-first" className="label">First payment due</label>
+              <input id="ln-first" name="firstDue" type="date" required className="input" value={first} onChange={(e) => setFirst(e.target.value)} />
+              <p className="mt-1 text-xs text-slate-500">Later payments fall on the same day each month. For a loan you already started, use its original first due date and the paid-off payments are counted for you.</p>
+            </div>
+          </>
+        )}
         {assets.length > 0 && (
           <div>
             <label htmlFor="ln-asset" className="label">Secured by <span className="font-normal text-slate-400">(car, home… anything you could sell)</span></label>
@@ -110,11 +159,12 @@ function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, 
             </div>
           )}
         </div>
-        {effPay > 0 && validN && (
+        {effPay > 0 && n > 0 && (
           <p className="nums rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            {n} payment{n === 1 ? "" : "s"} of <strong>{formatCents(effPay)}</strong>{last && <> · last one {shortDate(last)} {last.slice(0, 4)}</>} · {formatCents(total)} in all
-            {orig && orig > 0 && total > orig && <> · about {formatCents(total - orig)} interest or fees</>}
-            {!(pay && pay > 0) && " (payment worked out from the amount, count and rate)"}
+            {est && !nGiven ? "About " : ""}{n} payment{n === 1 ? "" : "s"} {mode === "now" ? "left " : ""}of <strong>{formatCents(effPay)}</strong>{last && <> · last one {shortDate(last)} {last.slice(0, 4)}</>} · {formatCents(total)} to pay
+            {mode === "start" && orig && orig > 0 && total > orig && <> · about {formatCents(total - orig)} interest or fees</>}
+            {mode === "now" && bal && bal > 0 && total > bal && <> · about {formatCents(total - bal)} of that is interest or fees</>}
+            {!(pay && pay > 0) && " (payment worked out for you)"}
           </p>
         )}
         {state && !state.ok && <p role="alert" className="text-sm text-neg">{state.error}</p>}
@@ -175,7 +225,7 @@ export function LoansPanel({ workspaceId, loans, groups, defaultGroupId, banks, 
               <div className="h-full rounded-full bg-pos" style={{ width: `${Math.round((l.paymentsDone / Math.max(1, l.numPayments ?? 1)) * 100)}%` }} />
             </div>
             <p className="nums mt-1 text-[11px] text-slate-500">
-              {l.phase === "upcoming" ? `Starts ${shortDate(l.firstDueIso!)} · ` : `${l.paymentsDone} of ${l.numPayments} paid · `}
+              {l.phase === "upcoming" ? `Next ${shortDate(l.firstDueIso!)} · ` : l.paymentsDone > 0 ? `${l.paymentsDone} of ${l.numPayments} paid · ` : ""}
               {l.paymentsLeft} left ({formatCents(l.remainingCents)})
               {l.lastDueIso && <> · last {shortDate(l.lastDueIso)} {l.lastDueIso.slice(0, 4)}</>}
             </p>
