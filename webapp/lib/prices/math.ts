@@ -50,3 +50,19 @@ export function formatUnitPrice(price: string): string {
   const [w, f = ""] = n.toFixed(places).split(".");
   return `$${w.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${f ? "." + f : ""}`;
 }
+
+const unscale = (v: bigint): string => {
+  const neg = v < 0n, a = neg ? -v : v;
+  const whole = a / 10n ** BigInt(SCALE), frac = (a % 10n ** BigInt(SCALE)).toString().padStart(SCALE, "0").replace(/0+$/, "");
+  return `${neg ? "-" : ""}${whole}${frac ? "." + frac : ""}`;
+};
+/** Exact a + b for decimal strings; null if either is invalid. */
+export function addDecimals(a: string, b: string): string | null {
+  const x = toScaled(a), y = toScaled(b);
+  return x === null || y === null ? null : unscale(x + y);
+}
+/** Exact a - b, never below zero. */
+export function subDecimals(a: string, b: string): string | null {
+  const x = toScaled(a), y = toScaled(b);
+  return x === null || y === null ? null : unscale(x - y < 0n ? 0n : x - y);
+}

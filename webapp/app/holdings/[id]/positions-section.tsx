@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { PriceRefresher } from "@/components/price-refresher";
-import { removePositionAction, saveCashAction, savePositionAction } from "@/app/actions/holding-detail";
+import { addToPositionAction, removeActivityAction, removePositionAction, saveCashAction, savePositionAction } from "@/app/actions/holding-detail";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
 import { formatQuantity, formatUnitPrice } from "@/lib/prices/math";
 import type { PositionVM } from "@/lib/reports/holding-meta";
@@ -51,6 +51,43 @@ function PositionDialog({ accountId, kind, edit, onClose }: { accountId: string;
   );
 }
 
+function AddSharesForm({ position, coin, today }: { position: PositionVM; coin: boolean; today: string }) {
+  const [state, action, pending] = useActionState(addToPositionAction, undefined);
+  const [removing, startRemove] = useTransition();
+  const unit = coin ? "coins" : "shares";
+  return (
+    <div className="mt-5 border-t border-[#E2E8F0] pt-4 dark:border-slate-800">
+      <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Add {unit} (reinvested dividend or bought more)</h3>
+      <form action={action} className="space-y-3">
+        <input type="hidden" name="positionId" value={position.id} />
+        <div role="radiogroup" aria-label="What happened" className="grid grid-cols-2 gap-2 text-sm font-semibold">
+          <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[#E2E8F0] px-3 dark:border-slate-700"><input type="radio" name="kind" value="REINVESTED" defaultChecked className="accent-indigo-600" /> Dividend reinvested</label>
+          <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[#E2E8F0] px-3 dark:border-slate-700"><input type="radio" name="kind" value="BOUGHT" className="accent-indigo-600" /> Bought more</label>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div><label htmlFor="act-shares" className="label">{coin ? "Coins added" : "Shares added"}</label><input id="act-shares" name="shares" required inputMode="decimal" className="input nums" placeholder="0.137" /></div>
+          <div><label htmlFor="act-amt" className="label">Dollars</label><input id="act-amt" name="amount" inputMode="decimal" className="input nums" placeholder="0.00" /></div>
+          <div><label htmlFor="act-date" className="label">Date</label><input id="act-date" name="date" type="date" defaultValue={today} className="input" /></div>
+        </div>
+        <p className="text-xs text-slate-500">Adds to your count{position.costBasisCents != null ? " and to what you paid, so your gain stays accurate" : ". Enter “Total you paid” above first if you want gain or loss tracked"}.</p>
+        <div className="flex items-center gap-3"><button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Adding…" : `Add ${unit}`}</button><Msg state={state} /></div>
+      </form>
+      {position.activity.length > 0 && (
+        <ul className="mt-4 divide-y divide-[#E2E8F0] text-sm dark:divide-slate-800" aria-label="History">
+          {position.activity.map((a) => (
+            <li key={a.id} className="flex items-center gap-2 py-2">
+              <div className="min-w-0 flex-1"><div className="nums truncate">+{formatQuantity(a.shares)} <span className="text-xs text-slate-500">{a.kind === "REINVESTED" ? "reinvested" : "bought"} · {a.date}</span></div></div>
+              <div className="nums shrink-0 text-xs text-slate-600 dark:text-slate-300">{formatCents(a.amountCents)}</div>
+              <button type="button" className="btn btn-sm !min-h-10" disabled={removing} aria-label={`Undo ${a.date}`}
+                onClick={() => { if (!window.confirm("Undo this? The shares come back off your count.")) return; startRemove(async () => { await removeActivityAction(a.id); }); }}><Trash2 className="size-3.5" aria-hidden /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function CashDialog({ accountId, cashCents, onClose }: { accountId: string; cashCents: number; onClose: () => void }) {
   const [state, action, pending] = useActionState(saveCashAction, undefined);
   useEffect(() => { if (state?.ok) onClose(); }, [state, onClose]);
@@ -70,7 +107,7 @@ function CashDialog({ accountId, cashCents, onClose }: { accountId: string; cash
   );
 }
 
-export function PositionsSection({ accountId, workspaceId, kind, positions, cashCents }: { accountId: string; workspaceId: string; kind: "CRYPTO" | "STOCK"; positions: PositionVM[]; cashCents: number }) {
+export function PositionsSection({ accountId, workspaceId, kind, positions, cashCents, today }: { accountId: string; workspaceId: string; kind: "CRYPTO" | "STOCK"; positions: PositionVM[]; cashCents: number; today: string }) {
   const [dlg, setDlg] = useState<{ edit?: PositionVM } | "cash" | null>(null);
   const coin = kind === "CRYPTO";
   const oldest = positions.map((p) => p.priceAt).filter((t): t is string => !!t).sort()[0] ?? null;
@@ -110,7 +147,16 @@ export function PositionsSection({ accountId, workspaceId, kind, positions, cash
       </div>
       {positions.length > 0 && <p className="mt-3 text-[11px] text-slate-500">Prices from {source || "market data"} · <TimeAgo iso={oldest} prefix="updated " /></p>}
       <Modal open={dlg !== null && dlg !== "cash"} onClose={() => setDlg(null)} title={dlg && dlg !== "cash" && dlg.edit ? `Edit ${dlg.edit.symbol}` : coin ? "Add a coin" : "Add a stock or fund"}>
-        {dlg !== null && dlg !== "cash" && <PositionDialog key={dlg.edit?.id ?? "new"} accountId={accountId} kind={kind} edit={dlg.edit} onClose={() => setDlg(null)} />}
+        {dlg !== null && dlg !== "cash" && (() => {
+          // Always edit the live copy, so a just-added reinvestment can't be overwritten by a stale count.
+          const live = dlg.edit ? positions.find((p) => p.id === dlg.edit!.id) ?? dlg.edit : undefined;
+          return (
+            <>
+              <PositionDialog key={live ? `${live.id}-${live.quantity}-${live.costBasisCents}` : "new"} accountId={accountId} kind={kind} edit={live} onClose={() => setDlg(null)} />
+              {live && <AddSharesForm key={`add-${live.id}`} position={live} coin={coin} today={today} />}
+            </>
+          );
+        })()}
       </Modal>
       <Modal open={dlg === "cash"} onClose={() => setDlg(null)} title="Cash in this account">
         {dlg === "cash" && <CashDialog accountId={accountId} cashCents={cashCents} onClose={() => setDlg(null)} />}

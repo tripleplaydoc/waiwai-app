@@ -7,7 +7,7 @@ import { assertAuthed } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
 import { isoToDate, todayIso } from "@/lib/utils/dates";
 import { holdingOf, holdingSide } from "@/lib/holdings";
-import { cleanDecimal } from "@/lib/prices/math";
+import { addDecimals, cleanDecimal, subDecimals } from "@/lib/prices/math";
 import { lookupPrices } from "@/lib/prices/providers";
 import { refreshPrices, snapshotAccountValue } from "@/lib/prices/refresh";
 import type { ActionResult } from "./types";
@@ -103,6 +103,49 @@ export async function removePositionAction(positionId: string): Promise<ActionRe
   await prisma.holdingPosition.delete({ where: { id: p.id } });
   const remaining = await prisma.holdingPosition.count({ where: { accountId: p.accountId } });
   if (remaining > 0) await snapshotAccountValue(p.accountId);
+  done(p.accountId);
+  return { ok: true };
+}
+
+/**
+ * Adds shares/coins to a position (bought more, or a reinvested dividend). The count goes up by the shares,
+ * and the cost basis by the dollars — but only if a cost basis is already being tracked, so we never invent a
+ * partial one that would overstate the gain.
+ */
+export async function addToPositionAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
+  await assertAuthed();
+  const pos = await prisma.holdingPosition.findUnique({ where: { id: String(formData.get("positionId") ?? "") }, include: { account: true } });
+  if (!pos || pos.account.isArchived) return { ok: false, error: "Not found." };
+  const kind = formData.get("kind") === "BOUGHT" ? "BOUGHT" : "REINVESTED";
+  const shares = cleanDecimal(String(formData.get("shares") ?? ""));
+  if (shares === null || Number(shares) <= 0) return { ok: false, error: "Enter how many shares or coins were added, like 0.137." };
+  const amt = dollars(formData.get("amount"), "Amount");
+  if ("error" in amt) return { ok: false, error: amt.error };
+  const when = dateOrNull(formData.get("date")) ?? isoToDate(todayIso());
+  if (when === "bad") return { ok: false, error: "Pick a date." };
+  const qty = addDecimals(pos.quantity.toFixed(), shares)!;
+  const amountCents = amt.cents ?? 0;
+  await prisma.$transaction([
+    prisma.positionActivity.create({ data: { positionId: pos.id, kind, date: when, shares, amountCents, note: blank(formData.get("note")) } }),
+    prisma.holdingPosition.update({ where: { id: pos.id }, data: { quantity: qty, ...(pos.costBasisCents != null ? { costBasisCents: pos.costBasisCents + amountCents } : {}) } }),
+  ]);
+  await snapshotAccountValue(pos.accountId);
+  done(pos.accountId);
+  return { ok: true, message: `Added ${shares} ${pos.symbol}.` };
+}
+
+/** Undoes one addition: takes the shares (and dollars) back off the position. */
+export async function removeActivityAction(activityId: string): Promise<ActionResult> {
+  await assertAuthed();
+  const a = await prisma.positionActivity.findUnique({ where: { id: activityId }, include: { position: true } });
+  if (!a) return { ok: false, error: "Not found." };
+  const p = a.position;
+  const qty = subDecimals(p.quantity.toFixed(), a.shares.toFixed())!;
+  await prisma.$transaction([
+    prisma.positionActivity.delete({ where: { id: a.id } }),
+    prisma.holdingPosition.update({ where: { id: p.id }, data: { quantity: qty, ...(p.costBasisCents != null ? { costBasisCents: Math.max(0, p.costBasisCents - a.amountCents) } : {}) } }),
+  ]);
+  await snapshotAccountValue(p.accountId);
   done(p.accountId);
   return { ok: true };
 }

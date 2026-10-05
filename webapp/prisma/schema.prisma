@@ -499,9 +499,33 @@ model HoldingPosition {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  activity     PositionActivity[]
+
   @@unique([accountId, kind, symbol])
   @@index([accountId])
   @@map("holding_positions")
+}
+
+enum PositionActivityKind {
+  BOUGHT
+  REINVESTED
+}
+
+/// Shares/coins added to a position: bought more, or a reinvested dividend. Adds to quantity and cost basis.
+model PositionActivity {
+  id           String                   @id @default(cuid())
+  positionId   String
+  position     HoldingPosition          @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  kind         PositionActivityKind
+  date         DateTime                 @db.Date
+  shares       Decimal                  @db.Decimal(30, 12)
+  /// Dollars paid / reinvested (added to cost basis when the position has one).
+  amountCents  Int
+  note         String?
+  createdAt    DateTime                 @default(now())
+
+  @@index([positionId, date])
+  @@map("position_activity")
 }
 
 // ----------------------------------------------------------------------------

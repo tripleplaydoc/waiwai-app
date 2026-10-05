@@ -56,7 +56,7 @@ export default async function HoldingPage({ params }: { params: Promise<{ id: st
         <div className="mt-2"><Sparkline values={series} color={side === "ASSET" ? "#059669" : "#DC2626"} /></div>
       </section>
 
-      {priced && <PositionsSection accountId={acct.id} workspaceId={acct.workspaceId} kind={cls === "CRYPTO" ? "CRYPTO" : "STOCK"} positions={meta.positions} cashCents={meta.cashCents} />}
+      {priced && <PositionsSection accountId={acct.id} workspaceId={acct.workspaceId} kind={cls === "CRYPTO" ? "CRYPTO" : "STOCK"} positions={meta.positions} cashCents={meta.cashCents} today={today} />}
       {priced && !hasPositions && value > 0 && <p className="text-xs text-slate-500">This is currently valued by hand at {formatCents(value)}. Add your {cls === "CRYPTO" ? "coins" : "shares"} above and the value will follow live prices instead.</p>}
       {cls === "VEHICLE" && <VehicleSection accountId={acct.id} meta={meta} valueCents={value} today={today} daysSinceValued={daysSinceValued} />}
       {side === "LIABILITY" && <LoanSection accountId={acct.id} meta={meta} owedCents={value} paymentCents={paymentCents} today={today} />}

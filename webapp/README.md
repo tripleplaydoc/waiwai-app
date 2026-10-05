@@ -75,3 +75,4 @@ On the **Personal** workspace the Flow chip sets up a three-way split. **Assign*
 - **Vehicles**: VIN lookup (free US NHTSA database) fills in year/make/model/trim. Kelley Blue Book has no free feed, so the page links to the car on KBB and you type the value in; values older than 90 days get a reminder.
 - **Loans**: rate, payment, original amount and term per loan; a live payoff calculator (extra monthly, one-time payment, "paid off in N years" payment, schedule) and a Debt payoff plan (avalanche / snowball) across all debts.
 - Env overrides for testing: `COINBASE_BASE`, `COINGECKO_BASE`, `YAHOO_BASE`, `STOOQ_BASE`, `FINNHUB_BASE`, `NHTSA_BASE`.
+- **Reinvested dividends / buying more**: open a position (pencil) → "Add shares". Adds to the share count, and to the cost basis when one is tracked (so gain stays accurate), with a history and undo. Cash dividends go in the account's Cash line.

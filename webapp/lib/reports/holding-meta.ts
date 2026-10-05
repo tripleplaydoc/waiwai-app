@@ -6,6 +6,7 @@ export interface PositionVM {
   id: string; kind: "CRYPTO" | "STOCK"; symbol: string; name: string | null; quantity: string;
   price: string | null; priceAt: string | null; priceSource: string | null;
   valueCents: number; costBasisCents: number | null;
+  activity: { id: string; kind: "BOUGHT" | "REINVESTED"; date: string; shares: string; amountCents: number }[];
 }
 export interface MetaVM {
   accountId: string;
@@ -28,14 +29,14 @@ export async function loadHoldingMeta(accountIds: string[]): Promise<Map<string,
   if (accountIds.length === 0) return out;
   const [details, positions, latest] = await Promise.all([
     prisma.holdingDetail.findMany({ where: { accountId: { in: accountIds } } }),
-    prisma.holdingPosition.findMany({ where: { accountId: { in: accountIds } }, orderBy: { symbol: "asc" } }),
+    prisma.holdingPosition.findMany({ where: { accountId: { in: accountIds } }, orderBy: { symbol: "asc" }, include: { activity: { orderBy: { date: "desc" }, take: 25 } } }),
     prisma.manualBalanceEntry.groupBy({ by: ["accountId"], where: { accountId: { in: accountIds } }, _max: { asOfDate: true } }),
   ]);
   for (const id of accountIds) {
     const d = details.find((x) => x.accountId === id);
     const pos: PositionVM[] = positions.filter((p) => p.accountId === id).map((p) => {
       const price = p.lastPrice ? p.lastPrice.toFixed() : null;
-      return { id: p.id, kind: p.kind, symbol: p.symbol, name: p.name, quantity: p.quantity.toFixed(), price, priceAt: p.priceAt ? p.priceAt.toISOString() : null, priceSource: p.priceSource, valueCents: price ? valueCents(p.quantity.toFixed(), price) : 0, costBasisCents: p.costBasisCents };
+      return { id: p.id, kind: p.kind, symbol: p.symbol, name: p.name, quantity: p.quantity.toFixed(), price, priceAt: p.priceAt ? p.priceAt.toISOString() : null, priceSource: p.priceSource, valueCents: price ? valueCents(p.quantity.toFixed(), price) : 0, costBasisCents: p.costBasisCents, activity: p.activity.map((a) => ({ id: a.id, kind: a.kind, date: a.date.toISOString().slice(0, 10), shares: a.shares.toFixed(), amountCents: a.amountCents })) };
     });
     const times = pos.map((p) => p.priceAt).filter((t): t is string => !!t).sort();
     out.set(id, {

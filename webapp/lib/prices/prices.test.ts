@@ -1,4 +1,4 @@
-import { valueCents, cleanDecimal, formatQuantity, formatUnitPrice, toScaled } from "./math";
+import { addDecimals, subDecimals, valueCents, cleanDecimal, formatQuantity, formatUnitPrice, toScaled } from "./math";
 import { parseCoinbase, parseCoinGecko, parseCoinGeckoSearch, parseYahoo, parseStooq, parseFinnhub, cryptoPrice, stockPrice, lookupPrices, type Fetcher } from "./providers";
 
 let failed = 0;
@@ -23,6 +23,13 @@ eq("scaled", String(toScaled("1.5")), "1500000000000");
 eq("format qty", formatQuantity("1234.50"), "1,234.5");
 eq("format price big", formatUnitPrice("60000.1"), "$60,000.10");
 eq("format price tiny", formatUnitPrice("0.0000089"), "$0.00000890");
+
+eq("add shares exact", addDecimals("0.5", "0.01"), "0.51");
+eq("add avoids float drift", addDecimals("0.1", "0.2"), "0.3");
+eq("add fractional + whole", addDecimals("10.5", "0.137"), "10.637");
+eq("sub shares exact", subDecimals("0.51", "0.01"), "0.5");
+eq("sub never negative", subDecimals("1", "5"), "0");
+eq("add rejects junk", addDecimals("x", "1"), null);
 
 // parsers (documented response shapes)
 eq("coinbase", parseCoinbase('{"data":{"amount":"63500.12","base":"BTC","currency":"USD"}}'), "63500.12");
