@@ -9,6 +9,7 @@ import { startOfMonthUTC } from "@/lib/budget/dates";
 import { isoToDate } from "@/lib/utils/dates";
 import { inDays } from "@/lib/cycle";
 import { AddAccountButton } from "./add-account";
+import { TransferButton } from "@/components/transfer-button";
 import { EditAccountButton } from "./edit-account";
 import { dateToIso } from "@/lib/utils/dates";
 
@@ -34,7 +35,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{workspace.name} accounts</h1>
-        <div className="ml-auto"><AddAccountButton workspaceId={workspace.id} today={todayIso()} /></div>
+        <div className="ml-auto flex items-center gap-2"><TransferButton accounts={accounts.filter((a) => a.onBudget && a.type !== "CREDIT_CARD" && a.balanceMode !== "MANUAL").map((a) => ({ id: a.id, name: a.name }))} today={todayIso()} /><AddAccountButton workspaceId={workspace.id} today={todayIso()} /></div>
       </div>
       <div className="flex gap-2 text-sm font-semibold" role="tablist" aria-label="Accounts view">
         <span role="tab" aria-selected className="rounded-full bg-navy px-4 py-2 text-white">Accounts</span>

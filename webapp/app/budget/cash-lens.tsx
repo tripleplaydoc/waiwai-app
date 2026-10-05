@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Landmark } from "lucide-react";
 import { Popover } from "@/components/popover";
 import { tagUntaggedAction } from "@/app/actions/funding";
+import { TransferButton } from "@/components/transfer-button";
 import { formatCents } from "@/lib/utils/currency";
 import type { CashView } from "@/lib/budget/funding";
 
@@ -55,7 +56,7 @@ function diffText(diff: number): { text: string; tone: string } {
 }
 
 /** The Cash chip and its "Where's my cash" panel. */
-export function CashChip({ workspaceId, month }: { workspaceId: string; month: string }) {
+export function CashChip({ workspaceId, month, today }: { workspaceId: string; month: string; today: string }) {
   const { cash, account, setAccount } = useCashLens();
   const router = useRouter();
   const [tagTo, setTagTo] = useState(cash.accounts[0]?.id ?? "");
@@ -93,12 +94,13 @@ export function CashChip({ workspaceId, month }: { workspaceId: string; month: s
             <>Ready {formatCents(a.readyCents)} · Pockets {formatCents(a.pocketsCents)}</>,
             diffText(a.realCents - a.readyCents - a.pocketsCents), account === a.id, () => setAccount(a.id)))}
       </ul>
+      <div className="mt-2"><TransferButton accounts={cash.accounts.map((a) => ({ id: a.id, name: a.name }))} today={today} className="btn btn-sm w-full" label="Move cash between accounts" /></div>
       {cash.cardsOwedCents > 0 && <p className="nums mt-2 text-xs text-slate-500">Credit cards owe {formatCents(cash.cardsOwedCents)}. Money spent on a card stays in the bank until you pay it.</p>}
 
       {cash.untaggedPocketCents > 0 && (
         <div className="mt-3 rounded-xl border border-amber-300 bg-warn-soft p-3 dark:border-amber-700">
           <p className="text-xs font-semibold text-warn">{formatCents(cash.untaggedPocketCents)} in your pockets isn&apos;t tagged to an account yet.</p>
-          <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">It was assigned before accounts were tracked. Choose where it really is.</p>
+          <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">It was assigned before accounts were tracked. Tag all of it to one account here, or go pocket by pocket: tap a pocket&apos;s amount, then <strong>Where it is</strong>.</p>
           <div className="mt-2 flex gap-2">
             <select aria-label="Account to tag it to" className="input !min-h-10 flex-1" value={tagTo} onChange={(e) => setTagTo(e.target.value)}>
               {cash.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}

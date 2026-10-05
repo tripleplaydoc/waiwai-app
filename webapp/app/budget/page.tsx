@@ -160,7 +160,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
               </div>
               {billsList}
             </Popover>
-            <CashChip workspaceId={workspace.id} month={mp} />
+            <CashChip workspaceId={workspace.id} month={mp} today={today} />
             {goals.length > 0 && (
               <Popover icon={<Target className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={<>Goals {goals.length}</>}>
                 <p className="mb-2 text-xs font-bold text-slate-800 dark:text-slate-100">Goals</p>

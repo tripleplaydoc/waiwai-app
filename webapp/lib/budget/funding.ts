@@ -181,3 +181,17 @@ export async function loadCashView(db: Db, workspaceId: string, month: Date, poc
     cardsOwedCents: cards.reduce((s, a) => s + Math.max(0, -real(a)), 0),
   };
 }
+
+/** Every spending pocket's money by account tag (spending applied), for the whole workspace. */
+export async function loadAllPocketBalances(db: Db, workspaceId: string, month: Date): Promise<Map<string, Parts>> {
+  const cats = await db.category.findMany({ where: { workspaceId, isArchived: false, type: { not: "INCOME" } }, select: { id: true } });
+  return loadPocketBalances(db, workspaceId, cats.map((c) => c.id), month);
+}
+
+/** Two offsetting rows that re-tag `cents` of a pocket's money from one account to another (null = not tagged). Pocket totals don't change. */
+export function retagRows(a: { categoryId: string; month: Date; cents: number; from: Key; to: Key; note: string }): NewRow[] {
+  return [
+    { categoryId: a.categoryId, month: a.month, amountCents: -a.cents, source: "CORRECTION", note: a.note, fundingAccountId: a.from },
+    { categoryId: a.categoryId, month: a.month, amountCents: a.cents, source: "CORRECTION", note: a.note, fundingAccountId: a.to },
+  ];
+}
