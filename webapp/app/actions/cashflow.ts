@@ -192,3 +192,18 @@ export async function coverShortfallAction(workspaceId: string, month: string): 
   revalidatePath("/budget");
   return { ok: true, message: `Covered ${formatCents(plan.coveredCents)}: ${parts.join(", ")}. New income will pay this back first.${short}` };
 }
+
+/** Sets Months ahead on every monthly-cost pocket in the OPEX category at once (0 = this month only). */
+export async function setOpexMonthsAheadAction(workspaceId: string, months: number): Promise<ActionResult> {
+  await assertAuthed();
+  if (!Number.isInteger(months) || months < 0 || months > 6) return { ok: false, error: "Pick 0 to 6 months." };
+  const cfg = await prisma.waterfallConfig.findUnique({ where: { workspaceId } });
+  if (!cfg?.opexGroupId) return { ok: false, error: "Choose your OPEX category in the waterfall settings first." };
+  const r = await prisma.category.updateMany({
+    where: { workspaceId, categoryGroupId: cfg.opexGroupId, type: "EXPENSE", isArchived: false, isSystemManaged: false, fundingTargetType: "MONTHLY_FUNDING" },
+    data: { monthsAhead: months },
+  });
+  if (r.count === 0) return { ok: false, error: "No OPEX pockets have a monthly cost yet." };
+  revalidatePath("/budget");
+  return { ok: true, message: `${r.count} monthly cost${r.count === 1 ? "" : "s"} now ${months === 0 ? "cover this month only" : `keep ${months} month${months === 1 ? "" : "s"} ahead`}.` };
+}

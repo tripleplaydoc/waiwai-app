@@ -14,6 +14,9 @@ export interface FlowVM {
   monthlyOpexCents: number;
   /** Money sitting in OPEX pockets (positive balances). */
   opexBalanceCents: number;
+  /** How many OPEX pockets have a monthly cost, and the Months ahead they share (null = they differ). */
+  opexMonthlyCount: number;
+  opexMonthsAhead: number | null;
   /** Still needed to bring every OPEX pocket up to its target. */
   opexNeedCents: number;
   reservoir1: (FlowPocketVM & { targetCents: number }) | null;

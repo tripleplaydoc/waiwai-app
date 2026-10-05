@@ -64,6 +64,8 @@ export async function loadFlow(workspaceId: string, month: Date, rows: EnvelopeR
     opexGroupId: cfg?.opexGroupId ?? null,
     opexGroupName: groups.find((g) => g.id === cfg?.opexGroupId)?.name ?? null,
     monthlyOpexCents: monthly, opexBalanceCents: balance, opexNeedCents: need,
+    opexMonthlyCount: opexRows.filter((r) => r.targetType === "MONTHLY_FUNDING").length,
+    opexMonthsAhead: (() => { const s = new Set(opexRows.filter((r) => r.targetType === "MONTHLY_FUNDING").map((r) => r.monthsAhead)); return s.size === 1 ? [...s][0] : null; })(),
     reservoir1: r1 ? { ...r1, targetCents: reserveTarget(monthly, r1m) } : null,
     reservoir2: r2 ? { ...r2, targetCents: reserveTarget(monthly, r2m) } : null,
     cash, cashBalanceCents: cash.reduce((s, c) => s + Math.max(0, c.balanceCents), 0), cashPctBps: cash.reduce((s, c) => s + c.bps, 0),

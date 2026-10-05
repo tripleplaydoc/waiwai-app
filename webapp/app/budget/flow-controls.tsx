@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowDownToLine, Droplets, Pencil, Plus, ShieldPlus } from "lucide-react";
 import { Modal } from "@/components/modal";
-import { addCashPocketAction, assignWaterfallAction, coverShortfallAction, saveWaterfallSettingsAction, setupWaterfallAction } from "@/app/actions/cashflow";
+import { addCashPocketAction, assignWaterfallAction, coverShortfallAction, saveWaterfallSettingsAction, setOpexMonthsAheadAction, setupWaterfallAction } from "@/app/actions/cashflow";
 import { formatCents } from "@/lib/utils/currency";
 import type { FlowVM } from "@/lib/budget/flow-types";
 
@@ -103,6 +104,7 @@ export function FlowPanel({ workspaceId, month, flow }: { workspaceId: string; m
         {r2 && <Row title="Reservoir 2" sub={`${flow.reservoir2Months} mo of OPEX`} amount={r2.balanceCents} of={r2.targetCents} ratio={r2.targetCents > 0 ? r2.balanceCents / r2.targetCents : undefined} />}
         <Row title="Cash" sub={`${pct(flow.cashPctBps)}% allocated`} amount={flow.cashBalanceCents} />
       </ul>
+      {flow.opexMonthlyCount > 0 && <OpexAhead workspaceId={workspaceId} flow={flow} />}
       {flow.cash.length > 0 && (
         <ul className="mt-1 space-y-0.5 pl-3 text-xs text-slate-600 dark:text-slate-300">
           {flow.cash.map((c) => (
@@ -180,5 +182,32 @@ function SettingsDialog({ workspaceId, flow, onClose }: { workspaceId: string; f
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** One choice that sets Months ahead on every monthly-cost pocket in the OPEX category. */
+function OpexAhead({ workspaceId, flow }: { workspaceId: string; flow: FlowVM }) {
+  const current = flow.opexMonthsAhead;
+  const [value, setValue] = useState(String(current ?? 0));
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string }>();
+  const router = useRouter();
+  const unchanged = current !== null && Number(value) === current;
+  return (
+    <div className="mt-2 rounded-xl border border-[#E2E8F0] p-2.5 dark:border-slate-700">
+      <p className="text-xs font-semibold">OPEX months ahead <span className="font-normal text-slate-500">({flow.opexMonthlyCount} monthly cost{flow.opexMonthlyCount === 1 ? "" : "s"})</span></p>
+      <p className="mb-1.5 text-[11px] text-slate-500">Keep extra months of each cost on hand beyond this month.{current === null && " They are set differently right now."}</p>
+      <div className="flex gap-2">
+        <select aria-label="OPEX months ahead" className="input !min-h-10 flex-1" value={value} onChange={(e) => { setValue(e.target.value); setMsg(undefined); }}>
+          <option value="0">This month only</option>
+          {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} month{n === 1 ? "" : "s"} ahead</option>)}
+        </select>
+        <button type="button" className="btn btn-primary" disabled={pending || unchanged}
+          onClick={() => start(async () => { const r = await setOpexMonthsAheadAction(workspaceId, Number(value)); setMsg({ ok: r.ok, text: r.ok ? r.message ?? "Done." : r.error }); if (r.ok) router.refresh(); })}>
+          {pending ? "Applying…" : "Apply to all"}
+        </button>
+      </div>
+      {msg && <p role={msg.ok ? "status" : "alert"} className={`mt-1 text-xs ${msg.ok ? "text-pos" : "text-neg"}`}>{msg.text}</p>}
+    </div>
   );
 }
