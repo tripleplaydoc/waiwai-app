@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDownToLine, Droplets, Pencil, Plus, ShieldPlus } from "lucide-react";
 import { Modal } from "@/components/modal";
-import { addCashPocketAction, assignWaterfallAction, coverShortfallAction, saveWaterfallSettingsAction, setOpexMonthsAheadAction, setupWaterfallAction } from "@/app/actions/cashflow";
+import { addCashPocketAction, assignWaterfallAction, combineTaxReserveAction, coverShortfallAction, saveWaterfallSettingsAction, splitTaxReserveAction, setOpexMonthsAheadAction, setupWaterfallAction } from "@/app/actions/cashflow";
 import { formatCents } from "@/lib/utils/currency";
 import type { FlowVM } from "@/lib/budget/flow-types";
 
@@ -99,11 +99,21 @@ export function FlowPanel({ workspaceId, month, flow }: { workspaceId: string; m
 
       <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-800">
         <Row title="Taxes" sub={`${pct(flow.taxBps)}% of each assign`} amount={tax?.balanceCents ?? 0} />
+        {flow.taxSplit.map((t) => (
+          <li key={t.id} className="flex justify-between gap-3 py-1 pl-4 text-xs text-slate-600 dark:text-slate-300"><span className="min-w-0 truncate">{t.accountName}</span><span className="nums shrink-0">{formatCents(Math.max(0, t.balanceCents))}</span></li>
+        ))}
         <Row title="OPEX" sub={flow.monthlyOpexCents > 0 ? `${formatCents(flow.monthlyOpexCents)}/mo total` : "set monthly costs on its pockets"} amount={flow.opexBalanceCents} of={opexTarget > 0 ? opexTarget : undefined} ratio={opexTarget > 0 ? flow.opexBalanceCents / opexTarget : undefined} />
         {r1 && <Row title="Reservoir 1" sub={`${flow.reservoir1Months} mo of OPEX`} amount={r1.balanceCents} of={r1.targetCents} ratio={r1.targetCents > 0 ? r1.balanceCents / r1.targetCents : undefined} />}
         {r2 && <Row title="Reservoir 2" sub={`${flow.reservoir2Months} mo of OPEX`} amount={r2.balanceCents} of={r2.targetCents} ratio={r2.targetCents > 0 ? r2.balanceCents / r2.targetCents : undefined} />}
         <Row title="Cash" sub={`${pct(flow.cashPctBps)}% allocated`} amount={flow.cashBalanceCents} />
       </ul>
+      <div className="mt-2 rounded-xl border border-[#E2E8F0] p-2.5 dark:border-slate-700">
+        <p className="text-xs font-semibold">Tax reserve by account</p>
+        <p className="mb-1.5 text-[11px] text-slate-500">{flow.taxSplit.length > 0 ? "Each cash account keeps its own tax pocket, filled from only that account's money in proportion to what it holds." : "Keep a separate tax pocket for each cash account, so every account shows how much of its balance is tax money."}</p>
+        <button type="button" className="btn btn-sm min-h-11" disabled={pending} onClick={() => run(() => (flow.taxSplit.length > 0 ? combineTaxReserveAction(workspaceId, month) : splitTaxReserveAction(workspaceId, month)))}>
+          {pending ? "Working…" : flow.taxSplit.length > 0 ? "Combine into one reserve" : "Split by account"}
+        </button>
+      </div>
       {flow.opexMonthlyCount > 0 && <OpexAhead workspaceId={workspaceId} flow={flow} />}
       {flow.cash.length > 0 && (
         <ul className="mt-1 space-y-0.5 pl-3 text-xs text-slate-600 dark:text-slate-300">

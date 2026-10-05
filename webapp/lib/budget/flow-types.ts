@@ -8,6 +8,8 @@ export interface FlowVM {
   reservoir2Months: number;
   reservoir2ShareBps: number;
   tax: FlowPocketVM | null;
+  /** Per-account tax reserve pockets (empty = one shared reserve). `tax.balanceCents` already includes them. */
+  taxSplit: { id: string; name: string; accountName: string; balanceCents: number }[];
   opexGroupId: string | null;
   opexGroupName: string | null;
   /** Sum of the monthly costs on the OPEX pockets. */

@@ -1,6 +1,8 @@
 "use server";
 
-import { endOfMonth, fundRows, moveRows } from "@/lib/budget/funding";
+import { endOfMonth, fundRows, loadPocketBalances, loadPools, moveRows } from "@/lib/budget/funding";
+import { loadTaxSplits } from "@/lib/budget/tax-split";
+import { expandCoverDraws, expandTaxMoves } from "@/lib/budget/tax-split-math";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -145,7 +147,10 @@ export async function assignWaterfallAction(workspaceId: string, month: string):
   if (plan.moves.length === 0) return { ok: false, error: "Nothing to assign yet — check that your OPEX pockets have monthly costs and the cash percentages add up." };
 
   const note = { REPAY: "Paid back to reserve", TAXES: "Taxes", OPEX: "OPEX", RESERVOIR_1: "Reservoir 1", RESERVOIR_2: "Reservoir 2", CASH: "Cash" } as const;
-  const fundRowsAll = await fundRows(prisma, workspaceId, endOfMonth(md), plan.moves.map((mv) => ({ categoryId: mv.categoryId, month: md, amountCents: mv.cents, source: "WATERFALL" as const, note: `Waterfall → ${note[mv.kind]}` })));
+  // With a separate tax reserve per account, taxes (and tax paybacks) go to each account's own pocket, in proportion to the cash it holds.
+  const taxSplits = await loadTaxSplits(prisma, workspaceId, vm.tax.id);
+  const moves = taxSplits.length > 0 ? expandTaxMoves(plan.moves, vm.tax.id, taxSplits, await loadPools(prisma, workspaceId, endOfMonth(md))) : plan.moves;
+  const fundRowsAll = await fundRows(prisma, workspaceId, endOfMonth(md), moves.map((mv) => ({ categoryId: mv.categoryId, month: md, amountCents: mv.cents, source: "WATERFALL" as const, note: `Waterfall → ${note[mv.kind]}` })));
   await prisma.$transaction([
     prisma.budgetAssignment.createMany({ data: fundRowsAll }),
     ...plan.repayments.map((r) => prisma.reserveDraw.update({ where: { id: r.drawId }, data: { repaidCents: { increment: r.cents } } })),
@@ -179,7 +184,12 @@ export async function coverShortfallAction(workspaceId: string, month: string): 
   });
   if (plan.draws.length === 0) return { ok: false, error: "Taxes and the reservoirs are empty — nothing to pull from." };
 
-  const coverRows = (await Promise.all(plan.draws.map((d) => moveRows(prisma, { workspaceId, fromId: d.fromId, toId: d.toId, month: md, cents: d.cents, source: "WATERFALL_COVER", noteFrom: `Covered ${d.toName}`, noteTo: `From ${bucketName[d.bucket]}` })))).flat();
+  const taxSplits = await loadTaxSplits(prisma, workspaceId, vm.tax.id);
+  const byId = new Map(summary.rows.map((r) => [r.id, r.availableCents]));
+  const coverDraws = taxSplits.length > 0
+    ? expandCoverDraws(plan.draws, vm.tax.id, [vm.tax.id, ...taxSplits.map((t) => t.id)].map((id) => ({ id, balanceCents: byId.get(id) ?? 0 })))
+    : plan.draws;
+  const coverRows = (await Promise.all(coverDraws.map((d) => moveRows(prisma, { workspaceId, fromId: d.fromId, toId: d.toId, month: md, cents: d.cents, source: "WATERFALL_COVER", noteFrom: `Covered ${d.toName}`, noteTo: `From ${bucketName[d.bucket]}` })))).flat();
   await prisma.$transaction([
     prisma.budgetAssignment.createMany({ data: coverRows }),
     ...plan.draws.flatMap((d) => [
@@ -206,4 +216,73 @@ export async function setOpexMonthsAheadAction(workspaceId: string, months: numb
   if (r.count === 0) return { ok: false, error: "No OPEX pockets have a monthly cost yet." };
   revalidatePath("/budget");
   return { ok: true, message: `${r.count} monthly cost${r.count === 1 ? "" : "s"} now ${months === 0 ? "cover this month only" : `keep ${months} month${months === 1 ? "" : "s"} ahead`}.` };
+}
+
+/** Gives each cash account its own tax reserve pocket, and moves the existing reserve across by the account each dollar sits in. */
+export async function splitTaxReserveAction(workspaceId: string, month: string): Promise<ActionResult> {
+  await assertAuthed();
+  const m = monthSchema.safeParse(month);
+  if (!m.success) return { ok: false, error: "Bad request." };
+  const md = monthDate(m.data);
+  const cfg = await prisma.waterfallConfig.findUnique({ where: { workspaceId } });
+  if (!cfg?.taxCategoryId) return { ok: false, error: "Set up the cashflow waterfall first." };
+  const main = await prisma.category.findFirst({ where: { id: cfg.taxCategoryId, workspaceId, isArchived: false } });
+  if (!main) return { ok: false, error: "The tax reserve pocket was not found." };
+  const accounts = await prisma.account.findMany({
+    where: { workspaceId, onBudget: true, isArchived: false, balanceMode: "TRANSACTION_DERIVED", type: { in: ["CHECKING", "SAVINGS", "CASH"] } },
+    orderBy: { name: "asc" }, select: { id: true, name: true },
+  });
+  if (accounts.length < 2) return { ok: false, error: "You need at least two cash accounts to split the reserve." };
+  const existing = await loadTaxSplits(prisma, workspaceId, main.id);
+  const have = new Set(existing.map((e) => e.accountId));
+  const todo = accounts.filter((a) => !have.has(a.id));
+  if (todo.length === 0) return { ok: false, error: "Every account already has its own tax reserve." };
+
+  const top = await prisma.category.aggregate({ where: { workspaceId, categoryGroupId: main.categoryGroupId }, _max: { sortOrder: true } });
+  let order = (top._max.sortOrder ?? 0) + 1;
+  const made = new Map<string, string>();
+  for (const a of todo) {
+    const c = await prisma.category.create({ data: { workspaceId, categoryGroupId: main.categoryGroupId, name: `Tax Reserve: ${a.name}`, type: "SYSTEM", isSystemManaged: true, paidFromAccountId: a.id, sortOrder: order++ } });
+    made.set(a.id, c.id);
+  }
+  // Move what the main reserve already holds into the matching account's pocket (money not tied to an account stays put).
+  const parts = (await loadPocketBalances(prisma, workspaceId, [main.id], md)).get(main.id) ?? [];
+  const rows = parts.flatMap(([k, n]) => {
+    const to = k ? made.get(k) : undefined;
+    if (!to || n <= 0) return [];
+    return [
+      { categoryId: main.id, month: md, amountCents: -n, source: "MANUAL" as const, note: "Moved to the account's own tax reserve", fundingAccountId: k },
+      { categoryId: to, month: md, amountCents: n, source: "MANUAL" as const, note: "Moved from the shared tax reserve", fundingAccountId: k },
+    ];
+  });
+  if (rows.length > 0) await prisma.budgetAssignment.createMany({ data: rows });
+  revalidatePath("/budget"); revalidatePath("/reports");
+  return { ok: true, message: `Each account now has its own tax reserve (${todo.map((a) => a.name).join(", ")}). Assign fills them by the cash each account holds.` };
+}
+
+/** Puts the per-account tax reserves back into the one shared reserve and retires the extra pockets. */
+export async function combineTaxReserveAction(workspaceId: string, month: string): Promise<ActionResult> {
+  await assertAuthed();
+  const m = monthSchema.safeParse(month);
+  if (!m.success) return { ok: false, error: "Bad request." };
+  const md = monthDate(m.data);
+  const cfg = await prisma.waterfallConfig.findUnique({ where: { workspaceId } });
+  if (!cfg?.taxCategoryId) return { ok: false, error: "Set up the cashflow waterfall first." };
+  const splits = await loadTaxSplits(prisma, workspaceId, cfg.taxCategoryId);
+  if (splits.length === 0) return { ok: false, error: "The tax reserve is not split." };
+  const summary = await getBudgetSummary(workspaceId, md);
+  const bal = new Map(summary.rows.map((r) => [r.id, r.availableCents]));
+  const over = splits.filter((s) => (bal.get(s.id) ?? 0) < 0);
+  if (over.length > 0) return { ok: false, error: `${over.map((o) => o.name).join(", ")} is overspent. Cover it first, then combine.` };
+  const balances = await loadPocketBalances(prisma, workspaceId, splits.map((s) => s.id), md);
+  const rows = splits.flatMap((s) => (balances.get(s.id) ?? []).flatMap(([k, n]) => n > 0 ? [
+    { categoryId: s.id, month: md, amountCents: -n, source: "MANUAL" as const, note: "Moved back to the shared tax reserve", fundingAccountId: k },
+    { categoryId: cfg.taxCategoryId!, month: md, amountCents: n, source: "MANUAL" as const, note: `From ${s.name}`, fundingAccountId: k },
+  ] : []));
+  await prisma.$transaction([
+    ...(rows.length > 0 ? [prisma.budgetAssignment.createMany({ data: rows })] : []),
+    prisma.category.updateMany({ where: { id: { in: splits.map((s) => s.id) }, workspaceId }, data: { isArchived: true } }),
+  ]);
+  revalidatePath("/budget"); revalidatePath("/reports");
+  return { ok: true, message: "Back to one shared tax reserve." };
 }

@@ -182,3 +182,11 @@ Past years live in their **own tables** (`historical_transactions`, `history_acc
 - **Can't find it yet?** One tap posts a labelled "Balance adjustment" so the app matches the bank, and parks the difference in an **Unaccounted** pocket (on-budget accounts). It is excluded from the P&L and deduction reports. Clear it when you find the cause.
 - Credit cards and loans: type the amount you owe, as your bank shows it.
 - Balance checkpoints are never read by balances, Ready to Assign or net worth. Needs migration `20261005310000_balance_checkpoints`.
+
+## Tax reserve by account
+- Budget → Flow → **Tax reserve by account → Split by account** gives each cash account (checking, savings, cash) its own `Tax Reserve: <account>` pocket. The existing reserve is moved across by the account each dollar sits in; money not tied to an account stays in the shared reserve.
+- **Assign** sends each account's share of the tax cut to that account's pocket, in proportion to the cash the account holds, and tags it to that account. Paybacks of reserve draws are split the same way.
+- **Cover from reserves** takes its Taxes share from the account pockets in proportion to what each holds.
+- Estimated tax payments still just spend from a tax pocket, so reports count them as tax payments as before.
+- **Combine into one reserve** moves everything back and retires the extra pockets (blocked while one is overspent).
+- No schema change: a split pocket is an app-managed pocket that is "paid from" one account (`lib/budget/tax-split.ts`).

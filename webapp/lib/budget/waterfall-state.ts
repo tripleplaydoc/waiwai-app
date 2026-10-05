@@ -4,6 +4,7 @@ import { pocketProgress } from "./targets";
 import { reserveTarget, type AssignInput, type OutstandingDraw } from "./cashflow-waterfall";
 import type { EnvelopeRow } from "./summary";
 import type { FlowVM } from "./flow-types";
+import { loadTaxSplits } from "./tax-split";
 
 const D = (s: string | null) => (s ? new Date(`${s}T00:00:00.000Z`) : null);
 
@@ -36,6 +37,11 @@ export async function loadFlow(workspaceId: string, month: Date, rows: EnvelopeR
   const cats = cfg ? await prisma.category.findMany({ where: { workspaceId, isArchived: false, cashShareBps: { not: null } }, select: { id: true, name: true, cashShareBps: true, categoryGroupId: true, sortOrder: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }) : [];
   const pocket = (id: string | null | undefined) => { const r = id ? byId.get(id) : undefined; return r ? { id: r.id, name: r.name, balanceCents: r.availableCents } : null; };
 
+  const taxSplits = cfg?.taxCategoryId ? await loadTaxSplits(prisma, workspaceId, cfg.taxCategoryId) : [];
+  const taxSplitVm = taxSplits.map((t) => ({ id: t.id, name: t.name, accountName: t.accountName, balanceCents: byId.get(t.id)?.availableCents ?? 0 }));
+  const taxMain = pocket(cfg?.taxCategoryId);
+  const tax = taxMain ? { ...taxMain, balanceCents: taxMain.balanceCents + taxSplitVm.reduce((a, t) => a + t.balanceCents, 0) } : null;
+
   const opexRows = cfg?.opexGroupId ? rows.filter((r) => r.groupId === cfg.opexGroupId && r.type === "EXPENSE") : [];
   let monthly = 0, need = 0, balance = 0;
   const overspent: FlowVM["overspent"] = [];
@@ -60,7 +66,7 @@ export async function loadFlow(workspaceId: string, month: Date, rows: EnvelopeR
     taxBps: cfg?.taxBps ?? 3000,
     reservoir1Months: r1m, reservoir2Months: r2m,
     reservoir2ShareBps: cfg?.reservoir2ShareBps ?? 5000,
-    tax: pocket(cfg?.taxCategoryId),
+    tax, taxSplit: taxSplitVm,
     opexGroupId: cfg?.opexGroupId ?? null,
     opexGroupName: groups.find((g) => g.id === cfg?.opexGroupId)?.name ?? null,
     monthlyOpexCents: monthly, opexBalanceCents: balance, opexNeedCents: need,
