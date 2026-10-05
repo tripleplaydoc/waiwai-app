@@ -99,4 +99,7 @@ export interface YearSummary {
   historyRows: number;
   /** Does this year include live budget data too? */
   includesLive: boolean;
+  /** Includes totals typed in from a tax return. */
+  hasTotals: boolean;
+  sealed: boolean;
 }

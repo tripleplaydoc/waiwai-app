@@ -353,6 +353,7 @@ model Workspace {
   reserveDraws          ReserveDraw[]
   expenseReviews        ExpenseReview[]
   historySettings       HistorySettings?
+  historyTotals         HistoryTotal[]
   historyAccounts       HistoryAccount[]
   historicalTransactions HistoricalTransaction[]
 
@@ -1259,6 +1260,8 @@ model HistorySettings {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// The day the live budget began. History must end before it.
   goLiveDate  DateTime  @db.Date
+  /// Every year up to and including this one is sealed: history for it cannot be changed without unsealing. Null = none.
+  sealedThrough Int?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1306,4 +1309,20 @@ model HistoricalTransaction {
   @@index([accountId, date])
   @@index([workspaceId, typeKey])
   @@map("historical_transactions")
+}
+
+/// A year's totals for one Type, for years where only a tax return exists (no transactions). Amounts are positive.
+model HistoryTotal {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  year        Int
+  typeKey     String
+  amountCents Int
+  note        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, year, typeKey])
+  @@map("history_totals")
 }

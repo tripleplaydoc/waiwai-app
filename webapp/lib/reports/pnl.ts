@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { historyActivity } from "@/lib/history-activity";
 import { OWNER_DRAW, deductibleShareBps, effectiveType, typeLabel } from "@/lib/budget/expense-types";
 
 export interface PnlPocket { id: string; name: string; cents: number; deductible: boolean }
@@ -54,6 +55,24 @@ export async function buildPnl(workspaceId: string, p: { from: string; to: strin
     if (isIncome) prevRevenue += b; else prevExpense += -b;
     if (!isIncome && c.isTaxDeductible) deductibleCents += Math.round((-a * deductibleShareBps(key)) / 10000);
   }
+  // Past years from the History layer (only non-empty for windows that reach before go-live).
+  const isBiz = (await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { type: true } }))?.type === "BUSINESS";
+  const [hCur, hPrev] = await Promise.all([historyActivity(workspaceId, p.from, p.to, isBiz), historyActivity(workspaceId, p.prevFrom, p.prevTo, isBiz)]);
+  const mergeHistory = (map: Map<string, PnlTypeRow>, cur: Map<string, number>, prev: Map<string, number>, unclassifiedKey: string, fallbackLabel: string) => {
+    for (const k of new Set([...cur.keys(), ...prev.keys()])) {
+      const key = k === unclassifiedKey ? (unclassifiedKey) : k;
+      const row = map.get(key) ?? { key, label: typeLabel(key) ?? fallbackLabel, cents: 0, prevCents: 0, pockets: [] };
+      const c = cur.get(k) ?? 0, pv = prev.get(k) ?? 0;
+      row.cents += c; row.prevCents += pv;
+      if (c !== 0) row.pockets.push({ id: `history:${key}`, name: "History (past years)", cents: c, deductible: false });
+      map.set(key, row);
+    }
+  };
+  mergeHistory(rev, hCur.revenue, hPrev.revenue, "UNCLASSIFIED_INCOME", "Unclassified income");
+  mergeHistory(exp, hCur.expenses, hPrev.expenses, "UNCLASSIFIED", "Unclassified");
+  for (const v of hPrev.revenue.values()) prevRevenue += v;
+  for (const v of hPrev.expenses.values()) prevExpense += v;
+  deductibleCents += hCur.deductibleCents;
   const sorted = (m: Map<string, PnlTypeRow>) => [...m.values()].map((r) => ({ ...r, pockets: r.pockets.sort((x, y) => y.cents - x.cents) })).sort((x, y) => y.cents - x.cents);
   const revenue = sorted(rev), expenses = sorted(exp);
   const revenueCents = revenue.reduce((s, r) => s + r.cents, 0);

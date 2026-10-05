@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { CheckCircle2, AlertTriangle } from "lucide-react";
-import { classifyPayeeAction, clearHistoryAction, setGoLiveAction, setHistoryStartAction } from "@/app/actions/history";
+import { CheckCircle2, AlertTriangle, Lock } from "lucide-react";
+import { addClosedAccountAction, classifyPayeeAction, clearHistoryAction, saveYearTotalsAction, setGoLiveAction, setHistoryStartAction, setSealAction } from "@/app/actions/history";
 import { typesFor } from "@/lib/budget/expense-types";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
 import type { HistoryAccountVM, HistoryVM } from "@/lib/history";
@@ -22,9 +22,13 @@ export function HistoryClient({ vm, workspaceId, isBusiness, taxBps, wsQuery }: 
   return (
     <div className="space-y-5">
       <GoLive workspaceId={workspaceId} goLive={vm.goLive} />
-      <Proof accounts={vm.accounts} wsQuery={wsQuery} />
+      <Proof accounts={vm.accounts} wsQuery={wsQuery} workspaceId={workspaceId} />
       {vm.payees.length > 0 && <Classify payees={vm.payees} workspaceId={workspaceId} isBusiness={isBusiness} />}
       <Years years={vm.years} isBusiness={isBusiness} taxBps={taxBps} empty={vm.totalRows === 0} wsQuery={wsQuery} />
+      <Totals vm={vm} workspaceId={workspaceId} isBusiness={isBusiness} />
+      <Seal vm={vm} workspaceId={workspaceId} />
+      {vm.totalRows > 0 && <Link href={`/history/rows${wsQuery}`} className="btn min-h-11 w-full justify-center">Browse, edit or add history rows</Link>}
+      <Link href={`/history/export${wsQuery}`} prefetch={false} className="btn min-h-11 w-full justify-center">Download Schedule C by year (CSV)</Link>
     </div>
   );
 }
@@ -50,7 +54,7 @@ function GoLive({ workspaceId, goLive }: { workspaceId: string; goLive: string |
   );
 }
 
-function Proof({ accounts, wsQuery }: { accounts: HistoryAccountVM[]; wsQuery: string }) {
+function Proof({ accounts, wsQuery, workspaceId }: { accounts: HistoryAccountVM[]; wsQuery: string; workspaceId: string }) {
   return (
     <section className="card p-5" aria-labelledby="pf-h">
       <h2 id="pf-h" className="text-base font-bold tracking-tight">Does history line up with today?</h2>
@@ -59,6 +63,7 @@ function Proof({ accounts, wsQuery }: { accounts: HistoryAccountVM[]; wsQuery: s
         {accounts.map((a) => <AccountProof key={a.id} a={a} wsQuery={wsQuery} />)}
         {accounts.length === 0 && <li className="py-3 text-sm text-slate-500">No accounts yet.</li>}
       </ul>
+      <ClosedAccount workspaceId={workspaceId} />
     </section>
   );
 }
@@ -73,12 +78,14 @@ function AccountProof({ a, wsQuery }: { a: HistoryAccountVM; wsQuery: string }) 
     <li className="py-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-semibold">{a.name}</span>
+        {a.closed && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">Closed</span>}
         {b.state === "ok" && <span className="inline-flex items-center gap-1 rounded-full bg-pos-soft px-2 py-0.5 text-xs font-semibold text-pos"><CheckCircle2 className="size-3.5" aria-hidden /> Connects</span>}
         {b.state === "off" && <span className="inline-flex items-center gap-1 rounded-full bg-neg-soft px-2 py-0.5 text-xs font-semibold text-neg"><AlertTriangle className="size-3.5" aria-hidden /> Off by <span className="nums">{formatCents(Math.abs(b.gapCents))}</span></span>}
         {b.state === "no-history" && <span className="text-xs text-slate-500">No history imported</span>}
         {b.state === "no-start" && <span className="text-xs text-[#8A5A00]">Enter the starting balance</span>}
         <span className="nums ml-auto text-xs text-slate-500">{a.count > 0 ? `${a.count.toLocaleString()} rows · ${a.firstDate} to ${a.lastDate}` : ""}</span>
       </div>
+      {a.closed && <p className="mt-0.5 text-xs text-slate-500">A closed account should end at $0, so its history proves out when the last balance is zero.</p>}
       <p className="mt-0.5 text-xs text-slate-500">Live budget opening balance: <span className="nums">{formatCents(a.openingCents)}</span>. History for this account must end before <span className="nums">{a.cutoff}</span>.</p>
       <div className="mt-2 flex flex-wrap items-end gap-2">
         <div>
@@ -106,6 +113,22 @@ function AccountProof({ a, wsQuery }: { a: HistoryAccountVM; wsQuery: string }) 
         </div>
       )}
     </li>
+  );
+}
+
+function ClosedAccount({ workspaceId }: { workspaceId: string }) {
+  const [name, setName] = useState("");
+  const [msg, setMsg] = useState<string>();
+  const [pending, start] = useTransition();
+  return (
+    <div className="mt-4 border-t border-[#E2E8F0] pt-3 dark:border-slate-800">
+      <label htmlFor="ca-name" className="label">Add a closed account (old bank or card you no longer have)</label>
+      <div className="flex flex-wrap items-center gap-2">
+        <input id="ca-name" className="input max-w-xs" placeholder="e.g. Old Chase checking" value={name} onChange={(e) => setName(e.target.value)} />
+        <button type="button" className="btn min-h-11" disabled={pending || !name.trim()} onClick={() => start(async () => { const r = await addClosedAccountAction(workspaceId, name); if (r.ok) { setName(""); setMsg("Added. Set its start balance below, then import."); } else setMsg(r.error); })}>Add</button>
+      </div>
+      {msg && <p role="status" className="mt-1 text-xs text-slate-600 dark:text-slate-300">{msg}</p>}
+    </div>
   );
 }
 
@@ -167,6 +190,8 @@ function Years({ years, isBusiness, taxBps, empty, wsQuery }: { years: YearSumma
           <article key={y.year} className="card p-5">
             <div className="flex flex-wrap items-baseline gap-2">
               <h3 className="text-lg font-bold">{y.year}</h3>
+              {y.sealed && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Lock className="size-3" aria-hidden /> Sealed</span>}
+              {y.hasTotals && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">includes typed-in totals</span>}
               {y.includesLive && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{y.year === new Date().getFullYear() ? "year to date · " : ""}history + live budget</span>}
               {y.unclassifiedCount > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-[#8A5A00] dark:bg-amber-950/40">{y.unclassifiedCount} row{y.unclassifiedCount === 1 ? "" : "s"} without a type</span>}
             </div>
@@ -190,6 +215,65 @@ function Years({ years, isBusiness, taxBps, empty, wsQuery }: { years: YearSumma
         );
       })}
       <p className="text-xs text-slate-500">An estimate for planning, not tax advice. Meals count at 50%.</p>
+    </section>
+  );
+}
+
+function Totals({ vm, workspaceId, isBusiness }: { vm: HistoryVM; workspaceId: string; isBusiness: boolean }) {
+  const thisYear = Number((vm.goLive ?? "").slice(0, 4)) || new Date().getFullYear();
+  const [year, setYear] = useState(String(thisYear - 1));
+  const [vals, setVals] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState<{ ok: boolean; text: string }>();
+  const [pending, start] = useTransition();
+  const opts = typeOptions(isBusiness);
+  const saved = (y: string, k: string) => { const t = vm.totals.find((x) => String(x.year) === y && x.typeKey === k); return t ? centsToInput(t.amountCents) : ""; };
+  const val = (k: string) => vals[k] ?? saved(year, k);
+  return (
+    <details className="card p-5">
+      <summary id="tt-h" className="min-h-11 cursor-pointer select-none text-base font-bold tracking-tight">Only have a tax return? Enter a year&apos;s totals</summary>
+      <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">For years with no bank files, type the totals by type (from your return or year-end report). They join the year-by-year view and trends. Positive numbers only.</p>
+      <div className="mt-3 max-w-[8rem]">
+        <label htmlFor="tt-year" className="label">Year</label>
+        <input id="tt-year" inputMode="numeric" className="input nums" value={year} onChange={(e) => { setYear(e.target.value.replace(/\D/g, "").slice(0, 4)); setVals({}); }} />
+      </div>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        {opts.map((t) => (
+          <li key={t.key} className="flex items-center justify-between gap-2">
+            <label htmlFor={`tt-${t.key}`} className="text-sm">{t.label}</label>
+            <input id={`tt-${t.key}`} inputMode="decimal" className="input nums !min-h-11 w-32" placeholder="0.00" value={val(t.key)} onChange={(e) => setVals((v) => ({ ...v, [t.key]: e.target.value }))} />
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" className="btn btn-primary min-h-11" disabled={pending || year.length !== 4}
+          onClick={() => start(async () => { const r = await saveYearTotalsAction(workspaceId, Number(year), opts.map((t) => ({ typeKey: t.key, amount: val(t.key) }))); setMsg(r.ok ? { ok: true, text: r.message ?? "Saved." } : { ok: false, text: r.error }); })}>{pending ? "Saving…" : `Save ${year} totals`}</button>
+        {msg && <p role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-pos" : "text-neg"}`}>{msg.text}</p>}
+      </div>
+    </details>
+  );
+}
+
+function Seal({ vm, workspaceId }: { vm: HistoryVM; workspaceId: string }) {
+  const years = [...new Set(vm.years.map((y) => y.year).filter((y) => !vm.goLive || y < Number(vm.goLive.slice(0, 4))))].sort((a, b) => b - a);
+  const [year, setYear] = useState(String(years[0] ?? ""));
+  const [msg, setMsg] = useState<string>();
+  const [pending, start] = useTransition();
+  if (years.length === 0 && vm.sealedThrough === null) return null;
+  return (
+    <section className="card p-5" aria-labelledby="sl-h">
+      <h2 id="sl-h" className="flex items-center gap-2 text-base font-bold tracking-tight"><Lock className="size-4" aria-hidden /> Seal checked years</h2>
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Once a year is imported and connects, seal it. Sealed years cannot be imported into, edited or cleared until you unseal, so settled numbers stay settled. {vm.sealedThrough !== null ? `Sealed through ${vm.sealedThrough}.` : "Nothing sealed yet."}</p>
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        {years.length > 0 && (
+          <div>
+            <label htmlFor="sl-year" className="label">Seal through</label>
+            <select id="sl-year" className="input" value={year} onChange={(e) => setYear(e.target.value)}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>
+          </div>
+        )}
+        {years.length > 0 && <button type="button" className="btn min-h-11" disabled={pending} onClick={() => start(async () => { const r = await setSealAction(workspaceId, Number(year)); setMsg(r.ok ? `Sealed through ${year}.` : r.error); })}>Seal</button>}
+        {vm.sealedThrough !== null && <button type="button" className="btn min-h-11" disabled={pending} onClick={() => start(async () => { const r = await setSealAction(workspaceId, null); setMsg(r.ok ? "Unsealed." : r.error); })}>Unseal all</button>}
+      </div>
+      {msg && <p role="status" className="mt-2 text-sm text-slate-600 dark:text-slate-300">{msg}</p>}
     </section>
   );
 }

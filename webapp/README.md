@@ -160,3 +160,18 @@ Past years live in their **own tables** (`historical_transactions`, `history_acc
 - **Proof that history connects to today:** per account, enter the date and balance when its history begins. Start balance + all imported rows must equal the opening balance the live budget started from. It says **Connects** or **Off by $X** with likely causes (a missing or doubled deposit, a flipped sign, a swapped digit).
 - **Year by year:** revenue, expenses, profit, deductible expenses (meals 50%) and an estimated tax at your rate, with change versus the prior year and a by-type breakdown. The current year combines history and the live budget.
 - Migration `20261005280000_history_layer` adds only new tables, so the rest of the app works before it is run; the History page shows a setup note until it is.
+
+### History completions
+- **History rows** (`/history/rows`): filter, fix, delete or add rows by hand; sealed years are locked.
+- **Only have a tax return?** Type yearly totals per Schedule C line for years before go-live (`history_totals`).
+- **Seal** a year when it is final, and **closed accounts** can carry history without touching live balances.
+- History feeds Reports (P&L, prior period) and **History CSV** (every year by Schedule C line). It never touches balances, Ready to Assign or net worth.
+- Needs migration `20261005300000_history_totals_seal`.
+
+## Coach (`/coach`)
+- **Money Meeting**: weekly ten-minute checklist plus one lesson chosen from what the numbers show.
+- **Leak finder**: recurring charges, price increases, double charges, overlapping subscriptions, with a negotiation script. Reads live data plus history.
+- **Where every $100 went**: income path over 30 days, 90 days or a year.
+- **Growth numbers**: net worth change, savings rate, cash runway, freedom number (25x yearly spending).
+- **Tax levers** (business): quarterly due dates, projection, what each lever saves at the workspace reserve rate. Planning guidance, not tax advice.
+- Pure math lives in `lib/coach/*-math.ts` with tests.

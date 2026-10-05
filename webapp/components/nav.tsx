@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun, LogOut, Wallet, Landmark, Upload, Settings, BarChart3 } from "lucide-react";
+import { Moon, Sun, LogOut, Wallet, Landmark, Upload, Settings, BarChart3, Compass } from "lucide-react";
 import { BrandName } from "@/components/brand";
 import { Avatar } from "@/components/avatar";
 import { logoutAction } from "@/app/actions/auth";
@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/budget", label: "Budget", icon: Wallet },
   { href: "/accounts", label: "Accounts", icon: Landmark },
   { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/coach", label: "Coach", icon: Compass },
   { href: "/import", label: "Import", icon: Upload },
 ];
 
@@ -123,7 +124,7 @@ export function BottomTabs() {
   const { ws, q } = useWs();
   return (
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-navy pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-1 text-white md:hidden">
-      <ul className="mx-auto grid max-w-md grid-cols-4">
+      <ul className="mx-auto grid max-w-md grid-cols-5">
         {LINKS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/") || (href === "/accounts" && pathname === "/holdings");
           return (

@@ -17,7 +17,7 @@ export default async function HistoryImportPage({ searchParams }: { searchParams
   if (!(await historyReady())) return <div className="space-y-3">{back}<div className="card p-5 text-sm">Run the History migration in Supabase first, then reload.</div></div>;
   const goLive = await getGoLive(ws.id);
   if (!goLive) return <div className="space-y-3">{back}<div className="card p-5 text-sm">Set your go-live day on the History page first.</div></div>;
-  const accounts = await prisma.account.findMany({ where: { workspaceId: ws.id, isArchived: false, balanceMode: "TRANSACTION_DERIVED" }, orderBy: { name: "asc" } });
+  const accounts = await prisma.account.findMany({ where: { workspaceId: ws.id, balanceMode: "TRANSACTION_DERIVED" }, orderBy: [{ isArchived: "asc" }, { name: "asc" }] });
   const cut = await cutoffsFor(ws.id, goLive);
   const initial = accounts.find((a) => a.id === sp.account)?.id ?? accounts[0]?.id ?? "";
   return (
@@ -26,7 +26,7 @@ export default async function HistoryImportPage({ searchParams }: { searchParams
       <h1 className="text-2xl font-semibold tracking-tight">Import past years (CSV)</h1>
       <p className="text-sm text-slate-600 dark:text-slate-300">Rows go into the History layer only. They never change a balance, Ready to Assign or a pocket. Import one account at a time, one year or many in the same file, and re-importing a file is safe.</p>
       {accounts.length === 0 ? <div className="card p-5 text-sm">Add an account first.</div> : (
-        <HistoryImportClient accounts={accounts.map((a) => ({ id: a.id, name: a.name, cutoff: cut.get(a.id) ?? goLive }))} initialAccountId={initial} isBusiness={ws.type === "BUSINESS"} wsQuery={q} />
+        <HistoryImportClient accounts={accounts.map((a) => ({ id: a.id, name: a.isArchived ? `${a.name} (closed)` : a.name, cutoff: cut.get(a.id) ?? goLive }))} initialAccountId={initial} isBusiness={ws.type === "BUSINESS"} wsQuery={q} />
       )}
     </div>
   );

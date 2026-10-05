@@ -3,11 +3,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildPnl } from "@/lib/reports/pnl";
 import { typeLabel } from "@/lib/budget/expense-types";
-import { bridge, deductibleAmount, type BridgeResult, type YearSummary, type YearTypeRow } from "@/lib/history-math";
+import { bridge, deductibleAmount, isDeductibleType, kindFor, type BridgeResult, type YearSummary, type YearTypeRow } from "@/lib/history-math";
 import { dateToIso, todayIso } from "@/lib/utils/dates";
 
 export interface HistoryAccountVM {
-  id: string; name: string; type: string;
+  id: string; name: string; type: string; closed: boolean;
   count: number; firstDate: string | null; lastDate: string | null; netCents: number;
   startDate: string | null; startCents: number | null; openingCents: number;
   /** History for this account must end before this day (go-live, or its first live transaction if earlier). */
@@ -22,6 +22,9 @@ export interface HistoryVM {
   years: YearSummary[];
   payees: PayeeToClassify[];
   totalRows: number;
+  sealedThrough: number | null;
+  /** Year totals typed in from a tax return, per year. */
+  totals: { year: number; typeKey: string; amountCents: number }[];
 }
 
 /** False until the History tables exist (the migration has been run). */
@@ -32,6 +35,11 @@ export async function historyReady(): Promise<boolean> {
 export async function getGoLive(workspaceId: string): Promise<string | null> {
   const s = await prisma.historySettings.findUnique({ where: { workspaceId } });
   return s ? dateToIso(s.goLiveDate) : null;
+}
+
+/** Years up to and including this are sealed (null = none). */
+export async function getSealedThrough(workspaceId: string): Promise<number | null> {
+  return (await prisma.historySettings.findUnique({ where: { workspaceId }, select: { sealedThrough: true } }))?.sealedThrough ?? null;
 }
 
 /** Per account: the day history must end before = min(go-live, first live transaction). */
@@ -49,11 +57,11 @@ const plusRows = (m: Map<string, YearTypeRow>, key: string, cents: number) => {
 
 export async function loadHistory(workspaceId: string, isBusiness: boolean): Promise<HistoryVM> {
   const goLive = await getGoLive(workspaceId);
-  const empty: HistoryVM = { ready: true, goLive, accounts: [], years: [], payees: [], totalRows: 0 };
+  const empty: HistoryVM = { ready: true, goLive, accounts: [], years: [], payees: [], totalRows: 0, sealedThrough: null, totals: [] };
   if (!goLive) return empty;
 
-  const [accounts, starts, per, cutoffs, rows, payees, firstLive] = await Promise.all([
-    prisma.account.findMany({ where: { workspaceId, isArchived: false }, orderBy: [{ onBudget: "desc" }, { name: "asc" }] }),
+  const [accounts, starts, per, cutoffs, rows, payees, firstLive, sealedThrough, totals] = await Promise.all([
+    prisma.account.findMany({ where: { workspaceId }, orderBy: [{ isArchived: "asc" }, { onBudget: "desc" }, { name: "asc" }] }),
     prisma.historyAccount.findMany({ where: { workspaceId } }),
     prisma.historicalTransaction.groupBy({ by: ["accountId"], where: { workspaceId }, _count: { _all: true }, _sum: { amountCents: true }, _min: { date: true }, _max: { date: true } }),
     cutoffsFor(workspaceId, goLive),
@@ -68,6 +76,8 @@ export async function loadHistory(workspaceId: string, isBusiness: boolean): Pro
       FROM historical_transactions WHERE "workspaceId" = ${workspaceId} AND "typeKey" IS NULL AND kind <> 'TRANSFER' AND payee <> ''
       GROUP BY payee ORDER BY (COALESCE(SUM(ABS("amountCents")), 0)) DESC LIMIT 25`),
     prisma.transaction.aggregate({ where: { workspaceId }, _min: { date: true } }),
+    getSealedThrough(workspaceId),
+    prisma.historyTotal.findMany({ where: { workspaceId } }),
   ]);
 
   const rowsBy = new Map(per.map((p) => [p.accountId, p]));
@@ -77,13 +87,13 @@ export async function loadHistory(workspaceId: string, isBusiness: boolean): Pro
   for (const r of accountRows) amounts.set(r.accountId, [...(amounts.get(r.accountId) ?? []), r.amountCents]);
 
   const vm: HistoryAccountVM[] = accounts
-    .filter((a) => a.balanceMode === "TRANSACTION_DERIVED" || rowsBy.has(a.id))
+    .filter((a) => (a.balanceMode === "TRANSACTION_DERIVED") || rowsBy.has(a.id))
     .map((a) => {
       const p = rowsBy.get(a.id), s = startBy.get(a.id);
       const net = p?._sum.amountCents ?? 0;
       const startCents = s ? s.startBalanceCents : null;
       return {
-        id: a.id, name: a.name, type: a.type,
+        id: a.id, name: a.name, type: a.type, closed: a.isArchived,
         count: p?._count._all ?? 0, firstDate: p?._min.date ? dateToIso(p._min.date) : null, lastDate: p?._max.date ? dateToIso(p._max.date) : null, netCents: net,
         startDate: s?.startDate ? dateToIso(s.startDate) : null, startCents, openingCents: a.openingBalanceCents,
         cutoff: cutoffs.get(a.id) ?? goLive,
@@ -92,8 +102,8 @@ export async function loadHistory(workspaceId: string, isBusiness: boolean): Pro
     });
 
   // Years: history rows plus the live budget (so the current year reads as one full year).
-  const byYear = new Map<number, { rev: Map<string, YearTypeRow>; exp: Map<string, YearTypeRow>; ded: number; uncN: number; uncC: number; n: number; live: boolean }>();
-  const slot = (y: number) => { let s = byYear.get(y); if (!s) { s = { rev: new Map(), exp: new Map(), ded: 0, uncN: 0, uncC: 0, n: 0, live: false }; byYear.set(y, s); } return s; };
+  const byYear = new Map<number, { rev: Map<string, YearTypeRow>; exp: Map<string, YearTypeRow>; ded: number; uncN: number; uncC: number; n: number; live: boolean; tot: boolean }>();
+  const slot = (y: number) => { let s = byYear.get(y); if (!s) { s = { rev: new Map(), exp: new Map(), ded: 0, uncN: 0, uncC: 0, n: 0, live: false, tot: false }; byYear.set(y, s); } return s; };
   for (const r of rows) {
     const s = slot(r.year); const cents = Number(r.cents); const n = Number(r.n);
     s.n += n;
@@ -104,6 +114,11 @@ export async function loadHistory(workspaceId: string, isBusiness: boolean): Pro
       if (r.ded) s.ded += deductibleAmount(-cents, r.typeKey);
     }
     if (!r.typeKey) { s.uncN += n; s.uncC += Math.abs(cents); }
+  }
+  for (const t of totals) {
+    const s = slot(t.year); s.tot = true;
+    if (kindFor(t.typeKey, 1) === "INCOME") plusRows(s.rev, t.typeKey, t.amountCents);
+    else { plusRows(s.exp, t.typeKey, t.amountCents); if (isDeductibleType(t.typeKey, isBusiness)) s.ded += deductibleAmount(t.amountCents, t.typeKey); }
   }
   const nowYear = Number(todayIso().slice(0, 4));
   const liveFrom = firstLive._min.date ? dateToIso(firstLive._min.date) : null;
@@ -120,12 +135,13 @@ export async function loadHistory(workspaceId: string, isBusiness: boolean): Pro
   const years: YearSummary[] = [...byYear.entries()].sort((a, b) => b[0] - a[0]).map(([year, s]) => {
     const revenue = sum(s.rev), expenses = sum(s.exp);
     const revenueCents = revenue.reduce((t, r) => t + r.cents, 0), expenseCents = expenses.reduce((t, r) => t + r.cents, 0);
-    return { year, revenueCents, expenseCents, netCents: revenueCents - expenseCents, deductibleCents: s.ded, revenue, expenses, unclassifiedCount: s.uncN, unclassifiedCents: s.uncC, historyRows: s.n, includesLive: s.live };
+    return { year, revenueCents, expenseCents, netCents: revenueCents - expenseCents, deductibleCents: s.ded, revenue, expenses, unclassifiedCount: s.uncN, unclassifiedCents: s.uncC, historyRows: s.n, includesLive: s.live, hasTotals: s.tot, sealed: sealedThrough !== null && year <= sealedThrough };
   });
 
   return {
     ready: true, goLive, accounts: vm, years,
     payees: payees.map((p) => ({ payee: p.payee, count: Number(p.n), outCents: Number(p.outc), inCents: Number(p.inc) })),
     totalRows: per.reduce((t, p) => t + p._count._all, 0),
+    sealedThrough, totals: totals.map((t) => ({ year: t.year, typeKey: t.typeKey, amountCents: t.amountCents })),
   };
 }
