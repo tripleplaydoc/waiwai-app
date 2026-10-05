@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock, ChevronLeft, ChevronRight, Droplets, Target } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Droplets, Landmark, Target } from "lucide-react";
 import { requireAuth, getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
@@ -14,6 +14,8 @@ import { AssignButton, FlowPanel } from "./flow-controls";
 import { PersonalAssignButton, PersonalFlowPanel } from "./personal-flow-controls";
 import { loadPersonalFlow } from "@/lib/budget/personal-flow-state";
 import { loadFlow } from "@/lib/budget/waterfall-state";
+import { loadLoans } from "@/lib/budget/loans-state";
+import { LoansPanel } from "./loans-panel";
 import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
 import { BillsCalendar, type CalItem } from "./bills-calendar";
@@ -66,6 +68,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const pflow = isPersonal ? (await loadPersonalFlow(workspace.id, month, summary.rows)).vm : null;
   const flowOn = pflow ? pflow.enabled : flow.enabled;
   const today = todayIso();
+  const loans = await loadLoans(workspace.id, mp, summary.rows, mp === today.slice(0, 7));
   const rta = summary.readyToAssignCents;
   const expenseRows = summary.rows.filter((r) => r.type !== "INCOME");
 
@@ -146,7 +149,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
       <DailyVerse />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="text-lg font-bold tracking-tight sm:text-xl">{workspace.name} budget</h1>
-        {(allPockets.length > 0 || goals.length > 0) && (
+        {(allPockets.length > 0 || goals.length > 0 || loans.length > 0) && (
           <div className="flex items-center gap-2">
             <Popover icon={<Droplets className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={!isPersonal && flow.enabled && flow.owedCents > 0 ? <>Flow <span className="rounded-full bg-warn-soft px-1.5 text-warn">owes</span></> : "Flow"}>
               {pflow ? <PersonalFlowPanel workspaceId={workspace.id} flow={pflow} /> : <FlowPanel workspaceId={workspace.id} month={mp} flow={flow} />}
@@ -160,6 +163,12 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
                 {billsStillDue > 0 && <span className="nums">≈ {formatCents(billsStillDue)} to pay</span>}
               </div>
               {billsList}
+            </Popover>
+            <Popover
+              icon={<Landmark className="size-3.5 text-[#2E6BE6]" aria-hidden />}
+              label={loans.filter((l) => l.onBudget && l.phase !== "finished").length > 0 ? <>Loans {loans.filter((l) => l.onBudget && l.phase !== "finished").length}{loans.some((l) => l.overdue) && <span className="rounded-full bg-neg-soft px-1.5 text-neg">overdue</span>}</> : loans.some((l) => !l.onBudget && l.phase === "unset") ? <>Loans <span className="rounded-full bg-warn-soft px-1.5 text-warn">set up</span></> : "Loans"}
+            >
+              <LoansPanel workspaceId={workspace.id} loans={loans} groups={allGroups} defaultGroupId={flow.opexGroupId && allGroups.some((g) => g.id === flow.opexGroupId) ? flow.opexGroupId : "__new"} banks={cash.accounts.map((a) => ({ id: a.id, name: a.name }))} />
             </Popover>
             {goals.length > 0 && (
               <Popover icon={<Target className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={<>Goals {goals.length}</>}>

@@ -118,3 +118,68 @@ export function planDebts(debts: Debt[], extraCents: number, strategy: Strategy)
   }
   return { never: true, months: 0, totalInterestCents: 0, payoffMonth: {}, order: [] };
 }
+
+// ------------------------------------------------------- loans on the budget
+const ym = (iso: string) => iso.slice(0, 7);
+const daysIn = (year: number, month1: number) => new Date(Date.UTC(year, month1, 0)).getUTCDate();
+
+/** Due date of payment `i` (0 = first). Same day of the month as the first payment, clamped to short months. */
+export function loanDueIso(firstIso: string, i: number): string {
+  const day = +firstIso.slice(8, 10);
+  const { year, month } = monthAfter(firstIso, i);
+  return `${year}-${String(month).padStart(2, "0")}-${String(Math.min(day, daysIn(year, month))).padStart(2, "0")}`;
+}
+
+export interface LoanTerms { paymentCents: number; numPayments: number; firstDueIso: string; aprBps: number; originalCents: number }
+export interface LoanStatus {
+  /** Payments finished so far: every payment due in an earlier month, plus this month's if it is paid. */
+  paymentsDone: number;
+  paymentsLeft: number;
+  /** 1-based number of the payment due in the viewed month (null when none falls in it). */
+  thisMonthNumber: number | null;
+  /** Next unpaid payment's date (null when finished). */
+  nextDueIso: string | null;
+  lastDueIso: string;
+  /** "upcoming" = first payment is in a later month, "active", or "finished" (last payment's month has passed or it is paid). */
+  phase: "upcoming" | "active" | "finished";
+  /** What is left to pay: payments left × the payment. */
+  remainingCents: number;
+}
+
+/** Where a loan stands in `todayIso`'s month. `thisMonthPaid` = that month's payment is marked paid or covered by spending. */
+export function loanStatus(t: LoanTerms, todayIso: string, thisMonthPaid: boolean): LoanStatus {
+  const n = Math.max(0, Math.floor(t.numPayments));
+  const lastDueIso = loanDueIso(t.firstDueIso, Math.max(0, n - 1));
+  const month = ym(todayIso);
+  let before = 0, thisIdx = -1;
+  for (let i = 0; i < n; i++) {
+    const m = ym(loanDueIso(t.firstDueIso, i));
+    if (m < month) before++;
+    else if (m === month) thisIdx = i;
+    else break;
+  }
+  const done = Math.min(n, before + (thisIdx >= 0 && thisMonthPaid ? 1 : 0));
+  const left = n - done;
+  const phase: LoanStatus["phase"] = left === 0 ? "finished" : ym(t.firstDueIso) > month ? "upcoming" : "active";
+  const nextIdx = thisIdx >= 0 && !thisMonthPaid ? thisIdx : Math.max(before + (thisIdx >= 0 ? 1 : 0), done);
+  return {
+    paymentsDone: done, paymentsLeft: left, thisMonthNumber: thisIdx >= 0 ? thisIdx + 1 : null,
+    nextDueIso: left === 0 ? null : loanDueIso(t.firstDueIso, Math.min(n - 1, nextIdx)),
+    lastDueIso, phase, remainingCents: left * Math.max(0, t.paymentCents),
+  };
+}
+
+/** Estimated balance after `paid` payments (interest-free when the rate is 0). */
+export function balanceAfter(t: LoanTerms, paid: number): number {
+  const p = Math.max(0, Math.min(t.numPayments, paid));
+  if (t.aprBps <= 0) return Math.max(0, t.originalCents - p * t.paymentCents);
+  const r = amortize({ balanceCents: t.originalCents, aprBps: t.aprBps, paymentCents: t.paymentCents });
+  return p === 0 ? t.originalCents : r.schedule[p - 1]?.balanceCents ?? 0;
+}
+
+/** The payment (rounded up to the cent) that clears `originalCents` in `numPayments` at `aprBps`; 0% = even split. */
+export function suggestPayment(originalCents: number, numPayments: number, aprBps: number): number {
+  if (originalCents <= 0 || numPayments <= 0) return 0;
+  if (aprBps <= 0) return Math.ceil(originalCents / numPayments);
+  return paymentToPayoffIn(originalCents, aprBps, numPayments);
+}

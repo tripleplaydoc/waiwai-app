@@ -422,6 +422,7 @@ model Account {
   securedByThis         HoldingDetail[]      @relation("HoldingDetailLoan")
   fundedAssignments     BudgetAssignment[]   @relation("AssignmentFunding")
   pocketsPaidFrom       Category[]           @relation("PocketPaidFrom")
+  loanPocket            Category?            @relation("PocketLoan")
   importBatches         ImportBatch[]
   taxPaymentsSourced     TaxPayment[]
 
@@ -472,6 +473,8 @@ model HoldingDetail {
   termMonths          Int?
   originalAmountCents Int?
   loanStartDate       DateTime? @db.Date
+  /// Loans: due date of the first payment; later payments fall on the same day each month.
+  firstPaymentDate    DateTime? @db.Date
 
   /// Credit cards: day of the month the statement closes / the payment is due.
   statementDay Int?
@@ -629,6 +632,9 @@ model Category {
   /// The bank account this pocket is usually paid from (null = any). Funding draws from it first.
   /// Monthly-cost pockets: extra months of the cost to keep on hand beyond the current month (0 = this month only).
   monthsAhead Int @default(0)
+  /// Set on the budget pocket that pays a loan (a LOAN account); the pocket follows that loan's schedule.
+  loanAccountId String? @unique
+  loanAccount   Account? @relation("PocketLoan", fields: [loanAccountId], references: [id], onDelete: SetNull)
   paidFromAccountId String?
   paidFromAccount   Account?              @relation("PocketPaidFrom", fields: [paidFromAccountId], references: [id], onDelete: SetNull)
 
