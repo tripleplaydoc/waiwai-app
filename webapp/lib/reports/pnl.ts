@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { historyActivity } from "@/lib/history-activity";
-import { OWNER_DRAW, deductibleShareBps, effectiveType, typeLabel } from "@/lib/budget/expense-types";
+import { OWNER_DRAW, UNACCOUNTED, deductibleShareBps, effectiveType, typeLabel } from "@/lib/budget/expense-types";
 
 export interface PnlPocket { id: string; name: string; cents: number; deductible: boolean }
 export interface PnlTypeRow { key: string; label: string; cents: number; prevCents: number; pockets: PnlPocket[] }
@@ -44,7 +44,7 @@ export async function buildPnl(workspaceId: string, p: { from: string; to: strin
     if (c.type === "SYSTEM") { taxPaymentsCents += -a; continue; }
     const isIncome = c.type === "INCOME";
     const sign = isIncome ? 1 : -1; // expenses are stored negative; refunds net against them
-    if (!isIncome && c.expenseType === OWNER_DRAW) continue; // personal use is not a business expense
+    if (!isIncome && (c.expenseType === OWNER_DRAW || c.expenseType === UNACCOUNTED)) continue; // personal use and unexplained differences are not business expenses
     const key = effectiveType(c) ?? (isIncome ? "UNCLASSIFIED_INCOME" : "UNCLASSIFIED");
     const label = typeLabel(key) ?? (isIncome ? "Unclassified income" : "Unclassified");
     const map = isIncome ? rev : exp;

@@ -42,7 +42,7 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
     sum.readyToAssignCents > 0 ? `Assign the ${formatCents(sum.readyToAssignCents)} in Ready to Assign` : "Ready to Assign is at zero",
     over.length ? `Cover ${over.length} overspent pocket${over.length > 1 ? "s" : ""}` : "No overspent pockets",
     uncategorized ? `Give ${uncategorized} transaction${uncategorized > 1 ? "s" : ""} a pocket` : "Every transaction has a pocket",
-    "Compare each account balance to your bank app",
+    "Check each account against your bank (Balance check)",
     "Make one decision for the week (below)",
   ];
   const card = "card p-5";
@@ -60,6 +60,7 @@ export default async function MeetingPage({ searchParams }: { searchParams: Prom
         <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold">
           <Link className="flex min-h-11 items-center rounded-xl border border-[#E2E8F0] px-4 dark:border-slate-700" href={`/budget${q}`}>Budget</Link>
           <Link className="flex min-h-11 items-center rounded-xl border border-[#E2E8F0] px-4 dark:border-slate-700" href={`/accounts${q}`}>Accounts</Link>
+          <Link className="flex min-h-11 items-center rounded-xl border border-[#E2E8F0] px-4 dark:border-slate-700" href={`/accounts/check${q}`}>Balance check</Link>
         </div>
       </section>
       {over.length > 0 && (

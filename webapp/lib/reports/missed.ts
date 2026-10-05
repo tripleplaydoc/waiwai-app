@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { TYPE_DEFS, OWNER_DRAW, deductibleShareBps, effectiveType, typeLabel } from "@/lib/budget/expense-types";
+import { TYPE_DEFS, OWNER_DRAW, UNACCOUNTED, deductibleShareBps, effectiveType, typeLabel } from "@/lib/budget/expense-types";
 import { matchRule } from "@/lib/budget/suggest";
 
 export interface MissedItem {
@@ -43,7 +43,7 @@ export async function missedDeductions(workspaceId: string, from: string, to: st
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
   for (const t of txs) {
     const c = t.categoryId ? cat.get(t.categoryId) : null;
-    if (c && (c.type !== "EXPENSE" || c.isSystemManaged || c.isTaxDeductible || c.expenseType === OWNER_DRAW)) continue;
+    if (c && (c.type !== "EXPENSE" || c.isSystemManaged || c.isTaxDeductible || c.expenseType === OWNER_DRAW || c.expenseType === UNACCOUNTED)) continue;
     if (t.isTaxDeductible) continue;
     const hit = matchRule(`${t.payee?.name ?? ""} ${t.memo ?? ""}`);
     if (!hit || !BUSINESS.has(hit.type)) continue;
@@ -75,7 +75,7 @@ export async function missedDeductions(workspaceId: string, from: string, to: st
   const counts = new Map<string, number>();
   for (const r of spentTx) if (r.categoryId) { spent.set(r.categoryId, -(r._sum.amountCents ?? 0)); counts.set(r.categoryId, r._count); }
   for (const c of cats) {
-    if (c.type !== "EXPENSE" || c.isSystemManaged || c.isTaxDeductible || c.expenseType === OWNER_DRAW) continue;
+    if (c.type !== "EXPENSE" || c.isSystemManaged || c.isTaxDeductible || c.expenseType === OWNER_DRAW || c.expenseType === UNACCOUNTED) continue;
     const cents = spent.get(c.id) ?? 0;
     if (cents <= 0) continue;
     const own = effectiveType(c);

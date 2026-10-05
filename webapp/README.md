@@ -175,3 +175,10 @@ Past years live in their **own tables** (`historical_transactions`, `history_acc
 - **Growth numbers**: net worth change, savings rate, cash runway, freedom number (25x yearly spending).
 - **Tax levers** (business): quarterly due dates, projection, what each lever saves at the workspace reserve rate. Planning guidance, not tax advice.
 - Pure math lives in `lib/coach/*-math.ts` with tests.
+
+## Balance check and proof line (numbers that match the bank)
+- `/accounts/check`: type the balance your bank shows. The app compares it to its own balance for that date and, if they differ, looks for the usual causes: entries not posted yet (uncleared total equals the gap), a missing deposit or payment, a wrong direction, a flipped sign, a duplicate, or two swapped digits. It lists the entries to look at first.
+- Every check is saved (`balance_checkpoints`). Each account shows a proof line: "Matched your bank 3 days ago", "Time to check again" after 14 days, or "Off $X at last check".
+- **Can't find it yet?** One tap posts a labelled "Balance adjustment" so the app matches the bank, and parks the difference in an **Unaccounted** pocket (on-budget accounts). It is excluded from the P&L and deduction reports. Clear it when you find the cause.
+- Credit cards and loans: type the amount you owe, as your bank shows it.
+- Balance checkpoints are never read by balances, Ready to Assign or net worth. Needs migration `20261005310000_balance_checkpoints`.

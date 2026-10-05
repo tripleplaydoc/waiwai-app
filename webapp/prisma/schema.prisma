@@ -354,6 +354,7 @@ model Workspace {
   expenseReviews        ExpenseReview[]
   historySettings       HistorySettings?
   historyTotals         HistoryTotal[]
+  balanceCheckpoints    BalanceCheckpoint[]
   historyAccounts       HistoryAccount[]
   historicalTransactions HistoricalTransaction[]
 
@@ -423,6 +424,7 @@ model Account {
   manualBalanceEntries  ManualBalanceEntry[]
   holdingDetail         HoldingDetail?       @relation("HoldingDetailOwner")
   holdingPositions      HoldingPosition[]
+  balanceCheckpoints    BalanceCheckpoint[]
   securedByThis         HoldingDetail[]      @relation("HoldingDetailLoan")
   fundedAssignments     BudgetAssignment[]   @relation("AssignmentFunding")
   pocketsPaidFrom       Category[]           @relation("PocketPaidFrom")
@@ -1325,4 +1327,29 @@ model HistoryTotal {
 
   @@unique([workspaceId, year, typeKey])
   @@map("history_totals")
+}
+
+/// A moment when the person compared an account to their bank. Never read by balance, Ready to Assign or net worth code.
+model BalanceCheckpoint {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accountId     String
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// The day the bank balance is for.
+  date          DateTime @db.Date
+  /// What the bank showed, in the app's sign convention (a card you owe on is negative).
+  bankCents     Int
+  /// What the app said for that day.
+  appCents      Int
+  /// bankCents - appCents
+  gapCents      Int
+  /// Part of the gap parked in the Unaccounted pocket (equals gapCents once handled).
+  adjustedCents Int      @default(0)
+  note          String?
+  createdAt     DateTime @default(now())
+
+  @@index([accountId, date])
+  @@index([workspaceId, createdAt])
+  @@map("balance_checkpoints")
 }

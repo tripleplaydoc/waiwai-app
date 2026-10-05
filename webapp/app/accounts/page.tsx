@@ -14,6 +14,8 @@ import { EditAccountButton } from "./edit-account";
 import { dateToIso } from "@/lib/utils/dates";
 import { loadMembers, type Member } from "@/lib/household";
 import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { proofFor, type ProofSummary } from "@/lib/proof-math";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,13 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const members = await loadMembers();
   const me = await getCurrentUser();
   const wsQ = wsKey === "business" ? "?ws=business" : "";
+  const latest = new Map<string, { date: string; gapCents: number; adjustedCents: number }>();
+  try {
+    const cps = await prisma.balanceCheckpoint.findMany({ where: { workspaceId: workspace.id }, orderBy: { createdAt: "desc" }, take: 500 });
+    for (const c of cps) if (!latest.has(c.accountId)) latest.set(c.accountId, { date: dateToIso(c.date), gapCents: c.gapCents, adjustedCents: c.adjustedCents });
+  } catch { /* table not created yet */ }
+  const proofs = new Map<string, ProofSummary>(accounts.filter((a) => a.balanceMode === "TRANSACTION_DERIVED").map((a) => [a.id, proofFor(latest.get(a.id) ?? null, todayIso())]));
+  const matched = [...proofs.values()].filter((p) => p.state === "matched").length;
   const onBudget = accounts.filter((a) => a.onBudget);
   const offBudget = accounts.filter((a) => !a.onBudget);
   const total = onBudget.reduce((s, a) => s + a.balanceCents, 0);
@@ -46,21 +55,28 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
         <Link role="tab" aria-selected={false} href={`/holdings${wsQ}`} className="rounded-full border border-[#E2E8F0] bg-white px-4 py-2 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Assets &amp; liabilities</Link>
       </div>
 
+      {proofs.size > 0 && (
+        <Link href={`/accounts/check${wsQ}`} className="card flex min-h-12 items-center justify-between gap-3 px-4 py-3 text-sm hover:border-[#4F46E5]">
+          <span><span className="font-semibold">{matched} of {proofs.size}</span> account{proofs.size === 1 ? "" : "s"} matched your bank in the last 14 days</span>
+          <span className="shrink-0 font-semibold text-[#2E6BE6] dark:text-indigo-300">Check balances</span>
+        </Link>
+      )}
+
       {accounts.length === 0 && (
         <div className="card p-5 text-sm">No accounts yet. Add your checking account first, with today’s balance as the opening balance.</div>
       )}
 
       {onBudget.length > 0 && (
-        <AccountTable title="On budget" rows={onBudget} wsQ={wsQ} cards={cards} members={members} footer={`Total on budget: ${formatCents(total)}`} />
+        <AccountTable title="On budget" rows={onBudget} wsQ={wsQ} cards={cards} proofs={proofs} members={members} footer={`Total on budget: ${formatCents(total)}`} />
       )}
       {offBudget.length > 0 && (
-        <AccountTable title="Off budget (counts toward net worth only)" rows={offBudget} wsQ={wsQ} members={members} />
+        <AccountTable title="Off budget (counts toward net worth only)" rows={offBudget} wsQ={wsQ} members={members} proofs={proofs} />
       )}
     </div>
   );
 }
 
-function AccountTable({ title, rows, wsQ, footer, cards, members }: { members: Member[]; title: string; rows: Awaited<ReturnType<typeof getAccountBalances>>; wsQ: string; footer?: string; cards?: Map<string, { owedCents: number; shortCents: number; nextDue: { days: number } | null }> }) {
+function AccountTable({ title, rows, wsQ, footer, cards, members, proofs }: { proofs: Map<string, ProofSummary>; members: Member[]; title: string; rows: Awaited<ReturnType<typeof getAccountBalances>>; wsQ: string; footer?: string; cards?: Map<string, { owedCents: number; shortCents: number; nextDue: { days: number } | null }> }) {
   return (
     <section className="card overflow-hidden">
       <h2 className="border-b border-[#E2E8F0] bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">{title}</h2>
@@ -71,6 +87,7 @@ function AccountTable({ title, rows, wsQ, footer, cards, members }: { members: M
               <td className="td">
                 <Link href={`/accounts/${a.id}${wsQ}`} className="font-medium text-[#2E6BE6] hover:underline dark:text-indigo-300">{a.name}</Link>
                 <span className="ml-2 text-xs text-slate-500">{TYPE_LABEL[a.type]}</span>
+                {proofs.get(a.id) && (() => { const p = proofs.get(a.id)!; return <Link href={`/accounts/check${wsQ}${wsQ ? "&" : "?"}account=${a.id}`} className={`block text-xs ${p.state === "matched" ? "font-medium text-pos" : p.state === "off" ? "font-semibold text-neg" : p.state === "stale" ? "font-medium text-warn" : "text-slate-500"} hover:underline`}>{p.state === "matched" ? "✓ " : p.state === "off" ? "⚠ " : ""}{p.label}</Link>; })()}
                 {members.length > 1 && a.onBudget && <div className="text-xs text-slate-500">Steward: <span className="font-medium text-slate-700 dark:text-slate-200">{members.find((m) => m.id === a.stewardId)?.name ?? "none"}</span></div>}
                 {cards?.get(a.id) && (() => { const c = cards.get(a.id)!; return c.owedCents === 0 ? null : c.shortCents > 0
                   ? <div className="nums text-xs font-medium text-neg">{formatCents(c.shortCents)} short: not set aside yet</div>

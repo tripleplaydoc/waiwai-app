@@ -7,6 +7,8 @@ export type TypeKind = "EXPENSE" | "INCOME";
 export interface TypeDef { key: string; label: string; kind: TypeKind; group: "Business" | "Personal" | "Income" }
 
 export const OWNER_DRAW = "OWNER_DRAW";
+/** Holds differences between the app and the bank that are not explained yet. Never counts as a business expense. */
+export const UNACCOUNTED = "UNACCOUNTED";
 /** Types where part of the cost is often personal (home office, phone, car...). */
 export const MIXED_USE_TYPES = ["UTILITIES", "AUTO", "RENT", "EQUIPMENT", "INSURANCE", "SOFTWARE"];
 /** Share of a cost that is deductible for tax, in basis points (meals are generally 50%). */
