@@ -421,6 +421,7 @@ model Account {
   holdingPositions      HoldingPosition[]
   securedByThis         HoldingDetail[]      @relation("HoldingDetailLoan")
   fundedAssignments     BudgetAssignment[]   @relation("AssignmentFunding")
+  pocketsPaidFrom       Category[]           @relation("PocketPaidFrom")
   importBatches         ImportBatch[]
   taxPaymentsSourced     TaxPayment[]
 
@@ -625,6 +626,9 @@ model Category {
   fundingTargetType   FundingTargetType?
   fundingTargetCents  Int?
   fundingTargetByDate DateTime?           @db.Date
+  /// The bank account this pocket is usually paid from (null = any). Funding draws from it first.
+  paidFromAccountId String?
+  paidFromAccount   Account?              @relation("PocketPaidFrom", fields: [paidFromAccountId], references: [id], onDelete: SetNull)
 
   isArchived Boolean  @default(false)
   createdAt  DateTime @default(now())

@@ -33,6 +33,7 @@ const pocketSchema = z.object({
   expenseType: z.string().optional(),
   customType: z.string().optional(),
   incomeKind: z.enum(["EARNED", "PORTFOLIO", "PASSIVE"]).optional(),
+  paidFromId: z.string().optional(),
 });
 
 /** Creates or edits a pocket (an envelope inside a category). */
@@ -105,6 +106,15 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
     expenseType = d.expenseType;
   }
 
+  let paidFromAccountId: string | null | undefined; // undefined = leave as is
+  if (d.paidFromId !== undefined) {
+    if (d.paidFromId === "" || isIncome) paidFromAccountId = null;
+    else {
+      const a = await prisma.account.findFirst({ where: { id: d.paidFromId, workspaceId: d.workspaceId, onBudget: true, isArchived: false, balanceMode: "TRANSACTION_DERIVED", type: { not: "CREDIT_CARD" } } });
+      if (!a) return { ok: false, error: "Pick one of your bank accounts." };
+      paidFromAccountId = a.id;
+    }
+  }
   const incomeKind = isIncome ? d.incomeKind ?? "EARNED" : null;
   const deductible = workspace.type === "BUSINESS" && !isIncome && d.isTaxDeductible === "on";
   try {
@@ -122,6 +132,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           fundingTargetType: targetType,
           fundingTargetCents: targetCents,
           fundingTargetByDate: targetDate,
+          ...(paidFromAccountId !== undefined ? { paidFromAccountId } : {}),
         },
       });
     } else {
@@ -141,6 +152,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           fundingTargetType: targetType,
           fundingTargetCents: targetCents,
           fundingTargetByDate: targetDate,
+          paidFromAccountId: paidFromAccountId ?? null,
         },
       });
     }

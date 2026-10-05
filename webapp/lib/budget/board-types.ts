@@ -16,6 +16,8 @@ export interface PocketVM {
   targetDate: string | null;
   allocationBps: number | null;
   dueDay: number | null;
+  /** Bank account this pocket is usually paid from. */
+  paidFromId: string | null;
   manualPaid: boolean;
   kind: "INCOME" | "EXPENSE" | "SYSTEM";
   expenseType: string | null;

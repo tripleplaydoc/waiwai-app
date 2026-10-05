@@ -8,6 +8,7 @@ import { monthsBetweenInclusive } from "@/lib/budget/dates";
 import type { PocketVM } from "@/lib/budget/board-types";
 import { typesFor, typeLabel } from "@/lib/budget/expense-types";
 import { AssignedInput } from "./budget-controls";
+import { useFunding } from "./funding-view";
 
 type TT = "NONE" | "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE";
 
@@ -26,6 +27,7 @@ export function PocketDialog({
   groups: { id: string; name: string }[]; pocket: PocketVM | null; defaultGroupId?: string;
   monthIso: string; kindOfNew?: "EXPENSE" | "INCOME";
 }) {
+  const { cash } = useFunding();
   const editing = pocket !== null;
   const isIncome = editing ? pocket.kind === "INCOME" : kindOfNew === "INCOME";
   const realGroups = groups.filter((g) => g.id !== "__none");
@@ -106,6 +108,17 @@ export function PocketDialog({
               <option value="PORTFOLIO">Portfolio — interest, dividends, gains</option>
               <option value="PASSIVE">Passive — rent, royalties, hands-off business</option>
             </select>
+          </div>
+        )}
+
+        {!system && !isIncome && cash.accounts.length > 1 && (
+          <div>
+            <label htmlFor="pk-paidfrom" className="label">Paid from <span className="font-normal text-slate-400">(bank account)</span></label>
+            <select id="pk-paidfrom" name="paidFromId" className="input" defaultValue={pocket?.paidFromId ?? ""}>
+              <option value="">Any account</option>
+              {cash.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">Adding money to this pocket, and the automatic Assign buttons, take from this account first.</p>
           </div>
         )}
 

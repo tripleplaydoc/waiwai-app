@@ -5,7 +5,7 @@ import { assignMoreAction, moveMoneyAction, releaseToReadyAction } from "@/app/a
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 
 const READY = "__ready__";
-export interface MovePocket { id: string; name: string; group: string; availableCents: number; assignedCents?: number; /** What it still takes to cover this pocket (its target for the month, or an overspend). 0 = covered. */ needCents?: number }
+export interface MovePocket { id: string; name: string; group: string; availableCents: number; assignedCents?: number; /** What it still takes to cover this pocket (its target for the month, or an overspend). 0 = covered. */ needCents?: number; /** Bank account this pocket is usually paid from. */ paidFromId?: string | null }
 
 /** Shared "move money between pockets" form (used from the + button and the budget page). */
 export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, onCancel }: {
@@ -75,8 +75,10 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
   /** Bank accounts with ready cash; the money added is tagged to the one chosen ("" = best match). */
   accounts?: FundingAccount[]; initialAccountId?: string | null;
 }) {
-  const [acctId, setAcctId] = useState(initialAccountId && accounts.some((a) => a.id === initialAccountId) ? initialAccountId : "");
   const [id, setId] = useState(initialId && pockets.some((p) => p.id === initialId) ? initialId : pockets[0]?.id ?? "");
+  // Start on the pocket's own account if it has one, else the account passed in (yours), else "Any account".
+  const startAcct = pockets.find((p) => p.id === id)?.paidFromId ?? initialAccountId;
+  const [acctId, setAcctId] = useState(startAcct && accounts.some((a) => a.id === startAcct) ? startAcct : "");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
@@ -108,7 +110,7 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
       ) : (
         <div>
           <label htmlFor="add-pocket" className="label">Add to</label>
-          <select id="add-pocket" className="input" value={id} onChange={(e) => setId(e.target.value)}>
+          <select id="add-pocket" className="input" value={id} onChange={(e) => { setId(e.target.value); const home = pockets.find((p) => p.id === e.target.value)?.paidFromId; if (home && accounts.some((a) => a.id === home)) setAcctId(home); }}>
             {groups.map((g) => (
               <optgroup key={g} label={g}>{pockets.filter((p) => p.group === g).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
             ))}

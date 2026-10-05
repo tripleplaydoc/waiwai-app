@@ -85,10 +85,13 @@ export interface FundInput { categoryId: string; month: Date; amountCents: numbe
  * (the preferred account first, then the biggest), so a row may become several tagged rows.
  * If the pools can't cover it (over-assigning), the rest is tagged to the preferred or biggest account.
  */
-export async function fundRows(db: Db, workspaceId: string, asOf: Date, inputs: FundInput[], prefer?: string | null): Promise<NewRow[]> {
+export async function fundRows(db: Db, workspaceId: string, asOf: Date, inputs: FundInput[], preferAll?: string | null): Promise<NewRow[]> {
   const pools = await loadPools(db, workspaceId, asOf);
+  // A pocket remembers the account it is paid from; that account is tried first unless the caller chose one.
+  const home = new Map((await db.category.findMany({ where: { id: { in: [...new Set(inputs.map((i) => i.categoryId))] } }, select: { id: true, paidFromAccountId: true } })).map((c) => [c.id, c.paidFromAccountId]));
   const rows: NewRow[] = [];
   for (const inp of inputs) {
+    const prefer = preferAll ?? home.get(inp.categoryId) ?? null;
     if (inp.amountCents <= 0) { rows.push({ ...inp, amountCents: inp.amountCents, fundingAccountId: null }); continue; }
     const { parts, shortCents } = drawFromPools([...pools], inp.amountCents, prefer);
     for (const [k, n] of parts) pools.set(k, (pools.get(k) ?? 0) - n);

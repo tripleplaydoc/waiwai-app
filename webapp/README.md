@@ -101,3 +101,6 @@ Tap a pocket, open the **Move money** tab, and leave **Move to** on "↩ Money i
 
 
 > "Ready to assign" is now called **Money in pool** everywhere in the app.
+
+## Paid from (each pocket remembers its bank account)
+With two or more bank accounts, the pocket's edit dialog (pencil) has a **Paid from** choice, for example Software = Found, Advertising = Novo. A pocket with an account shows "from Found" under its name. Opening **Add money** on that pocket starts on its account, and the automatic Assign buttons (Assign, Assign by %, auto-assign) take that pocket's money from its account first, then from the account with the most free cash if it runs short. You can still pick a different account for any single add. Pockets left on "Any account" draw from your own account with the most free cash.
