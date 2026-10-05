@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { assignMoreAction, moveMoneyAction } from "@/app/actions/pockets";
+import { assignMoreAction, moveMoneyAction, releaseToReadyAction } from "@/app/actions/pockets";
 import { retagPocketAction } from "@/app/actions/funding";
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 
+const READY = "__ready__";
 export interface MovePocket { id: string; name: string; group: string; availableCents: number; assignedCents?: number }
 
 /** Shared "move money between pockets" form (used from the + button and the budget page). */
@@ -13,14 +14,13 @@ export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, o
 }) {
   const firstFrom = initialFromId && pockets.some((p) => p.id === initialFromId) ? initialFromId : pockets.find((p) => p.availableCents > 0)?.id ?? pockets[0]?.id ?? "";
   const [fromId, setFromId] = useState(firstFrom);
-  const [toId, setToId] = useState(pockets.find((p) => p.id !== firstFrom)?.id ?? "");
+  const [toId, setToId] = useState(READY);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
   const from = pockets.find((p) => p.id === fromId);
   const groups = [...new Set(pockets.map((p) => p.group))];
 
-  if (pockets.length < 2) return <p className="text-sm">You need at least two pockets to move money between them.</p>;
 
   const options = (skip?: string) => groups.map((g) => (
     <optgroup key={g} label={g}>
@@ -35,7 +35,7 @@ export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, o
         e.preventDefault();
         setError(undefined);
         start(async () => {
-          const r = await moveMoneyAction(workspaceId, fromId, toId, month, amount);
+          const r = toId === READY ? await releaseToReadyAction(workspaceId, fromId, month, amount) : await moveMoneyAction(workspaceId, fromId, toId, month, amount);
           if (r.ok) onDone(); else setError(r.error);
         });
       }}
@@ -47,7 +47,7 @@ export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, o
       <div>
         <label htmlFor="mv-to" className="label">Move to</label>
         <select id="mv-to" className="input" value={toId} onChange={(e) => setToId(e.target.value)}>
-          <option value="" disabled>Choose a pocket…</option>
+          <option value={READY}>↩ Ready to assign</option>
           {options(fromId)}
         </select>
       </div>
@@ -62,7 +62,7 @@ export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, o
       {error && <p role="alert" className="text-sm text-neg">{error}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>
-        <button type="submit" className="btn btn-primary" disabled={pending || !toId}>{pending ? "Moving…" : "Move money"}</button>
+        <button type="submit" className="btn btn-primary" disabled={pending || !toId}>{pending ? "Moving…" : toId === READY ? "Move to Ready to assign" : "Move money"}</button>
       </div>
     </form>
   );

@@ -491,3 +491,26 @@ export async function moveMoneyAction(workspaceId: string, fromId: string, toId:
   revalidatePath("/reports");
   return { ok: true, message: `Moved to ${to.name}.` };
 }
+
+/** Takes money out of a pocket and puts it back in Ready to assign (the account tags go back with it). */
+export async function releaseToReadyAction(workspaceId: string, fromId: string, month: string, amount: string): Promise<ActionResult> {
+  await assertAuthed();
+  const m = monthSchema.safeParse(month);
+  if (!m.success) return { ok: false, error: "Bad request." };
+  const cents = parseToCents(amount);
+  if (cents === null || cents <= 0) return { ok: false, error: "Enter an amount like 50.00" };
+  const from = await prisma.category.findFirst({ where: { id: fromId, workspaceId, isArchived: false } });
+  if (!from) return { ok: false, error: "Pocket not found." };
+  if (from.type === "INCOME") return { ok: false, error: "Income sources don't hold money. Pick a spending pocket." };
+  if (from.isSystemManaged) return { ok: false, error: "The tax reserve is managed automatically. Use the tax rebalance instead." };
+  const monthDate = new Date(`${m.data}-01T00:00:00.000Z`);
+  const available = await getCategoryAvailableBalance(prisma, from.id, monthDate);
+  if (cents > available) {
+    return { ok: false, error: `${from.name} only has ${(Math.max(0, available) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} available.` };
+  }
+  const rows = await releaseRows(prisma, { workspaceId, categoryId: from.id, month: monthDate, cents, source: "MANUAL", note: "Moved back to Ready to assign" });
+  await prisma.budgetAssignment.createMany({ data: rows });
+  revalidatePath("/budget");
+  revalidatePath("/reports");
+  return { ok: true, message: "Moved back to Ready to assign." };
+}

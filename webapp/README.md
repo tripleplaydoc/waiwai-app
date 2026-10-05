@@ -97,3 +97,6 @@ The **Cash** chip on the Budget screen shows each account's real balance next to
 ### Moving cash between accounts, and tagging pocket by pocket
 - **Transfer** (Accounts page, and "Move cash between accounts" inside the Cash panel) moves cash from one of your bank accounts to another. It isn't spending, so no pocket changes, and deleting either half removes both. If the sending account has less free cash than you move, the pocket money tagged to it moves along to the receiving account (shown in the confirmation), so the tags keep matching where the cash really is.
 - **Which account holds this money?**: tap a pocket, then open the collapsed line at the bottom of the sheet (only shown when you have 2+ bank accounts). It lists the pocket's money by account and lets you move any part of it to another account. Everything account-related stays hidden until you have two or more bank accounts.
+
+### Moving money back to Ready to assign
+Tap a pocket, open the **Move money** tab, and leave **Move to** on "↩ Ready to assign" (the default). Enter an amount (or **All**) and tap **Move to Ready to assign**. Only money that is still available in the pocket can be moved; the account it came from goes back with it.
