@@ -117,10 +117,10 @@ function PocketRowView({
       </div>
 
       <div className="text-right md:order-5">
-        {p.isSystemManaged || overlay ? (
+        {overlay ? (
           <span className={`nums inline-block min-w-[5.5rem] rounded-full px-3 py-1.5 text-right text-[15px] font-semibold md:min-w-20 md:py-1 md:text-sm ${pill(p)}`}>{formatCents(p.availableCents)}</span>
         ) : (
-          <button type="button" onClick={() => openMoveMoney(p.id, "add")} title="Add money to this pocket, or move it" aria-label={`${p.name}: ${formatCents(p.availableCents)} available. Add or move money`}
+          <button type="button" onClick={() => openMoveMoney(p.id, "add")} title={p.isSystemManaged ? "Add money to this pocket" : "Add money to this pocket, or move it"} aria-label={`${p.name}: ${formatCents(p.availableCents)} available. Add or move money`}
             className={`nums inline-block min-w-[5.5rem] cursor-pointer rounded-full px-3 py-1.5 text-right text-[15px] font-semibold hover:ring-2 hover:ring-water/40 md:min-w-20 md:py-1 md:text-sm ${pill(p)}`}>{formatCents(p.availableCents)}</button>
         )}
       </div>

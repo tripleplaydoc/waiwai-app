@@ -231,7 +231,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </Link>
       )}
 
-      <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} readyToAssignCents={rta} pockets={allPockets.filter((p) => !p.isSystemManaged).map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents, assignedCents: p.assignedCents, paidFromId: p.paidFromId, needCents: p.progress.hasTarget || p.availableCents < 0 ? Math.max(p.progress.stillNeededCents, p.availableCents < 0 ? -p.availableCents : 0) : undefined }))} />
+      <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} readyToAssignCents={rta} pockets={allPockets.map((p) => ({ system: p.isSystemManaged, id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents, assignedCents: p.assignedCents, paidFromId: p.paidFromId, needCents: p.progress.hasTarget || p.availableCents < 0 ? Math.max(p.progress.stillNeededCents, p.availableCents < 0 ? -p.availableCents : 0) : undefined }))} />
 
 
       <BudgetBoard customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />

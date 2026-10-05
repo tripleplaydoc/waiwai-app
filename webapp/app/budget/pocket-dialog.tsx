@@ -111,7 +111,7 @@ export function PocketDialog({
           </div>
         )}
 
-        {!system && !isIncome && cash.accounts.length > 1 && (
+        {!isIncome && cash.accounts.length > 1 && (
           <div>
             <label htmlFor="pk-paidfrom" className="label">Paid from <span className="font-normal text-slate-400">(bank account)</span></label>
             <select id="pk-paidfrom" name="paidFromId" className="input" defaultValue={pocket?.paidFromId ?? ""}>

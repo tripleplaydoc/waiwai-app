@@ -5,12 +5,13 @@ import { assignMoreAction, moveMoneyAction, releaseToReadyAction } from "@/app/a
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 
 const READY = "__ready__";
-export interface MovePocket { id: string; name: string; group: string; availableCents: number; assignedCents?: number; /** What it still takes to cover this pocket (its target for the month, or an overspend). 0 = covered. */ needCents?: number; /** Bank account this pocket is usually paid from. */ paidFromId?: string | null }
+export interface MovePocket { id: string; name: string; group: string; availableCents: number; assignedCents?: number; /** What it still takes to cover this pocket (its target for the month, or an overspend). 0 = covered. */ needCents?: number; /** Bank account this pocket is usually paid from. */ paidFromId?: string | null; /** App-managed pocket (the tax reserve): money can be added to it but not moved out. */ system?: boolean }
 
 /** Shared "move money between pockets" form (used from the + button and the budget page). */
-export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, onCancel }: {
+export function MoveForm({ workspaceId, month, pockets: allPockets, initialFromId, onDone, onCancel }: {
   workspaceId: string; month: string; pockets: MovePocket[]; initialFromId?: string; onDone: () => void; onCancel: () => void;
 }) {
+  const pockets = allPockets.filter((p) => !p.system);
   const firstFrom = initialFromId && pockets.some((p) => p.id === initialFromId) ? initialFromId : pockets.find((p) => p.availableCents > 0)?.id ?? pockets[0]?.id ?? "";
   const [fromId, setFromId] = useState(firstFrom);
   const [toId, setToId] = useState(READY);
