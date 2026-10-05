@@ -1,20 +1,22 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowRightLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/modal";
-import { archiveHoldingAction, createHoldingAction, updateHoldingAction } from "@/app/actions/accounts";
+import { archiveHoldingAction, createHoldingAction, moveHoldingAction, updateHoldingAction } from "@/app/actions/accounts";
 import { HOLDING_DEFS, type HoldingKey } from "@/lib/holdings";
 import { centsToInput } from "@/lib/utils/currency";
 
 export interface HoldingEdit { id: string; name: string; cls: HoldingKey; valueCents: number; monthlyCents: number; manual: boolean }
 
-export function HoldingButton({ workspaceId, today, edit }: { workspaceId: string; today: string; edit?: HoldingEdit }) {
+export function HoldingButton({ workspaceId, today, edit, moveTo }: { workspaceId: string; today: string; edit?: HoldingEdit; moveTo?: { id: string; name: string } }) {
   const [open, setOpen] = useState(false);
   const [cls, setCls] = useState<HoldingKey>(edit?.cls ?? "STOCKS_FUNDS");
   const [state, action, pending] = useActionState(edit ? updateHoldingAction : createHoldingAction, undefined);
   const [removing, startRemove] = useTransition();
   const [err, setErr] = useState<string>();
+  const [confirmMove, setConfirmMove] = useState(false);
+  const [moving, startMove] = useTransition();
   useEffect(() => { if (state?.ok) setOpen(false); }, [state]);
   const side = HOLDING_DEFS.find((h) => h.key === cls)!.side;
   const id = edit?.id ?? "new";
@@ -60,6 +62,18 @@ export function HoldingButton({ workspaceId, today, edit }: { workspaceId: strin
           <p className="text-xs text-slate-500">Each time you update the value, WaiWai keeps the old one, so the reports can show growth over time.</p>
           {state && !state.ok && <p role="alert" className="text-sm text-[#C9372C]">{state.error}</p>}
           {err && <p role="alert" className="text-sm text-[#C9372C]">{err}</p>}
+          {edit && moveTo && (
+            confirmMove ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#E2E8F0] p-3 text-sm dark:border-slate-700">
+                <span className="min-w-0 flex-1">Move <strong>{edit.name}</strong> to {moveTo.name}? It leaves this workspace&apos;s totals and joins {moveTo.name}&apos;s, with its history.</span>
+                <button type="button" className="btn btn-sm btn-primary" disabled={moving}
+                  onClick={() => startMove(async () => { const r = await moveHoldingAction(edit.id, moveTo.id); if (r.ok) { setConfirmMove(false); setOpen(false); } else { setErr(r.error); setConfirmMove(false); } })}>{moving ? "Moving…" : "Yes, move it"}</button>
+                <button type="button" className="btn btn-sm" onClick={() => setConfirmMove(false)}>Keep here</button>
+              </div>
+            ) : (
+              <button type="button" className="btn w-full" onClick={() => { setErr(undefined); setConfirmMove(true); }}><ArrowRightLeft className="size-4" aria-hidden /> Move to {moveTo.name}</button>
+            )
+          )}
           <div className="flex items-center gap-2 pt-1">
             {edit?.manual && (
               <button type="button" className="btn btn-sm" disabled={removing} aria-label="Remove"

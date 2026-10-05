@@ -13,6 +13,7 @@ export default async function HoldingsPage({ searchParams }: { searchParams: Pro
   await requireAuth();
   const wsKey = wsKeyFromParam((await searchParams).ws);
   const ws = await getWorkspace(wsKey);
+  const other = await getWorkspace(wsKey === "business" ? "personal" : "business");
   const today = todayIso();
   const { points, rows, prevById } = await loadHoldings([ws.id], today, "monthly", 2);
   const now = points[points.length - 1], before = points[0];
@@ -48,7 +49,7 @@ export default async function HoldingsPage({ searchParams }: { searchParams: Pro
                   </div>
                 </div>
                 <div className="nums shrink-0 text-right text-[15px] font-bold">{formatCents(r.valueCents)}</div>
-                <HoldingButton workspaceId={ws.id} today={today} edit={{ id: r.id, name: r.name, cls: r.cls, valueCents: r.valueCents, monthlyCents: r.monthlyCashflowCents, manual: r.manual }} />
+                <HoldingButton workspaceId={ws.id} today={today} moveTo={{ id: other.id, name: other.name }} edit={{ id: r.id, name: r.name, cls: r.cls, valueCents: r.valueCents, monthlyCents: r.monthlyCashflowCents, manual: r.manual }} />
               </li>
             );
           })}

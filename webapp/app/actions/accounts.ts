@@ -194,3 +194,26 @@ export async function archiveHoldingAction(accountId: string): Promise<ActionRes
   revalidatePath("/reports");
   return { ok: true };
 }
+
+/** Moves an asset or liability to the other workspace (Business <-> Personal). Its value history comes with it. */
+export async function moveHoldingAction(accountId: string, toWorkspaceId: string): Promise<ActionResult> {
+  await assertAuthed();
+  const [acct, dest] = await Promise.all([
+    prisma.account.findUnique({ where: { id: accountId }, include: { workspace: true } }),
+    prisma.workspace.findUnique({ where: { id: toWorkspaceId } }),
+  ]);
+  if (!acct || acct.isArchived) return { ok: false, error: "Not found." };
+  if (!dest) return { ok: false, error: "That workspace wasn't found." };
+  if (acct.workspaceId === dest.id) return { ok: false, error: `It's already in ${dest.name}.` };
+  // Transactions are tied to the pockets of the workspace they were recorded in, so an account with any can't change sides.
+  const used = await prisma.transaction.count({ where: { OR: [{ accountId: acct.id }, { transferAccountId: acct.id }] } });
+  if (used > 0) return { ok: false, error: `${acct.name} has transactions recorded against ${acct.workspace.name} pockets, so it can't be moved. Add it again in ${dest.name} instead.` };
+  const clash = await prisma.account.findFirst({ where: { workspaceId: dest.id, isArchived: false, name: { equals: acct.name, mode: "insensitive" } } });
+  if (clash) return { ok: false, error: `${dest.name} already has something called “${acct.name}”. Rename one first.` };
+  await prisma.account.update({ where: { id: acct.id }, data: { workspaceId: dest.id } });
+  revalidatePath("/holdings");
+  revalidatePath("/accounts", "layout");
+  revalidatePath("/budget");
+  revalidatePath("/reports");
+  return { ok: true, message: `Moved “${acct.name}” to ${dest.name}.` };
+}
