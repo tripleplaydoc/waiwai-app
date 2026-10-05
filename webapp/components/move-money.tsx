@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { moveMoneyAction } from "@/app/actions/pockets";
-import { centsToInput, formatCents } from "@/lib/utils/currency";
+import { assignMoreAction, moveMoneyAction } from "@/app/actions/pockets";
+import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 
-export interface MovePocket { id: string; name: string; group: string; availableCents: number }
+export interface MovePocket { id: string; name: string; group: string; availableCents: number; assignedCents?: number }
 
 /** Shared "move money between pockets" form (used from the + button and the budget page). */
 export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, onCancel }: {
@@ -62,6 +62,68 @@ export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, o
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>
         <button type="submit" className="btn btn-primary" disabled={pending || !toId}>{pending ? "Moving…" : "Move money"}</button>
+      </div>
+    </form>
+  );
+}
+
+/** Add money to a pocket's assigned amount, taken from Ready to Assign. */
+export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initialId, onDone, onCancel }: {
+  workspaceId: string; month: string; pockets: MovePocket[]; readyToAssignCents: number; initialId?: string; onDone: () => void; onCancel: () => void;
+}) {
+  const [id, setId] = useState(initialId && pockets.some((p) => p.id === initialId) ? initialId : pockets[0]?.id ?? "");
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState<string>();
+  const [pending, start] = useTransition();
+  const pocket = pockets.find((p) => p.id === id);
+  const groups = [...new Set(pockets.map((p) => p.group))];
+  const cents = parseToCents(amount);
+  const adding = cents !== null && cents > 0 ? cents : 0;
+  const ready = Math.max(0, readyToAssignCents);
+
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError(undefined);
+        start(async () => {
+          const r = await assignMoreAction(workspaceId, id, month, amount);
+          if (r.ok) onDone(); else setError(r.error);
+        });
+      }}
+    >
+      <div className="rounded-xl bg-pos-soft px-3 py-2 text-sm">
+        <span className="text-slate-600 dark:text-slate-300">Ready to assign</span>{" "}
+        <span className="nums font-bold text-pos">{formatCents(readyToAssignCents)}</span>
+      </div>
+      <div>
+        <label htmlFor="add-pocket" className="label">Add to</label>
+        <select id="add-pocket" className="input" value={id} onChange={(e) => setId(e.target.value)}>
+          {groups.map((g) => (
+            <optgroup key={g} label={g}>{pockets.filter((p) => p.group === g).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="add-amount" className="label">Amount to add</label>
+        <div className="flex gap-2">
+          <input id="add-amount" data-autofocus required inputMode="decimal" placeholder="0.00" className="input nums" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <button type="button" className="btn shrink-0" disabled={ready <= 0} onClick={() => setAmount(centsToInput(ready))}>All ready</button>
+        </div>
+        {pocket && (
+          <p className="nums mt-1 text-xs text-slate-500">
+            {pocket.name}: assigned {formatCents(pocket.assignedCents ?? 0)}
+            {adding > 0 && <> → <strong className="text-slate-800 dark:text-slate-100">{formatCents((pocket.assignedCents ?? 0) + adding)}</strong></>}
+            {" · "}available {formatCents(pocket.availableCents)}{adding > 0 && <> → <strong className="text-slate-800 dark:text-slate-100">{formatCents(pocket.availableCents + adding)}</strong></>}
+          </p>
+        )}
+        {adding > ready && <p className="mt-1 text-xs text-warn">That&apos;s more than the {formatCents(ready)} ready to assign.</p>}
+      </div>
+      {error && <p role="alert" className="text-sm text-neg">{error}</p>}
+      <div className="flex justify-end gap-2 pt-1">
+        <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>
+        <button type="submit" className="btn btn-primary" disabled={pending || !id || ready <= 0}>{pending ? "Adding…" : "Add money"}</button>
       </div>
     </form>
   );

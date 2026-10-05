@@ -229,7 +229,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </Link>
       )}
 
-      <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} pockets={allPockets.filter((p) => !p.isSystemManaged).map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents }))} />
+      <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} readyToAssignCents={rta} pockets={allPockets.filter((p) => !p.isSystemManaged).map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents, assignedCents: p.assignedCents }))} />
 
 
       <BudgetBoard customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />

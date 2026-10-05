@@ -85,3 +85,6 @@ On the **Personal** workspace the Flow chip sets up a three-way split. **Assign*
 
 ## Bills calendar
 The **Bills** chip on the Budget screen opens a month calendar (it follows the month you're viewing). Each day with a bill is colored by status: green = paid, amber = due soon (within 7 days), red = overdue, grey = upcoming; a day with several bills takes its most urgent color. Tap a day to see its bills with amount, status and **Mark paid** / **Undo**. Credit cards with a balance and a due day also appear on their due date, with an **Open card** button.
+
+## Adding money to a pocket
+Tap a pocket's amount on the Budget screen to open **Pocket money**. **Add money** (the default tab) takes an amount from Ready to Assign and adds it on top of what's already assigned, showing the new assigned and available totals before you confirm; **All ready** fills in everything that's unassigned. The **Move money** tab moves money out of the pocket into another one.
