@@ -101,6 +101,13 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
   // An inflow only counts toward Ready to assign when it has an income category, so pick one for you.
   const firstIncome = data.categories.find((c) => c.type === "INCOME")?.id ?? "";
   const [category, setCategory] = useState("");
+  // Picking a pocket that is paid from a particular bank account switches the Account box to it (you can still change it).
+  const [acct, setAcct] = useState(data.accounts[0].id);
+  const pickCategory = (id: string) => {
+    setCategory(id);
+    const home = direction === "outflow" ? data.categories.find((c) => c.id === id)?.paidFromId : null;
+    if (home && data.accounts.some((a) => a.id === home)) setAcct(home);
+  };
   const pickDirection = (d: Flow) => { setDirection(d); setCategory(d === "inflow" ? firstIncome : ""); };
   const [state, action, pending] = useActionState(createTransactionAction, undefined);
   useEffect(() => { if (state?.ok) setSaved(direction); // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,13 +150,13 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor="qa-acct" className="label">Account</label>
-          <select id="qa-acct" name="accountId" className="input" defaultValue={data.accounts[0].id}>
+          <select id="qa-acct" name="accountId" className="input" value={acct} onChange={(e) => setAcct(e.target.value)}>
             {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </div>
         <div>
           <label htmlFor="qa-cat" className="label">Pocket</label>
-          <select id="qa-cat" name="categoryId" className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+          <select id="qa-cat" name="categoryId" className="input" value={category} onChange={(e) => pickCategory(e.target.value)}>
             <option value="">Uncategorized (decide later)</option>
             <CategoryOptions options={direction === "inflow" ? [...data.categories].sort((a, b) => Number(b.type === "INCOME") - Number(a.type === "INCOME")) : data.categories.filter((c) => c.type !== "INCOME")} />
           </select>

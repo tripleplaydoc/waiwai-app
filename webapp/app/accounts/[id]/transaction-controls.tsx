@@ -9,7 +9,7 @@ import { Affirmation, type Flow } from "@/components/affirmation";
 import { ReceiptField } from "@/components/receipt-field";
 import { attachReceiptAction, createTransactionAction, removeReceiptAction, setTransactionCategoryAction, setTransactionPersonAction } from "@/app/actions/transactions";
 
-type CatOption = { id: string; name: string; group: string; type: "INCOME" | "EXPENSE" | "SYSTEM" };
+type CatOption = { id: string; name: string; group: string; type: "INCOME" | "EXPENSE" | "SYSTEM"; paidFromId?: string | null };
 
 function CategoryOptions({ options }: { options: CatOption[] }) {
   const groups = [...new Set(options.map((o) => o.group))];
@@ -35,10 +35,17 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
   // An inflow only counts toward Ready to assign when it has an income category, so pick one for you.
   const firstIncome = categories.find((c) => c.type === "INCOME")?.id ?? "";
   const [category, setCategory] = useState("");
+  // Picking a pocket that is paid from a particular bank account switches the Account box to it (you can still change it).
+  const [acct, setAcct] = useState(accountId);
+  const pickCategory = (id: string) => {
+    setCategory(id);
+    const home = direction === "outflow" ? categories.find((c) => c.id === id)?.paidFromId : null;
+    if (home && accounts.some((a) => a.id === home)) setAcct(home);
+  };
   const pickDirection = (d: Flow) => { setDirection(d); setCategory(d === "inflow" ? firstIncome : ""); };
   const [state, action, pending] = useActionState(createTransactionAction, undefined);
   const formRef = useRef<HTMLFormElement>(null);
-  const reset = () => { formRef.current?.reset(); setDirection("outflow"); setCategory(""); setSaved(null); };
+  const reset = () => { formRef.current?.reset(); setDirection("outflow"); setCategory(""); setAcct(accountId); setSaved(null); };
 
   // Hotkey: N opens "new transaction" unless you're typing in a field.
   useEffect(() => {
@@ -89,7 +96,7 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
           </div>
           <div>
             <label htmlFor="tx-acct" className="label">Account</label>
-            <select id="tx-acct" name="accountId" className="input" defaultValue={accountId}>
+            <select id="tx-acct" name="accountId" className="input" value={acct} onChange={(e) => setAcct(e.target.value)}>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
@@ -108,7 +115,7 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
           </div>
           <div>
             <label htmlFor="tx-cat" className="label">Category</label>
-            <select id="tx-cat" name="categoryId" className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <select id="tx-cat" name="categoryId" className="input" value={category} onChange={(e) => pickCategory(e.target.value)}>
               <option value="">Uncategorized (decide later)</option>
               <CategoryOptions options={direction === "inflow" ? [...categories].sort((a, b) => Number(b.type === "INCOME") - Number(a.type === "INCOME")) : categories.filter((c) => c.type !== "INCOME")} />
             </select>

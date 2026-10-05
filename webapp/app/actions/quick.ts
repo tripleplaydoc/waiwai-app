@@ -15,7 +15,7 @@ export interface QuickAddData {
   month: string;
   readyToAssignCents: number;
   accounts: { id: string; name: string }[];
-  categories: { id: string; name: string; group: string; type: "INCOME" | "EXPENSE" | "SYSTEM"; availableCents: number; targetType: "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE" | null; targetCents: number | null; dueDay: number | null; isSystemManaged: boolean }[];
+  categories: { id: string; name: string; group: string; type: "INCOME" | "EXPENSE" | "SYSTEM"; availableCents: number; targetType: "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE" | null; targetCents: number | null; dueDay: number | null; isSystemManaged: boolean; paidFromId: string | null }[];
   payees: string[];
   people: { id: string; name: string }[];
   currentUserId: string | null;
@@ -46,7 +46,7 @@ export async function getQuickAddDataAction(wsParam: string): Promise<QuickAddDa
     month,
     readyToAssignCents: rta,
     accounts: accounts.map((a) => ({ id: a.id, name: a.name })),
-    categories: categories.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroupId ? groupName.get(c.categoryGroupId) ?? "Other" : "Other", type: c.type, availableCents: rowById.get(c.id)?.availableCents ?? 0, targetType: rowById.get(c.id)?.targetType ?? null, targetCents: rowById.get(c.id)?.targetCents ?? null, dueDay: rowById.get(c.id)?.dueDay ?? null, isSystemManaged: c.isSystemManaged })),
+    categories: categories.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroupId ? groupName.get(c.categoryGroupId) ?? "Other" : "Other", type: c.type, availableCents: rowById.get(c.id)?.availableCents ?? 0, targetType: rowById.get(c.id)?.targetType ?? null, targetCents: rowById.get(c.id)?.targetCents ?? null, dueDay: rowById.get(c.id)?.dueDay ?? null, isSystemManaged: c.isSystemManaged, paidFromId: c.paidFromAccountId })),
     payees: payees.map((p) => p.name),
     people: people.map((u) => ({ id: u.id, name: u.name || u.email.split("@")[0] })),
     currentUserId: me?.id ?? null,

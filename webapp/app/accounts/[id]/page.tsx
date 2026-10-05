@@ -45,7 +45,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   const balance = account.balanceMode === "MANUAL" ? account.manualBalanceEntries[0]?.balanceCents ?? 0 : account.openingBalanceCents + (sum._sum.amountCents ?? 0);
   const wsQ = account.workspace.type === "BUSINESS" ? "?ws=business" : "";
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
-  const catOptions = categories.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroupId ? groupName.get(c.categoryGroupId) ?? "Other" : "Other", type: c.type }));
+  const catOptions = categories.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroupId ? groupName.get(c.categoryGroupId) ?? "Other" : "Other", type: c.type, paidFromId: c.paidFromAccountId }));
 
   const isCard = account.type === "CREDIT_CARD" && account.onBudget && account.balanceMode !== "MANUAL";
   const thisMonth = startOfMonthUTC(isoToDate(todayIso()));
