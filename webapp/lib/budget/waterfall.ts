@@ -2,6 +2,7 @@ import { AssignmentSource, FundingTargetType, type Category, type PrismaClient }
 import { addMonthsUTC, monthsBetweenInclusive, startOfMonthUTC } from "./dates";
 import { getCategoryAssignedForMonth, getCategoryAvailableBalance } from "./category-balance";
 import { getReadyToAssign } from "./ready-to-assign";
+import { endOfMonth, fundRows } from "./funding";
 
 export interface WaterfallBucketResult {
   categoryId: string;
@@ -175,15 +176,14 @@ export async function runWaterfallAutoAssign(
     });
 
     if (toCreate.length > 0) {
-      await trx.budgetAssignment.createMany({
-        data: toCreate.map((item) => ({
-          categoryId: item.categoryId,
-          month: monthStart,
-          amountCents: item.amountCents,
-          source: AssignmentSource.AUTO_WATERFALL,
-          waterfallRunId: created.id,
-        })),
-      });
+      const rows = await fundRows(trx, workspaceId, endOfMonth(monthStart), toCreate.map((item) => ({
+        categoryId: item.categoryId,
+        month: monthStart,
+        amountCents: item.amountCents,
+        source: AssignmentSource.AUTO_WATERFALL,
+        waterfallRunId: created.id,
+      })));
+      await trx.budgetAssignment.createMany({ data: rows });
     }
 
     return created;

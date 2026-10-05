@@ -18,6 +18,8 @@ import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
 import { BillsCalendar, type CalItem } from "./bills-calendar";
 import { MoveMoneyHost } from "./move-money-host";
+import { CashChip, CashLensProvider, ReadyAmount } from "./cash-lens";
+import { loadCashView } from "@/lib/budget/funding";
 import { toVM } from "@/lib/budget/to-vm";
 import { isCustomKey } from "@/lib/budget/expense-types";
 import { DailyVerse } from "@/components/daily-verse";
@@ -81,6 +83,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const allGroups = groupsDb.map((g) => ({ id: g.id, name: g.name }));
 
   const allPockets = boardGroups.flatMap((g) => g.pockets);
+  const cash = await loadCashView(prisma, workspace.id, month, allPockets.map((p) => ({ id: p.id, availableCents: p.availableCents })));
   const health = budgetHealth(
     allPockets.map((p) => ({
       input: { assignedCents: p.assignedCents, activityCents: p.activityCents, availableCents: p.availableCents, targetType: p.targetType, targetCents: p.targetCents, targetDate: p.targetDate ? new Date(`${p.targetDate}T00:00:00.000Z`) : null },
@@ -137,6 +140,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const coverText = health.stillNeededCents === 0 ? "Everything funded" : health.canCover ? "You can cover it" : `Short ${formatCents(health.shortfallCents)}`;
 
   return (
+    <CashLensProvider cash={cash}>
     <div className="space-y-2.5">
       <DailyVerse />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -156,6 +160,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
               </div>
               {billsList}
             </Popover>
+            <CashChip workspaceId={workspace.id} month={mp} />
             {goals.length > 0 && (
               <Popover icon={<Target className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={<>Goals {goals.length}</>}>
                 <p className="mb-2 text-xs font-bold text-slate-800 dark:text-slate-100">Goals</p>
@@ -174,10 +179,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
       <section aria-label="Budget summary" className="card grid overflow-hidden grid-cols-1 md:grid-cols-[1.3fr_1fr]">
         {/* Ready to assign */}
         <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 ${rta < 0 ? "bg-neg-soft/50" : "bg-pos-soft/60 dark:bg-pos-soft/10"}`}>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">{rta < 0 ? "Over-assigned" : "Ready to assign"}</span>
-            <span className={`nums text-2xl font-bold leading-tight tracking-tight ${rta < 0 ? "text-neg" : "text-pos"}`}>{formatCents(rta)}</span>
-          </div>
+          <ReadyAmount rtaCents={rta} />
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
             {flowOn ? (
               pflow ? <PersonalAssignButton workspaceId={workspace.id} month={mp} disabled={rta <= 0} /> : <AssignButton workspaceId={workspace.id} month={mp} disabled={rta <= 0} />
@@ -238,5 +240,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         <span className="nums">Totals this month — assigned {formatCents(summary.totalAssignedCents)} · activity {formatCents(summary.totalActivityCents)} · available {formatCents(summary.totalAvailableCents)}</span>
       </section>
     </div>
+    </CashLensProvider>
   );
 }

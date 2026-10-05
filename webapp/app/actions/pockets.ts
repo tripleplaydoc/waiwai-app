@@ -9,6 +9,7 @@ import { formatCents, parseToCents } from "@/lib/utils/currency";
 import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
 import { addMonthsUTC, startOfMonthUTC } from "@/lib/budget/dates";
 import { getCategoryAvailableBalance } from "@/lib/budget/category-balance";
+import { endOfMonth, fundRows, loadPools, moveRows, releaseRows } from "@/lib/budget/funding";
 import { bpsProblem, planAllocation, type AllocGroup } from "@/lib/budget/allocation";
 import { customKey, isCustomKey, isTypeKey, typesFor } from "@/lib/budget/expense-types";
 import type { ActionResult } from "./types";
@@ -185,8 +186,9 @@ async function removePockets(workspaceId: string, workspaceType: "PERSONAL" | "B
   const balances = await Promise.all(pockets.map((c) => getCategoryAvailableBalance(prisma, c.id, month)));
   const release = pockets.map((c, i) => ({ c, cents: balances[i] })).filter((x) => x.cents > 0);
   const live = pockets.map((c) => c.id);
+  const releaseRowsAll = (await Promise.all(release.map((x) => releaseRows(prisma, { workspaceId, categoryId: x.c.id, month, cents: x.cents, source: "CORRECTION", note: "Released back to Ready to assign (pocket deleted)" })))).flat();
   await prisma.$transaction([
-    ...release.map((x) => prisma.budgetAssignment.create({ data: { categoryId: x.c.id, month, amountCents: -x.cents, source: "CORRECTION", note: "Released back to Ready to assign (pocket deleted)" } })),
+    prisma.budgetAssignment.createMany({ data: releaseRowsAll }),
     prisma.category.updateMany({ where: { id: { in: live } }, data: { isArchived: true } }),
   ]);
   return { ok: true, releasedCents: release.reduce((s, x) => s + x.cents, 0) };
@@ -369,9 +371,8 @@ export async function applyAllocationAction(workspaceId: string, month: string, 
   if (!preview.ok) return preview;
   if (preview.lines.length === 0) return { ok: false, error: "Nothing to assign yet. Set percentages first." };
   const monthDate = new Date(`${month}-01T00:00:00.000Z`);
-  await prisma.budgetAssignment.createMany({
-    data: preview.lines.map((l) => ({ categoryId: l.id, month: monthDate, amountCents: l.cents, source: "AUTO_PERCENT" as const })),
-  });
+  const rows = await fundRows(prisma, workspaceId, endOfMonth(monthDate), preview.lines.map((l) => ({ categoryId: l.id, month: monthDate, amountCents: l.cents, source: "AUTO_PERCENT" as const })));
+  await prisma.budgetAssignment.createMany({ data: rows });
   revalidatePath("/budget");
   revalidatePath("/reports");
   return { ok: true, message: `Assigned across ${preview.lines.length} pocket${preview.lines.length === 1 ? "" : "s"}.` };
@@ -429,7 +430,7 @@ export async function setPaidAction(workspaceId: string, categoryId: string, mon
 }
 
 /** Adds money to a pocket from Ready to Assign (on top of what's already there). */
-export async function assignMoreAction(workspaceId: string, categoryId: string, month: string, amount: string): Promise<ActionResult> {
+export async function assignMoreAction(workspaceId: string, categoryId: string, month: string, amount: string, fromAccountId?: string): Promise<ActionResult> {
   await assertAuthed();
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
@@ -438,9 +439,20 @@ export async function assignMoreAction(workspaceId: string, categoryId: string, 
   const c = await prisma.category.findFirst({ where: { id: categoryId, workspaceId, isArchived: false } });
   if (!c || c.type === "INCOME") return { ok: false, error: "Pick a spending pocket." };
   const monthDate = new Date(`${m.data}-01T00:00:00.000Z`);
-  const rta = await getReadyToAssign(prisma, workspaceId, new Date(addMonthsUTC(monthDate, 1).getTime() - 1));
-  if (cents > rta) return { ok: false, error: `Only ${(Math.max(0, rta) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} is ready to assign.` };
-  await prisma.budgetAssignment.create({ data: { categoryId, month: monthDate, amountCents: cents, source: "MANUAL" } });
+  const asOf = endOfMonth(monthDate);
+  const rta = await getReadyToAssign(prisma, workspaceId, asOf);
+  const money = (n: number) => (Math.max(0, n) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+  if (cents > rta) return { ok: false, error: `Only ${money(rta)} is ready to assign.` };
+  let prefer: string | undefined;
+  if (fromAccountId) {
+    const acct = await prisma.account.findFirst({ where: { id: fromAccountId, workspaceId, onBudget: true, isArchived: false } });
+    if (!acct) return { ok: false, error: "Pick one of your accounts." };
+    const pool = (await loadPools(prisma, workspaceId, asOf)).get(acct.id) ?? 0;
+    if (cents > pool) return { ok: false, error: `${acct.name} only has ${money(pool)} ready to assign.` };
+    prefer = acct.id;
+  }
+  const rows = await fundRows(prisma, workspaceId, asOf, [{ categoryId, month: monthDate, amountCents: cents, source: "MANUAL" }], prefer);
+  await prisma.budgetAssignment.createMany({ data: rows });
   revalidatePath("/budget");
   revalidatePath("/reports");
   return { ok: true };
@@ -473,10 +485,8 @@ export async function moveMoneyAction(workspaceId: string, fromId: string, toId:
   if (cents > available) {
     return { ok: false, error: `${from.name} only has ${(Math.max(0, available) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} available.` };
   }
-  await prisma.$transaction([
-    prisma.budgetAssignment.create({ data: { categoryId: from.id, month: monthDate, amountCents: -cents, source: "MANUAL", note: `Moved to ${to.name}` } }),
-    prisma.budgetAssignment.create({ data: { categoryId: to.id, month: monthDate, amountCents: cents, source: "MANUAL", note: `Moved from ${from.name}` } }),
-  ]);
+  const rows = await moveRows(prisma, { workspaceId, fromId: from.id, toId: to.id, month: monthDate, cents, source: "MANUAL", noteFrom: `Moved to ${to.name}`, noteTo: `Moved from ${from.name}` });
+  await prisma.budgetAssignment.createMany({ data: rows });
   revalidatePath("/budget");
   revalidatePath("/reports");
   return { ok: true, message: `Moved to ${to.name}.` };

@@ -1,5 +1,6 @@
 "use server";
 
+import { endOfMonth, fundRows, moveRows } from "@/lib/budget/funding";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -69,9 +70,15 @@ export async function coverCardShortfallAction(_prev: ActionResult | undefined, 
     const src = summary.rows.find((r) => r.id === source && r.type !== "INCOME");
     if (!src || status.parts.some((p) => p.categoryId === src.id)) return { ok: false, error: "Pick a different pocket to take it from." };
     if (src.availableCents < total) return { ok: false, error: `${src.name} only has ${(Math.max(0, src.availableCents) / 100).toFixed(2)} available.` };
-    rows.push({ categoryId: src.id, amountCents: -total });
   }
-  await prisma.budgetAssignment.createMany({ data: rows.map((r) => ({ ...r, month, source: "MANUAL" as const, note: `Cover ${card.name}` })) });
+  const note = `Cover ${card.name}`;
+  let tagged;
+  if (source === "RTA") {
+    tagged = await fundRows(prisma, card.workspaceId, endOfMonth(month), rows.map((r) => ({ ...r, month, source: "MANUAL" as const, note })));
+  } else {
+    tagged = (await Promise.all(rows.map((r) => moveRows(prisma, { workspaceId: card.workspaceId, fromId: source, toId: r.categoryId, month, cents: r.amountCents, source: "MANUAL", noteFrom: note, noteTo: note })))).flat();
+  }
+  await prisma.budgetAssignment.createMany({ data: tagged });
   refresh(card.id);
   return { ok: true, message: "Covered. Your card is fully set aside." };
 }

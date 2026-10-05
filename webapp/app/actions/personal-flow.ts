@@ -1,5 +1,6 @@
 "use server";
 
+import { endOfMonth, fundRows } from "@/lib/budget/funding";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -104,9 +105,8 @@ export async function assignPersonalFlowAction(workspaceId: string, month: strin
   if (plan.moves.length === 0) return { ok: false, error: "Nothing to assign yet — each of Give, Save and Live needs at least one pocket." };
 
   const label = { GIVE: "Give", SAVE: "Save", LIVE: "Live" } as const;
-  await prisma.$transaction(
-    plan.moves.map((mv) => prisma.budgetAssignment.create({ data: { categoryId: mv.categoryId, month: md, amountCents: mv.cents, source: "WATERFALL", note: `Flow → ${label[mv.bucket]}` } }))
-  );
+  const flowRows = await fundRows(prisma, workspaceId, endOfMonth(md), plan.moves.map((mv) => ({ categoryId: mv.categoryId, month: md, amountCents: mv.cents, source: "WATERFALL" as const, note: `Flow → ${label[mv.bucket]}` })));
+  await prisma.budgetAssignment.createMany({ data: flowRows });
   const parts = vm.buckets.filter((b) => plan.totals[b.key] > 0).map((b) => `${formatCents(plan.totals[b.key])} ${b.label}`);
   const left = plan.leftoverCents > 0 ? ` ${formatCents(plan.leftoverCents)} stays in Ready to assign (a bucket has no pockets yet).` : "";
   revalidatePath("/budget");

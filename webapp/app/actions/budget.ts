@@ -7,6 +7,7 @@ import { assertAuthed } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
 import { getCategoryAssignedForMonth } from "@/lib/budget/category-balance";
 import { runWaterfallAutoAssign } from "@/lib/budget/waterfall";
+import { endOfMonth, fundRows, releaseRows } from "@/lib/budget/funding";
 import type { ActionResult } from "./types";
 
 const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
@@ -32,10 +33,12 @@ export async function setAssignedAction(formData: FormData): Promise<ActionResul
   const monthDate = new Date(`${month.data}-01T00:00:00.000Z`);
   const current = await getCategoryAssignedForMonth(prisma, category.id, monthDate);
   const delta = cents - current;
-  if (delta !== 0) {
-    await prisma.budgetAssignment.create({
-      data: { categoryId: category.id, month: monthDate, amountCents: delta, source: "MANUAL" },
-    });
+  if (delta > 0) {
+    const rows = await fundRows(prisma, category.workspaceId, endOfMonth(monthDate), [{ categoryId: category.id, month: monthDate, amountCents: delta, source: "MANUAL" }]);
+    await prisma.budgetAssignment.createMany({ data: rows });
+  } else if (delta < 0) {
+    const rows = await releaseRows(prisma, { workspaceId: category.workspaceId, categoryId: category.id, month: monthDate, cents: -delta, source: "MANUAL" });
+    await prisma.budgetAssignment.createMany({ data: rows });
   }
   revalidatePath("/budget");
   return { ok: true };

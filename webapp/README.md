@@ -88,3 +88,8 @@ The **Bills** chip on the Budget screen opens a month calendar (it follows the m
 
 ## Adding money to a pocket
 Tap a pocket's amount on the Budget screen to open **Pocket money**. **Add money** (the default tab) takes an amount from Ready to Assign and adds it on top of what's already assigned, showing the new assigned and available totals before you confirm; **All ready** fills in everything that's unassigned. The **Move money** tab moves money out of the pocket into another one.
+
+## Where's my cash (money tagged to bank accounts)
+Every dollar of Ready to Assign sits in a bank account: its starting balance, income recorded in it, and cash moved in from your other accounts. When you assign money to a pocket, that account tag goes with it (**Add money** lets you choose the account; automatic flows take from the account with the most ready cash). Moving money between pockets, releasing it and covering shortfalls all carry the tags along, and a purchase comes out of the account that paid for it first.
+
+The **Cash** chip on the Budget screen shows each account's real balance next to what your budget expects it to hold, with a plain-words note when they differ. Tap an account and the whole budget switches to that account's money: Ready to Assign and every pocket's amount show only what sits there. Money assigned before this existed is shown as "not tagged yet", with a one-tap way to say which account it is in.

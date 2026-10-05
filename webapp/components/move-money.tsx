@@ -68,9 +68,14 @@ export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, o
 }
 
 /** Add money to a pocket's assigned amount, taken from Ready to Assign. */
-export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initialId, onDone, onCancel }: {
+export interface FundingAccount { id: string; name: string; readyCents: number }
+
+export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initialId, accounts = [], initialAccountId = null, byPocket = {}, onDone, onCancel }: {
   workspaceId: string; month: string; pockets: MovePocket[]; readyToAssignCents: number; initialId?: string; onDone: () => void; onCancel: () => void;
+  /** Bank accounts with ready cash; the money added is tagged to the one chosen ("" = best match). */
+  accounts?: FundingAccount[]; initialAccountId?: string | null; byPocket?: Record<string, Record<string, number>>;
 }) {
+  const [acctId, setAcctId] = useState(initialAccountId && accounts.some((a) => a.id === initialAccountId) ? initialAccountId : "");
   const [id, setId] = useState(initialId && pockets.some((p) => p.id === initialId) ? initialId : pockets[0]?.id ?? "");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string>();
@@ -79,7 +84,9 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
   const groups = [...new Set(pockets.map((p) => p.group))];
   const cents = parseToCents(amount);
   const adding = cents !== null && cents > 0 ? cents : 0;
-  const ready = Math.max(0, readyToAssignCents);
+  const chosen = accounts.find((a) => a.id === acctId);
+  const ready = Math.max(0, chosen ? chosen.readyCents : readyToAssignCents);
+  const here = pocket ? byPocket[pocket.id] : undefined;
 
   return (
     <form
@@ -88,14 +95,14 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
         e.preventDefault();
         setError(undefined);
         start(async () => {
-          const r = await assignMoreAction(workspaceId, id, month, amount);
+          const r = await assignMoreAction(workspaceId, id, month, amount, acctId || undefined);
           if (r.ok) onDone(); else setError(r.error);
         });
       }}
     >
       <div className="rounded-xl bg-pos-soft px-3 py-2 text-sm">
-        <span className="text-slate-600 dark:text-slate-300">Ready to assign</span>{" "}
-        <span className="nums font-bold text-pos">{formatCents(readyToAssignCents)}</span>
+        <span className="text-slate-600 dark:text-slate-300">Ready to assign{chosen ? ` in ${chosen.name}` : ""}</span>{" "}
+        <span className="nums font-bold text-pos">{formatCents(chosen ? chosen.readyCents : readyToAssignCents)}</span>
       </div>
       <div>
         <label htmlFor="add-pocket" className="label">Add to</label>
@@ -105,6 +112,15 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
           ))}
         </select>
       </div>
+      {accounts.length > 0 && (
+        <div>
+          <label htmlFor="add-acct" className="label">Take it from</label>
+          <select id="add-acct" className="input" value={acctId} onChange={(e) => setAcctId(e.target.value)}>
+            <option value="">Best match ({formatCents(readyToAssignCents)} ready)</option>
+            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} — {formatCents(a.readyCents)} ready</option>)}
+          </select>
+        </div>
+      )}
       <div>
         <label htmlFor="add-amount" className="label">Amount to add</label>
         <div className="flex gap-2">
@@ -117,6 +133,9 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
             {adding > 0 && <> → <strong className="text-slate-800 dark:text-slate-100">{formatCents((pocket.assignedCents ?? 0) + adding)}</strong></>}
             {" · "}available {formatCents(pocket.availableCents)}{adding > 0 && <> → <strong className="text-slate-800 dark:text-slate-100">{formatCents(pocket.availableCents + adding)}</strong></>}
           </p>
+        )}
+        {here && Object.keys(here).length > 0 && (
+          <p className="nums mt-1 text-xs text-slate-500">Money in it now: {Object.entries(here).map(([k, n]) => `${accounts.find((a) => a.id === k)?.name ?? "Not tagged"} ${formatCents(n)}`).join(" · ")}</p>
         )}
         {adding > ready && <p className="mt-1 text-xs text-warn">That&apos;s more than the {formatCents(ready)} ready to assign.</p>}
       </div>

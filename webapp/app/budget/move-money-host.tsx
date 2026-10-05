@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRightLeft } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { AddForm, MoveForm, type MovePocket } from "@/components/move-money";
+import { useCashLens } from "./cash-lens";
 
 export const MOVE_EVENT = "waiwai:move-money";
 type Tab = "add" | "move";
@@ -14,6 +15,7 @@ export const openMoveMoney = (fromId?: string, tab: Tab = "move") => window.disp
 /** Button + modal host; any pocket's amount can also open it via openMoveMoney(). */
 export function MoveMoneyHost({ workspaceId, month, pockets, readyToAssignCents, hideButton }: { workspaceId: string; month: string; pockets: MovePocket[]; readyToAssignCents: number; hideButton?: boolean }) {
   const router = useRouter();
+  const { cash, account } = useCashLens();
   const [open, setOpen] = useState<{ fromId?: string; tab: Tab } | null>(null);
   useEffect(() => {
     const h = (e: Event) => { const d = (e as CustomEvent).detail ?? {}; setOpen({ fromId: d.fromId, tab: d.tab === "add" ? "add" : "move" }); };
@@ -32,7 +34,7 @@ export function MoveMoneyHost({ workspaceId, month, pockets, readyToAssignCents,
             <button type="button" role="tab" aria-selected={open.tab === "move"} className={tabCls(open.tab === "move")} onClick={() => setOpen({ ...open, tab: "move" })}>Move money</button>
           </div>
           {open.tab === "add"
-            ? <AddForm workspaceId={workspaceId} month={month} pockets={pockets} readyToAssignCents={readyToAssignCents} initialId={open.fromId} onCancel={() => setOpen(null)} onDone={done} />
+            ? <AddForm workspaceId={workspaceId} month={month} pockets={pockets} readyToAssignCents={readyToAssignCents} initialId={open.fromId} accounts={cash.accounts.map((a) => ({ id: a.id, name: a.name, readyCents: a.readyCents }))} initialAccountId={account} byPocket={cash.byPocket} onCancel={() => setOpen(null)} onDone={done} />
             : <MoveForm workspaceId={workspaceId} month={month} pockets={pockets} initialFromId={open.fromId} onCancel={() => setOpen(null)} onDone={done} />}
         </Modal>
       )}

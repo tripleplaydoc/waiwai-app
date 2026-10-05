@@ -15,6 +15,7 @@ import { archiveGroupAction, renameGroupAction, renamePocketAction, reorderActio
 import { InlineName } from "@/components/inline-name";
 import { typeLabel } from "@/lib/budget/expense-types";
 import { openMoveMoney } from "./move-money-host";
+import { useCashLens } from "./cash-lens";
 import { BillBadge, MarkPaidButton } from "./bill-controls";
 import { shortDate } from "@/lib/budget/bills";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
@@ -82,6 +83,9 @@ function PocketRowView({
   handleProps?: React.HTMLAttributes<HTMLButtonElement>;
 }) {
   const pr = p.progress;
+  const lens = useCashLens();
+  const lensName = lens.account ? lens.cash.accounts.find((a) => a.id === lens.account)?.name ?? null : null;
+  const shown = lensName && p.availableCents >= 0 ? lens.cash.byPocket[p.id]?.[lens.account!] ?? 0 : p.availableCents;
   const sub = [typeLabel(p.expenseType), p.bill && !overlay ? (p.bill.state === "paid" ? "Paid" : p.bill.state === "overdue" ? "Overdue" : `Due ${shortDate(p.bill.dueIso)}`) : null].filter(Boolean).join(" · ");
   return (
     <div className={`grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 border-t border-[#E2E8F0] bg-white px-3 py-2.5 md:items-center md:gap-x-3 md:py-3 ${COLS} dark:border-slate-800 dark:bg-slate-900 ${overlay ? "rounded-xl border shadow-xl" : ""}`}>
@@ -117,8 +121,8 @@ function PocketRowView({
         {p.isSystemManaged || overlay ? (
           <span className={`nums inline-block min-w-[5.5rem] rounded-full px-3 py-1.5 text-right text-[15px] font-semibold md:min-w-20 md:py-1 md:text-sm ${pill(p)}`}>{formatCents(p.availableCents)}</span>
         ) : (
-          <button type="button" onClick={() => openMoveMoney(p.id, "add")} title="Add money to this pocket, or move it" aria-label={`${p.name}: ${formatCents(p.availableCents)} available. Add or move money`}
-            className={`nums inline-block min-w-[5.5rem] cursor-pointer rounded-full px-3 py-1.5 text-right text-[15px] font-semibold hover:ring-2 hover:ring-water/40 md:min-w-20 md:py-1 md:text-sm ${pill(p)}`}>{formatCents(p.availableCents)}</button>
+          <button type="button" onClick={() => openMoveMoney(p.id, "add")} title={lensName ? `${lensName}'s share of ${p.name}. Tap to add or move money.` : "Add money to this pocket, or move it"} aria-label={`${p.name}: ${formatCents(shown)} ${lensName ? `in ${lensName}` : "available"}. Add or move money`}
+            className={`nums inline-block min-w-[5.5rem] cursor-pointer rounded-full px-3 py-1.5 text-right text-[15px] font-semibold hover:ring-2 hover:ring-water/40 md:min-w-20 md:py-1 md:text-sm ${lensName && p.availableCents >= 0 ? (shown > 0 ? "bg-blue-50 text-[#1E4FBF] dark:bg-blue-950 dark:text-blue-300" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400") : pill(p)}`}>{formatCents(shown)}</button>
         )}
       </div>
 

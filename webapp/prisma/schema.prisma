@@ -415,6 +415,7 @@ model Account {
   holdingDetail         HoldingDetail?       @relation("HoldingDetailOwner")
   holdingPositions      HoldingPosition[]
   securedByThis         HoldingDetail[]      @relation("HoldingDetailLoan")
+  fundedAssignments     BudgetAssignment[]   @relation("AssignmentFunding")
   importBatches         ImportBatch[]
   taxPaymentsSourced     TaxPayment[]
 
@@ -680,11 +681,18 @@ model BudgetAssignment {
   waterfallRunId String?
   waterfallRun   WaterfallRun? @relation(fields: [waterfallRunId], references: [id], onDelete: SetNull)
 
+  /// The bank account this money was tagged to when it arrived as income. The tag rides along
+  /// when money is assigned, moved between pockets or released back to Ready to assign.
+  /// Null = money assigned before accounts were tracked (shown as "not tagged yet").
+  fundingAccountId String?
+  fundingAccount   Account? @relation("AssignmentFunding", fields: [fundingAccountId], references: [id], onDelete: SetNull)
+
   note      String?
   createdAt DateTime @default(now())
 
   @@index([categoryId, month])
   @@index([waterfallRunId])
+  @@index([fundingAccountId])
   @@map("budget_assignments")
 }
 
