@@ -59,9 +59,22 @@ export async function loadLoans(workspaceId: string, monthIso: string, rows: Env
       const p = a.loanPocket;
       if (st.phase === "finished" && !p.isArchived) await prisma.category.update({ where: { id: p.id }, data: { isArchived: true } });
       else if (st.phase !== "finished" && !p.isArchived) {
-        const want = st.phase === "upcoming" ? 0 : pay;
-        const wantDue = st.phase === "upcoming" ? null : +first.slice(8, 10); // no due date (so no bill) before the first payment's month
-        if (p.fundingTargetCents !== want || p.dueDay !== wantDue) await prisma.category.update({ where: { id: p.id }, data: { fundingTargetType: "MONTHLY_FUNDING", fundingTargetCents: want, dueDay: wantDue } });
+        // A loan whose first payment is next month was paid up for this month before it was entered here: show the payment and
+        // due date now, with this month marked paid. Further out than that, nothing is due yet, so no target or due date.
+        const nextMonth = new Date(Date.UTC(+monthIso.slice(0, 4), +monthIso.slice(5, 7), 1)).toISOString().slice(0, 7);
+        const paidUp = st.phase === "upcoming" && first.slice(0, 7) === nextMonth;
+        const showTerms = st.phase !== "upcoming" || paidUp;
+        const want = showTerms ? pay : 0;
+        const wantDue = showTerms ? +first.slice(8, 10) : null;
+        if (p.fundingTargetCents !== want || p.dueDay !== wantDue) {
+          await prisma.category.update({ where: { id: p.id }, data: { fundingTargetType: "MONTHLY_FUNDING", fundingTargetCents: want, dueDay: wantDue } });
+          if (paidUp) {
+            const month = new Date(`${monthIso}-01T00:00:00.000Z`);
+            await prisma.billPayment.upsert({ where: { categoryId_month: { categoryId: p.id, month } }, update: {}, create: { categoryId: p.id, month } });
+          }
+          // the board is drawn from these same rows, so show the change on this load
+          if (row) { row.targetType = "MONTHLY_FUNDING"; row.targetCents = want; row.dueDay = wantDue; if (paidUp) row.manualPaid = true; }
+        }
       }
     }
   }

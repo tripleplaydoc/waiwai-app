@@ -190,3 +190,6 @@ Past years live in their **own tables** (`historical_transactions`, `history_acc
 - Estimated tax payments still just spend from a tax pocket, so reports count them as tax payments as before.
 - **Combine into one reserve** moves everything back and retires the extra pockets (blocked while one is overspent).
 - No schema change: a split pocket is an app-managed pocket that is "paid from" one account (`lib/budget/tax-split.ts`).
+
+### Loans already paid up this month
+If a loan's first payment in the app is **next month** (because this month's was paid before you entered it), its pocket now shows the monthly payment and due day right away, with this month marked paid. Loans starting further out still show nothing until their first payment month.
