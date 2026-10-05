@@ -7,6 +7,7 @@ import { todayIso } from "@/lib/utils/dates";
 import { loadCardStatuses } from "@/lib/budget/cards";
 import { startOfMonthUTC } from "@/lib/budget/dates";
 import { isoToDate } from "@/lib/utils/dates";
+import { inDays } from "@/lib/cycle";
 import { AddAccountButton } from "./add-account";
 import { EditAccountButton } from "./edit-account";
 import { dateToIso } from "@/lib/utils/dates";
@@ -54,7 +55,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-function AccountTable({ title, rows, wsQ, footer, cards }: { title: string; rows: Awaited<ReturnType<typeof getAccountBalances>>; wsQ: string; footer?: string; cards?: Map<string, { owedCents: number; shortCents: number }> }) {
+function AccountTable({ title, rows, wsQ, footer, cards }: { title: string; rows: Awaited<ReturnType<typeof getAccountBalances>>; wsQ: string; footer?: string; cards?: Map<string, { owedCents: number; shortCents: number; nextDue: { days: number } | null }> }) {
   return (
     <section className="card overflow-hidden">
       <h2 className="border-b border-[#E2E8F0] bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">{title}</h2>
@@ -68,6 +69,7 @@ function AccountTable({ title, rows, wsQ, footer, cards }: { title: string; rows
                 {cards?.get(a.id) && (() => { const c = cards.get(a.id)!; return c.owedCents === 0 ? null : c.shortCents > 0
                   ? <div className="nums text-xs font-medium text-neg">{formatCents(c.shortCents)} short: not set aside yet</div>
                   : <div className="text-xs font-medium text-pos">All set aside ✓</div>; })()}
+                {cards?.get(a.id) && cards.get(a.id)!.owedCents > 0 && cards.get(a.id)!.nextDue && (() => { const d = cards.get(a.id)!.nextDue!.days; return <div className={`text-xs ${d <= 5 ? "font-semibold text-warn" : "text-slate-500"}`}>Payment due {inDays(d)}</div>; })()}
               </td>
               <td className={`td nums text-right font-medium ${a.balanceCents < 0 ? "text-[#C9372C]" : ""}`}>{formatCents(a.balanceCents)}</td>
               <td className="td w-12 !pl-0 text-right">

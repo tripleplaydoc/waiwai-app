@@ -1,0 +1,15 @@
+import { nextDayOfMonth, shortDate, inDays } from "./cycle";
+let failed = 0;
+const eq = (n: string, a: unknown, b: unknown) => { const ok = JSON.stringify(a) === JSON.stringify(b); if (!ok) { failed++; console.error(`FAIL ${n}\n  got ${JSON.stringify(a)}\n  exp ${JSON.stringify(b)}`); } else console.log(`ok   ${n}`); };
+eq("later this month", nextDayOfMonth(20, "2026-10-04"), { iso: "2026-10-20", days: 16 });
+eq("today counts", nextDayOfMonth(4, "2026-10-04"), { iso: "2026-10-04", days: 0 });
+eq("already passed -> next month", nextDayOfMonth(2, "2026-10-04"), { iso: "2026-11-02", days: 29 });
+eq("year rollover", nextDayOfMonth(5, "2026-12-20"), { iso: "2027-01-05", days: 16 });
+eq("31st clamps in a 30-day month", nextDayOfMonth(31, "2026-11-10"), { iso: "2026-11-30", days: 20 });
+eq("31st after Feb rolls to Feb 28", nextDayOfMonth(31, "2027-01-31").iso, "2027-01-31");
+eq("30th in February clamps", nextDayOfMonth(30, "2027-02-10"), { iso: "2027-02-28", days: 18 });
+eq("leap February", nextDayOfMonth(31, "2028-02-10").iso, "2028-02-29");
+eq("passed clamp day rolls over", nextDayOfMonth(31, "2026-11-30").iso, "2026-11-30");
+eq("label", shortDate("2026-10-09"), "Oct 9");
+eq("in days", [inDays(0), inDays(1), inDays(5)], ["today", "tomorrow", "in 5 days"]);
+if (failed) process.exit(1); else console.log("all cycle tests passed");

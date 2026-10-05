@@ -465,6 +465,10 @@ model HoldingDetail {
   originalAmountCents Int?
   loanStartDate       DateTime? @db.Date
 
+  /// Credit cards: day of the month the statement closes / the payment is due.
+  statementDay Int?
+  dueDay       Int?
+
   /// Vehicles.
   vin          String?
   vehicleYear  Int?

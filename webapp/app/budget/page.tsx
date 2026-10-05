@@ -38,6 +38,7 @@ function Meter({ value, tone }: { value: number; tone: "pos" | "warn" | "neg" | 
 }
 
 import { loadCardStatuses } from "@/lib/budget/cards";
+import { inDays, shortDate as cycleDate } from "@/lib/cycle";
 
 export default async function BudgetPage({ searchParams }: { searchParams: SP }) {
   await requireAuth();
@@ -55,7 +56,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
     prisma.categoryGroup.findMany({ where: { workspaceId: workspace.id, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
 
-  const cardsShort = (await loadCardStatuses(workspace.id, month)).filter((c) => c.shortCents > 0);
+  const cardStatuses = await loadCardStatuses(workspace.id, month);
+  const cardsShort = cardStatuses.filter((c) => c.shortCents > 0);
+  const cardsDue = cardStatuses.filter((c) => c.owedCents > 0 && c.nextDue && c.nextDue.days <= 5);
   const isPersonal = workspace.type === "PERSONAL";
   const { vm: flow } = await loadFlow(workspace.id, month, summary.rows);
   const pflow = isPersonal ? (await loadPersonalFlow(workspace.id, month, summary.rows)).vm : null;
@@ -221,6 +224,11 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
       {cardsShort.map((c) => (
         <Link key={c.id} href={`/accounts/${c.id}${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-red-300 bg-neg-soft px-3 py-2 text-xs font-medium text-neg dark:border-red-800">
           {c.name} is {formatCents(c.shortCents)} short: money spent on it isn&apos;t set aside yet. Tap to fix.
+        </Link>
+      ))}
+      {cardsDue.map((c) => (
+        <Link key={`due-${c.id}`} href={`/accounts/${c.id}${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-amber-300 bg-warn-soft px-3 py-2 text-xs font-medium text-warn dark:border-amber-700">
+          {c.name} payment is due {inDays(c.nextDue!.days)} ({cycleDate(c.nextDue!.iso)}). You owe {formatCents(c.owedCents)}.
         </Link>
       ))}
       {needsReview > 0 && (

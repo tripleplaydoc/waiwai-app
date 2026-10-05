@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { addMonthsUTC } from "@/lib/budget/dates";
 import { getBudgetSummary } from "@/lib/budget/summary";
+import { nextDayOfMonth } from "@/lib/cycle";
+import { todayIso } from "@/lib/utils/dates";
 import { computeCardShortfalls, type ShortPart } from "@/lib/budget/cards-math";
 
 export interface CardStatus {
@@ -17,6 +19,11 @@ export interface CardStatus {
   uncategorizedCents: number;
   aprBps: number | null;
   minPaymentCents: number;
+  statementDay: number | null;
+  dueDay: number | null;
+  /** Next statement closing / payment due dates (ISO) and days away, from today. */
+  nextStatement: { iso: string; days: number } | null;
+  nextDue: { iso: string; days: number } | null;
 }
 
 /** Status of every on-budget credit card in a workspace, as of the end of `month`. */
@@ -48,9 +55,16 @@ export async function loadCardStatuses(workspaceId: string, month: Date): Promis
   }
   const pockets = summary.rows.filter((r) => r.type !== "INCOME").map((r) => ({ id: r.id, name: r.name, availableCents: r.availableCents }));
   const short = computeCardShortfalls({ pockets, spend, uncategorized, owedCents: owed });
-  return cards.map((c) => ({
+  const today = todayIso();
+  return cards.map((c) => {
+    const det = details.find((d) => d.accountId === c.id);
+    return {
     id: c.id, name: c.name, owedCents: owed[c.id], shortCents: short[c.id].shortCents, setAsideCents: owed[c.id] - short[c.id].shortCents,
     parts: short[c.id].parts, uncategorizedCents: short[c.id].uncategorizedCents,
-    aprBps: details.find((d) => d.accountId === c.id)?.interestRateBps ?? null, minPaymentCents: c.monthlyCashflowCents ?? 0,
-  }));
+    aprBps: det?.interestRateBps ?? null, minPaymentCents: c.monthlyCashflowCents ?? 0,
+    statementDay: det?.statementDay ?? null, dueDay: det?.dueDay ?? null,
+    nextStatement: det?.statementDay ? nextDayOfMonth(det.statementDay, today) : null,
+    nextDue: det?.dueDay ? nextDayOfMonth(det.dueDay, today) : null,
+    };
+  });
 }

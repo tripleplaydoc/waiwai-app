@@ -7,6 +7,7 @@ import { Modal } from "@/components/modal";
 import { coverCardShortfallAction, payCardAction, saveCardTermsAction } from "@/app/actions/cards";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
 import type { CardStatus } from "@/lib/budget/cards";
+import { inDays, shortDate } from "@/lib/cycle";
 
 const Msg = ({ s }: { s: { ok: boolean; message?: string; error?: string } | undefined }) =>
   !s ? null : s.ok ? (s.message ? <p role="status" className="text-sm text-pos">{s.message}</p> : null) : <p role="alert" className="text-sm text-[#C9372C]">{s.error}</p>;
@@ -83,20 +84,42 @@ export function CardPanel({ card, payFrom, pockets, today, wsQ }: { card: CardSt
             {card.uncategorizedCents > 0 && <p className="pl-6 text-xs text-slate-600 dark:text-slate-300">{formatCents(card.uncategorizedCents)} of card spending has no pocket yet. Pick one for those transactions below.</p>}
           </div>
         )}
+        {(card.nextDue || card.nextStatement) && (
+          <div className="grid grid-cols-2 gap-3 text-center">
+            {card.nextStatement && (
+              <div className="rounded-xl border border-[#E2E8F0] px-2 py-2 dark:border-slate-700">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Statement closes</div>
+                <div className="nums text-base font-bold">{shortDate(card.nextStatement.iso)}</div>
+                <div className="text-[11px] text-slate-500">{inDays(card.nextStatement.days)}</div>
+              </div>
+            )}
+            {card.nextDue && (() => { const soon = card.owedCents > 0 && card.nextDue.days <= 5; return (
+              <div className={`rounded-xl border px-2 py-2 ${soon ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30" : "border-[#E2E8F0] dark:border-slate-700"}`}>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Payment due</div>
+                <div className="nums text-base font-bold">{shortDate(card.nextDue.iso)}</div>
+                <div className={`text-[11px] ${soon ? "font-semibold text-warn" : "text-slate-500"}`}>{inDays(card.nextDue.days)}</div>
+              </div>
+            ); })()}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn btn-primary" onClick={() => setDlg("pay")} disabled={payFrom.length === 0}>Pay card</button>
           {card.parts.length > 0 && <button type="button" className="btn" onClick={() => setDlg("cover")}>Cover the {formatCents(card.parts.reduce((s, p) => s + p.cents, 0))}</button>}
           {card.owedCents > 0 && <Link href={`/holdings/payoff${wsQ}`} className="btn">Payoff plan</Link>}
         </div>
         <details className="rounded-xl border border-[#E2E8F0] dark:border-slate-700">
-          <summary className="cursor-pointer px-3 py-3 text-sm font-semibold">Interest rate &amp; minimum payment{card.aprBps != null ? ` · ${card.aprBps / 100}%` : ""}</summary>
+          <summary className="cursor-pointer px-3 py-3 text-sm font-semibold">Dates, interest rate &amp; minimum payment{card.aprBps != null ? ` · ${card.aprBps / 100}%` : ""}</summary>
           <form action={termsAction} className="space-y-3 px-3 pb-3">
             <input type="hidden" name="cardId" value={card.id} />
+            <div className="grid grid-cols-2 gap-3">
+              <div><label htmlFor="card-stmt" className="label">Statement closes on day</label><input id="card-stmt" name="statementDay" inputMode="numeric" maxLength={2} defaultValue={card.statementDay ?? ""} className="input nums" placeholder="15" /></div>
+              <div><label htmlFor="card-due" className="label">Payment due on day</label><input id="card-due" name="dueDay" inputMode="numeric" maxLength={2} defaultValue={card.dueDay ?? ""} className="input nums" placeholder="10" /></div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><label htmlFor="card-rate" className="label">Interest rate (% per year)</label><input id="card-rate" name="rate" inputMode="decimal" defaultValue={card.aprBps != null ? String(card.aprBps / 100) : ""} className="input nums" placeholder="24.99" /></div>
               <div><label htmlFor="card-min" className="label">Minimum payment</label><input id="card-min" name="payment" inputMode="decimal" defaultValue={card.minPaymentCents ? centsToInput(card.minPaymentCents) : ""} className="input nums" placeholder="0.00" /></div>
             </div>
-            <p className="text-xs text-slate-500">Used by the Debt payoff plan. When interest is charged, add it as spending in the “Interest &amp; fees” pocket so you can see what the debt costs.</p>
+            <p className="text-xs text-slate-500">Day of the month, 1 to 31 (your statement shows both). The rate and payment are used by the Debt payoff plan. When interest is charged, add it as spending in the “Interest &amp; fees” pocket so you can see what the debt costs.</p>
             <div className="flex items-center gap-3"><button type="submit" className="btn" disabled={termsPending}>{termsPending ? "Saving…" : "Save"}</button><Msg s={terms} /></div>
           </form>
         </details>

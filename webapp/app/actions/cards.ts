@@ -87,8 +87,18 @@ export async function saveCardTermsAction(_prev: ActionResult | undefined, formD
   const pay = payText ? parseToCents(payText) : null;
   if (payText && (pay === null || pay < 0)) return { ok: false, error: "Minimum payment must be an amount like 35.00." };
   const bps = rateText === null ? null : Math.round(Number(rateText) * 100);
+  const dayOf = (k: string, label: string): { day: number | null } | { error: string } => {
+    const t = blank(formData.get(k));
+    if (t === null) return { day: null };
+    const n = Number(t);
+    return Number.isInteger(n) && n >= 1 && n <= 31 ? { day: n } : { error: `${label} should be a day of the month, 1 to 31.` };
+  };
+  const stmt = dayOf("statementDay", "Statement date"), due = dayOf("dueDay", "Due date");
+  if ("error" in stmt) return { ok: false, error: stmt.error };
+  if ("error" in due) return { ok: false, error: due.error };
+  const fields = { interestRateBps: bps, statementDay: stmt.day, dueDay: due.day };
   await prisma.$transaction([
-    prisma.holdingDetail.upsert({ where: { accountId: card.id }, create: { accountId: card.id, interestRateBps: bps }, update: { interestRateBps: bps } }),
+    prisma.holdingDetail.upsert({ where: { accountId: card.id }, create: { accountId: card.id, ...fields }, update: fields }),
     prisma.account.update({ where: { id: card.id }, data: { monthlyCashflowCents: pay } }),
   ]);
   if (bps && bps > 0) await ensureInterestPocket(card.workspaceId);
