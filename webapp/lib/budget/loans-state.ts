@@ -3,12 +3,19 @@ import { prisma } from "@/lib/prisma";
 import { loanStatus } from "@/lib/loans";
 import { dateToIso } from "@/lib/utils/dates";
 import type { EnvelopeRow } from "./summary";
-import type { LoanVM } from "./loans-types";
+import { holdingOf, holdingSide } from "@/lib/holdings";
+import type { AssetChoice, LoanVM } from "./loans-types";
 
 /**
  * Every loan account in the workspace with where it stands this month. Loans that have terms and a budget pocket also keep
  * that pocket in step with the schedule: no target before the first payment, archived after the last.
  */
+/** Hand-valued assets in the workspace that a loan can be secured by (car, home, boat…). */
+export async function loadAssetChoices(workspaceId: string): Promise<AssetChoice[]> {
+  const accts = await prisma.account.findMany({ where: { workspaceId, isArchived: false, balanceMode: "MANUAL" }, include: { holdingDetail: { include: { linkedLoan: { select: { name: true } } } } }, orderBy: { name: "asc" } });
+  return accts.filter((a) => holdingSide(holdingOf(a)) === "ASSET").map((a) => ({ id: a.id, name: a.name, otherLoan: a.holdingDetail?.linkedLoan?.name ?? null }));
+}
+
 export async function loadLoans(workspaceId: string, monthIso: string, rows: EnvelopeRow[], syncPockets: boolean): Promise<LoanVM[]> {
   const accounts = await prisma.account.findMany({
     where: { workspaceId, type: "LOAN", isArchived: false },
@@ -16,6 +23,11 @@ export async function loadLoans(workspaceId: string, monthIso: string, rows: Env
     orderBy: { name: "asc" },
   });
   const byId = new Map(rows.map((r) => [r.id, r]));
+  const secured = await prisma.holdingDetail.findMany({
+    where: { linkedLoanId: { in: accounts.map((a) => a.id) } },
+    include: { account: { include: { manualBalanceEntries: { orderBy: { asOfDate: "desc" }, take: 1 } } } },
+  });
+  const securedBy = new Map(secured.filter((h) => !h.account.isArchived).map((h) => [h.linkedLoanId!, { id: h.account.id, name: h.account.name, valueCents: Math.max(0, h.account.manualBalanceEntries[0]?.balanceCents ?? 0) }]));
   const out: LoanVM[] = [];
   for (const a of accounts) {
     const d = a.holdingDetail;
@@ -24,7 +36,7 @@ export async function loadLoans(workspaceId: string, monthIso: string, rows: Env
     const first = d?.firstPaymentDate ? dateToIso(d.firstPaymentDate) : null;
     const n = d?.termMonths ?? null;
     const owed = Math.max(0, -(a.manualBalanceEntries[0]?.balanceCents ?? 0));
-    const base = { accountId: a.id, name: a.name, paymentCents: pay, numPayments: n, firstDueIso: first, aprBps: d?.interestRateBps ?? 0, originalCents: d?.originalAmountCents ?? 0, groupId: pocket?.categoryGroupId ?? null, paidFromId: pocket?.paidFromAccountId ?? null, balanceOwedCents: owed };
+    const base = { accountId: a.id, name: a.name, paymentCents: pay, numPayments: n, firstDueIso: first, aprBps: d?.interestRateBps ?? 0, originalCents: d?.originalAmountCents ?? 0, groupId: pocket?.categoryGroupId ?? null, paidFromId: pocket?.paidFromAccountId ?? null, balanceOwedCents: owed, securedBy: securedBy.get(a.id) ?? null };
     if (!first || !n || pay <= 0) {
       out.push({ ...base, onBudget: false, paymentsDone: 0, paymentsLeft: n ?? 0, nextDueIso: null, lastDueIso: null, phase: "unset", remainingCents: 0, paidThisMonth: false, overdue: false });
       continue;

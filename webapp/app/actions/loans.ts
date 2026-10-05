@@ -7,6 +7,7 @@ import { assertAuthed } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
 import { isoToDate, todayIso } from "@/lib/utils/dates";
 import { balanceAfter, loanStatus, suggestPayment } from "@/lib/loans";
+import { holdingOf, holdingSide } from "@/lib/holdings";
 import type { ActionResult } from "./types";
 
 const schema = z.object({
@@ -20,6 +21,7 @@ const schema = z.object({
   rate: z.string().optional(),
   groupId: z.string().optional(),
   paidFromId: z.string().optional(),
+  securedById: z.string().optional(),
 });
 
 /** Creates a loan (or adds terms to an existing loan account) and puts its payment on the budget as a monthly bill. */
@@ -70,6 +72,13 @@ export async function saveLoanAction(_prev: ActionResult | undefined, formData: 
     }
   }
 
+  let securedAssetId: string | null = null;
+  if (d.securedById) {
+    const asset = await prisma.account.findFirst({ where: { id: d.securedById, workspaceId: d.workspaceId, isArchived: false } });
+    if (!asset || holdingSide(holdingOf(asset)) !== "ASSET") return { ok: false, error: "Pick one of your assets (car, home…) to tie this loan to." };
+    securedAssetId = asset.id;
+  }
+
   const terms = { paymentCents: pay, numPayments: n, firstDueIso: d.firstDue, aprBps, originalCents };
   const day = +d.firstDue.slice(8, 10);
   const today = todayIso();
@@ -98,6 +107,9 @@ export async function saveLoanAction(_prev: ActionResult | undefined, formData: 
       const top = await tx.category.aggregate({ where: { workspaceId: d.workspaceId, categoryGroupId: groupId }, _max: { sortOrder: true } });
       await tx.category.create({ data: { workspaceId: d.workspaceId, type: "EXPENSE", loanAccountId: account.id, sortOrder: (top._max.sortOrder ?? 0) + 1, ...pocketData } });
     }
+    // Tie the loan to the asset it is secured by: the asset's detail points at the loan (equity = value − owed).
+    await tx.holdingDetail.updateMany({ where: { linkedLoanId: account.id, ...(securedAssetId ? { accountId: { not: securedAssetId } } : {}) }, data: { linkedLoanId: null } });
+    if (securedAssetId) await tx.holdingDetail.upsert({ where: { accountId: securedAssetId }, create: { accountId: securedAssetId, linkedLoanId: account.id }, update: { linkedLoanId: account.id } });
     return account.id;
   });
   void result;

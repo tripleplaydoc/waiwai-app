@@ -14,7 +14,7 @@ import { AssignButton, FlowPanel } from "./flow-controls";
 import { PersonalAssignButton, PersonalFlowPanel } from "./personal-flow-controls";
 import { loadPersonalFlow } from "@/lib/budget/personal-flow-state";
 import { loadFlow } from "@/lib/budget/waterfall-state";
-import { loadLoans } from "@/lib/budget/loans-state";
+import { loadAssetChoices, loadLoans } from "@/lib/budget/loans-state";
 import { LoansPanel } from "./loans-panel";
 import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
@@ -68,6 +68,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const pflow = isPersonal ? (await loadPersonalFlow(workspace.id, month, summary.rows)).vm : null;
   const flowOn = pflow ? pflow.enabled : flow.enabled;
   const today = todayIso();
+  const assetChoices = await loadAssetChoices(workspace.id);
   const loans = await loadLoans(workspace.id, mp, summary.rows, mp === today.slice(0, 7));
   const rta = summary.readyToAssignCents;
   const expenseRows = summary.rows.filter((r) => r.type !== "INCOME");
@@ -168,7 +169,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
               icon={<Landmark className="size-3.5 text-[#2E6BE6]" aria-hidden />}
               label={loans.filter((l) => l.onBudget && l.phase !== "finished").length > 0 ? <>Loans {loans.filter((l) => l.onBudget && l.phase !== "finished").length}{loans.some((l) => l.overdue) && <span className="rounded-full bg-neg-soft px-1.5 text-neg">overdue</span>}</> : loans.some((l) => !l.onBudget && l.phase === "unset") ? <>Loans <span className="rounded-full bg-warn-soft px-1.5 text-warn">set up</span></> : "Loans"}
             >
-              <LoansPanel workspaceId={workspace.id} loans={loans} groups={allGroups} defaultGroupId={flow.opexGroupId && allGroups.some((g) => g.id === flow.opexGroupId) ? flow.opexGroupId : "__new"} banks={cash.accounts.map((a) => ({ id: a.id, name: a.name }))} />
+              <LoansPanel workspaceId={workspace.id} loans={loans} groups={allGroups} defaultGroupId={flow.opexGroupId && allGroups.some((g) => g.id === flow.opexGroupId) ? flow.opexGroupId : "__new"} banks={cash.accounts.map((a) => ({ id: a.id, name: a.name }))} assets={assetChoices} />
             </Popover>
             {goals.length > 0 && (
               <Popover icon={<Target className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={<>Goals {goals.length}</>}>

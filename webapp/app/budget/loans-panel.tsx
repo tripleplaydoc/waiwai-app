@@ -8,12 +8,12 @@ import { removeLoanFromBudgetAction, saveLoanAction } from "@/app/actions/loans"
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 import { loanDueIso, suggestPayment } from "@/lib/loans";
 import { shortDate } from "@/lib/budget/bills";
-import type { LoanVM } from "@/lib/budget/loans-types";
+import type { AssetChoice, LoanVM } from "@/lib/budget/loans-types";
 
 type Group = { id: string; name: string };
 type Bank = { id: string; name: string };
 
-function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, banks }: { open: boolean; onClose: () => void; workspaceId: string; loan: LoanVM | null; groups: Group[]; defaultGroupId: string; banks: Bank[] }) {
+function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, banks, assets }: { open: boolean; onClose: () => void; workspaceId: string; loan: LoanVM | null; groups: Group[]; defaultGroupId: string; banks: Bank[]; assets: AssetChoice[] }) {
   const router = useRouter();
   const [state, action, pending] = useActionState(saveLoanAction, undefined);
   const [name, setName] = useState(loan?.name ?? "");
@@ -66,6 +66,16 @@ function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, 
           <input id="ln-first" name="firstDue" type="date" required className="input" value={first} onChange={(e) => setFirst(e.target.value)} />
           <p className="mt-1 text-xs text-slate-500">Later payments fall on the same day each month. For a loan you already started, use its original first due date and the paid-off payments are counted for you.</p>
         </div>
+        {assets.length > 0 && (
+          <div>
+            <label htmlFor="ln-asset" className="label">Secured by <span className="font-normal text-slate-400">(car, home… anything you could sell)</span></label>
+            <select id="ln-asset" name="securedById" className="input" defaultValue={loan?.securedBy?.id ?? ""}>
+              <option value="">Nothing, this loan isn&apos;t tied to an asset</option>
+              {assets.map((a) => <option key={a.id} value={a.id}>{a.name}{a.otherLoan && a.otherLoan !== loan?.name ? ` (now tied to ${a.otherLoan})` : ""}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">Tying them shows your equity (what it&apos;s worth minus what you owe) on the asset and in net worth. Add the car, home or other asset under Assets &amp; liabilities first if it isn&apos;t listed.</p>
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="ln-group" className="label">Budget category</label>
@@ -114,7 +124,7 @@ function dueText(l: LoanVM): string {
 }
 
 /** The budget's Loans panel: every loan with its payment, due date and payments left, plus add / set up. */
-export function LoansPanel({ workspaceId, loans, groups, defaultGroupId, banks }: { workspaceId: string; loans: LoanVM[]; groups: Group[]; defaultGroupId: string; banks: Bank[] }) {
+export function LoansPanel({ workspaceId, loans, groups, defaultGroupId, banks, assets }: { workspaceId: string; loans: LoanVM[]; groups: Group[]; defaultGroupId: string; banks: Bank[]; assets: AssetChoice[] }) {
   const [dialog, setDialog] = useState<{ loan: LoanVM | null } | null>(null);
   const live = loans.filter((l) => l.onBudget && l.phase !== "finished");
   const done = loans.filter((l) => l.phase === "finished");
@@ -139,6 +149,12 @@ export function LoansPanel({ workspaceId, loans, groups, defaultGroupId, banks }
               </div>
               <button type="button" className="btn btn-sm !px-2" aria-label={`Edit ${l.name}`} onClick={() => setDialog({ loan: l })}><Pencil className="size-3.5" aria-hidden /></button>
             </div>
+            {l.securedBy && (
+              <p className="nums mt-1 text-[11px] text-slate-500">
+                Secured by <strong className="font-semibold text-slate-700 dark:text-slate-200">{l.securedBy.name}</strong> · worth {formatCents(l.securedBy.valueCents)} · equity{" "}
+                <span className={l.securedBy.valueCents - l.balanceOwedCents < 0 ? "font-semibold text-neg" : "font-semibold text-pos"}>{formatCents(l.securedBy.valueCents - l.balanceOwedCents)}</span>
+              </p>
+            )}
             <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="presentation">
               <div className="h-full rounded-full bg-pos" style={{ width: `${Math.round((l.paymentsDone / Math.max(1, l.numPayments ?? 1)) * 100)}%` }} />
             </div>
@@ -167,7 +183,7 @@ export function LoansPanel({ workspaceId, loans, groups, defaultGroupId, banks }
         </div>
       )}
       {done.length > 0 && <p className="mt-2 text-xs text-slate-500">{done.length} paid off: {done.map((l) => l.name).join(", ")}</p>}
-      {dialog && <LoanDialog key={dialog.loan?.accountId ?? "new"} open onClose={() => setDialog(null)} workspaceId={workspaceId} loan={dialog.loan} groups={groups} defaultGroupId={defaultGroupId} banks={banks} />}
+      {dialog && <LoanDialog key={dialog.loan?.accountId ?? "new"} open onClose={() => setDialog(null)} workspaceId={workspaceId} loan={dialog.loan} groups={groups} defaultGroupId={defaultGroupId} banks={banks} assets={assets} />}
     </div>
   );
 }
