@@ -86,6 +86,20 @@ export function CardPanel({ card, payFrom, pockets, today, wsQ }: { card: CardSt
           </div>
         )}
         <CreditMeter owedCents={card.owedCents} limitCents={card.limitCents} />
+        {card.owedCents > 0 && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs dark:border-indigo-900 dark:bg-indigo-950/40">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">Payment plan</div>
+            {card.nextStatement && card.plan.payByIso ? (
+              <ol className="list-decimal space-y-1 pl-4 text-slate-700 dark:text-slate-200">
+                {card.plan.payDownCents > 0
+                  ? <li><strong>{card.plan.payByDays! <= 0 ? "Today" : shortDate(card.plan.payByIso)}</strong>: pay <strong className="nums">{formatCents(card.plan.payDownCents)}</strong>, two days before the statement closes on {shortDate(card.nextStatement.iso)}{card.plan.reportedPct !== null ? `, so the card reports ${card.plan.reportedPct}% of your limit` : ""}.</li>
+                  : <li>Your balance is already low enough to report well. No early payment needed.</li>}
+                {card.nextDue && <li><strong>{shortDate(card.nextDue.iso)}</strong>: pay the rest of the statement balance (at least the minimum) so there is no interest or late fee.</li>}
+              </ol>
+            ) : <p className="text-slate-700 dark:text-slate-200">Add the day your statement closes (under “Limit, dates, interest rate &amp; minimum payment”) to get a pay-down date.</p>}
+            {!card.limitCents && <p className="mt-1 text-slate-500">Add your credit limit to aim for a low reported balance instead of paying it all.</p>}
+          </div>
+        )}
         {(card.nextDue || card.nextStatement) && (
           <div className="grid grid-cols-2 gap-3 text-center">
             {card.nextStatement && (

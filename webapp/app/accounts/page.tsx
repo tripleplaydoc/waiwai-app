@@ -16,6 +16,7 @@ import { dateToIso } from "@/lib/utils/dates";
 import { loadMembers, type Member } from "@/lib/household";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { CardReminders } from "@/components/card-reminders";
 import { CreditMeter } from "@/components/credit-meter";
 import { utilization } from "@/lib/budget/utilization";
 import { proofFor, type ProofSummary } from "@/lib/proof-math";
@@ -76,6 +77,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
         <div className="card p-5 text-sm">No accounts yet. Add your checking account first, with today’s balance as the opening balance.</div>
       )}
 
+      <CardReminders cards={cardList} wsQ={wsQ} />
       {cardList.length > 0 && (
         <section className="card space-y-3 p-4" aria-label="Credit card limits">
           <div className="flex items-baseline justify-between gap-2">

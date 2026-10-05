@@ -5,6 +5,7 @@ import { addMonthsUTC } from "@/lib/budget/dates";
 import { getBudgetSummary } from "@/lib/budget/summary";
 import { nextDayOfMonth } from "@/lib/cycle";
 import { todayIso } from "@/lib/utils/dates";
+import { planCard, type CardPlan } from "@/lib/budget/card-plan";
 import { computeCardShortfalls, type ShortPart } from "@/lib/budget/cards-math";
 
 export interface CardStatus {
@@ -26,6 +27,8 @@ export interface CardStatus {
   /** Next statement closing / payment due dates (ISO) and days away, from today. */
   nextStatement: { iso: string; days: number } | null;
   nextDue: { iso: string; days: number } | null;
+  /** When to pay down before the statement closes, and how much. */
+  plan: CardPlan;
 }
 
 /** Status of every on-budget credit card in a workspace, as of the end of `month`. */
@@ -62,14 +65,17 @@ export async function loadCardStatuses(workspaceId: string, month: Date): Promis
   const today = todayIso();
   return cards.map((c) => {
     const det = details.find((d) => d.accountId === c.id);
+    const limitCents = limits.find((l) => l.accountId === c.id)?.limitCents ?? null;
+    const nextStatement = det?.statementDay ? nextDayOfMonth(det.statementDay, today) : null;
+    const nextDue = det?.dueDay ? nextDayOfMonth(det.dueDay, today) : null;
     return {
     id: c.id, name: c.name, owedCents: owed[c.id], shortCents: short[c.id].shortCents, setAsideCents: owed[c.id] - short[c.id].shortCents,
     parts: short[c.id].parts, uncategorizedCents: short[c.id].uncategorizedCents,
-    limitCents: limits.find((l) => l.accountId === c.id)?.limitCents ?? null,
+    limitCents,
     aprBps: det?.interestRateBps ?? null, minPaymentCents: c.monthlyCashflowCents ?? 0,
     statementDay: det?.statementDay ?? null, dueDay: det?.dueDay ?? null,
-    nextStatement: det?.statementDay ? nextDayOfMonth(det.statementDay, today) : null,
-    nextDue: det?.dueDay ? nextDayOfMonth(det.dueDay, today) : null,
+    nextStatement, nextDue,
+    plan: planCard({ owedCents: owed[c.id], limitCents, closeIso: nextStatement?.iso ?? null, closeDays: nextStatement?.days ?? null, dueIso: nextDue?.iso ?? null, dueDays: nextDue?.days ?? null }),
     };
   });
 }

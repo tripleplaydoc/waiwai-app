@@ -204,3 +204,6 @@ If a loan's first payment in the app is **next month** (because this month's was
 
 ## Credit cards no longer reduce Ready to assign
 What you owe on a credit card (its starting balance, and payments to it) is left out of Ready to assign and the per-account cash pools. The debt is covered from the pockets that spent it (see the card's "set aside" status). When Ready to assign is negative, the budget header now names the accounts that were assigned more than they hold.
+
+## Credit card payment plan
+Each card with a statement day gets a plan (lib/budget/card-plan.ts): pay down 2 days BEFORE the statement closes, aiming to report under 9% of the credit limit (everything owed if no limit is set), then pay the rest by the due date. Reminders show on the Budget and Accounts pages from 5 days ahead, the card page has a "Payment plan" box, and the bills calendar gets a "Pay down <card>" day. There are no push or email notifications yet; reminders are in the app.

@@ -18,6 +18,7 @@ import { loadAssetChoices, loadLoans, loadPocketChoices } from "@/lib/budget/loa
 import { LoansPanel } from "./loans-panel";
 import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
+import { CardReminders } from "@/components/card-reminders";
 import { BillsCalendar, type CalItem } from "./bills-calendar";
 import { MoveMoneyHost } from "./move-money-host";
 import { FundingProvider, ReadyAmount } from "./funding-view";
@@ -41,7 +42,6 @@ function Meter({ value, tone }: { value: number; tone: "pos" | "warn" | "neg" | 
 }
 
 import { loadCardStatuses } from "@/lib/budget/cards";
-import { inDays, shortDate as cycleDate } from "@/lib/cycle";
 
 export default async function BudgetPage({ searchParams }: { searchParams: SP }) {
   await requireAuth();
@@ -62,7 +62,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
 
   const cardStatuses = await loadCardStatuses(workspace.id, month);
   const cardsShort = cardStatuses.filter((c) => c.shortCents > 0);
-  const cardsDue = cardStatuses.filter((c) => c.owedCents > 0 && c.nextDue && c.nextDue.days <= 5);
   const isPersonal = workspace.type === "PERSONAL";
   const { vm: flow } = await loadFlow(workspace.id, month, summary.rows);
   const pflow = isPersonal ? (await loadPersonalFlow(workspace.id, month, summary.rows)).vm : null;
@@ -110,6 +109,14 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
 
   const calItems: CalItem[] = [
     ...bills.map((p): CalItem => ({ id: p.id, kind: "pocket", name: p.name, dueIso: p.bill!.dueIso, amountCents: billAmount(p), status: p.bill!, manualPaid: p.manualPaid })),
+    // The day to pay a card down so it closes low.
+    ...cardStatuses
+      .filter((c) => c.plan.payDownCents > 0 && c.plan.payByIso && c.plan.payByIso.startsWith(mp) && c.plan.payByDays! >= 0)
+      .map((c): CalItem => ({
+        id: `paydown-${c.id}`, kind: "card", name: `Pay down ${c.name}`, dueIso: c.plan.payByIso!, amountCents: c.plan.payDownCents, manualPaid: false,
+        href: `/accounts/${c.id}${wsKey === "business" ? "?ws=business" : ""}`,
+        status: { state: c.plan.payByDays! <= DUE_SOON_DAYS ? "due_soon" : "upcoming", dueIso: c.plan.payByIso!, daysUntil: c.plan.payByDays!, autoPaid: false },
+      })),
     // Card payments due this month (only ones with a balance; the date comes from the card's due day).
     ...cardStatuses
       .filter((c) => c.owedCents > 0 && c.nextDue && c.nextDue.iso.startsWith(mp))
@@ -232,11 +239,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
           {c.name} is {formatCents(c.shortCents)} short: money spent on it isn&apos;t set aside yet. Tap to fix.
         </Link>
       ))}
-      {cardsDue.map((c) => (
-        <Link key={`due-${c.id}`} href={`/accounts/${c.id}${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-amber-300 bg-warn-soft px-3 py-2 text-xs font-medium text-warn dark:border-amber-700">
-          {c.name} payment is due {inDays(c.nextDue!.days)} ({cycleDate(c.nextDue!.iso)}). You owe {formatCents(c.owedCents)}.
-        </Link>
-      ))}
+      <CardReminders cards={cardStatuses} wsQ={wsKey === "business" ? "?ws=business" : ""} />
       {needsReview > 0 && (
         <Link href={`/accounts${wsKey === "business" ? "?ws=business" : ""}`} className="inline-block rounded-xl border border-amber-300 bg-warn-soft px-3 py-2 text-xs font-medium text-warn dark:border-amber-700">
           {needsReview} transaction{needsReview === 1 ? "" : "s"} need a category
