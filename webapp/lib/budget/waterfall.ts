@@ -49,6 +49,13 @@ async function computeShortfall(
       // Needs this amount freshly assigned every month, independent of
       // whatever's left over from prior months (e.g. Rent).
       const requiredThisMonth = category.fundingTargetCents;
+      // Already paid this month (ticked, or enough spent): nothing left to fund.
+      const [paidMark, spentAgg] = await Promise.all([
+        db.billPayment.findFirst({ where: { categoryId: category.id, month }, select: { id: true } }),
+        db.transaction.aggregate({ where: { categoryId: category.id, date: { gte: month, lt: addMonthsUTC(month, 1) }, transferGroupId: null }, _sum: { amountCents: true } }),
+      ]);
+      const spent = Math.max(0, -(spentAgg._sum.amountCents ?? 0));
+      if (paidMark || (spent > 0 && spent >= requiredThisMonth)) return { requiredThisMonth, alreadyAssignedThisMonth, shortfallCents: 0 };
       const shortfallCents = Math.max(0, requiredThisMonth - alreadyAssignedThisMonth);
       return { requiredThisMonth, alreadyAssignedThisMonth, shortfallCents };
     }

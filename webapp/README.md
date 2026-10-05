@@ -108,3 +108,5 @@ With two or more bank accounts, the pocket's edit dialog (pencil) has a **Paid f
 Recording an expense follows the same rule: when you pick a pocket that is paid from a particular account, the **Account** box in the Add transaction form (the + button and the account page) switches to that account. You can still change it before saving.
 
 The **Estimated Tax Reserve** pocket can be topped up by hand too: tap its amount, pick the account the tax money is coming from (for example Found), and add. It also has a **Paid from** choice in its pencil dialog. Money can only be added to it this way, not moved out; use the tax rebalance for that.
+
+A monthly cost that is **paid** for the month (ticked Mark paid, or enough spending recorded to reach its amount) drops out of "Cover this month?" / "Short" and out of the Assign buttons' needs for that month. It comes back next month.

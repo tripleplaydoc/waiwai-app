@@ -14,6 +14,8 @@ export interface PocketInput {
   targetType: TargetType | null;
   targetCents: number | null;
   targetDate: Date | null;
+  /** Ticked "paid" for this month. A paid monthly cost has nothing left to fund this month. */
+  manualPaid?: boolean;
 }
 
 export type PocketState = "none" | "overspent" | "funded" | "partial" | "empty";
@@ -52,8 +54,11 @@ export function pocketProgress(p: PocketInput, month: Date): PocketProgress {
   switch (p.targetType) {
     case "MONTHLY_FUNDING":
       need = target;
-      still = Math.max(0, target - p.assignedCents);
-      progress = clamp01(p.assignedCents / target);
+      // Paid (ticked, or enough spending recorded) means this month's cost is done, whatever was assigned.
+      const spent = Math.max(0, -p.activityCents);
+      const paid = p.manualPaid === true || (spent > 0 && spent >= target);
+      still = paid ? 0 : Math.max(0, target - p.assignedCents);
+      progress = paid ? 1 : clamp01(p.assignedCents / target);
       break;
     case "TARGET_BALANCE":
       still = Math.max(0, target - p.availableCents);

@@ -10,11 +10,16 @@ const D = (s: string | null) => (s ? new Date(`${s}T00:00:00.000Z`) : null);
 /** What an OPEX pocket still needs, and what it costs per month. */
 export function opexPocket(r: EnvelopeRow, month: Date) {
   const p = pocketProgress(
-    { assignedCents: r.assignedCents, activityCents: r.activityCents, availableCents: r.availableCents, targetType: r.targetType, targetCents: r.targetCents, targetDate: D(r.targetDate) },
+    { assignedCents: r.assignedCents, activityCents: r.activityCents, availableCents: r.availableCents, targetType: r.targetType, targetCents: r.targetCents, targetDate: D(r.targetDate), manualPaid: r.manualPaid },
     month
   );
   let need = 0;
-  if (p.targetType === "MONTHLY_FUNDING" || p.targetType === "TARGET_BALANCE") need = Math.max(0, p.targetCents - r.availableCents);
+  if (p.targetType === "MONTHLY_FUNDING") {
+    const spent = Math.max(0, -r.activityCents);
+    const paid = r.manualPaid || (spent > 0 && spent >= p.targetCents); // paid this month = nothing more to fund
+    need = paid ? 0 : Math.max(0, p.targetCents - r.availableCents);
+  }
+  else if (p.targetType === "TARGET_BALANCE") need = Math.max(0, p.targetCents - r.availableCents);
   else if (p.targetType === "TARGET_BALANCE_BY_DATE") need = p.stillNeededCents;
   // an overspent pocket first has to climb back to zero
   const monthly = p.targetType === "MONTHLY_FUNDING" ? p.targetCents : 0;

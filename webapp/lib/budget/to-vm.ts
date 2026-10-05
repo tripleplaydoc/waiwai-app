@@ -10,6 +10,7 @@ export function toVM(r: EnvelopeRow, month: Date, today: string): PocketVM {
     {
       assignedCents: r.assignedCents, activityCents: r.activityCents, availableCents: r.availableCents,
       targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate ? new Date(`${r.targetDate}T00:00:00.000Z`) : null,
+      manualPaid: r.manualPaid,
     },
     month
   );
