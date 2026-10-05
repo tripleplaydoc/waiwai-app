@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun, LogOut, Wallet, Landmark, Upload, Settings, BarChart3, Compass } from "lucide-react";
+import { Moon, Sun, Monitor, LogOut, Wallet, Landmark, Upload, Settings, BarChart3, Compass } from "lucide-react";
 import { BrandName } from "@/components/brand";
 import { Avatar } from "@/components/avatar";
 import { logoutAction } from "@/app/actions/auth";
@@ -24,12 +24,12 @@ function useWs() {
 
 function UserMenu({ initial, name, email, avatar }: { initial: string; name: string; email: string; avatar: string | null }) {
   const [open, setOpen] = useState(false);
-  const [dark, setDark] = useState(false);
+  const [mode, setMode] = useState<"light" | "dark" | "system">("light");
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    setDark(document.documentElement.classList.contains("dark"));
+    try { const t = localStorage.getItem("theme"); setMode(t === "dark" || t === "system" ? t : "light"); } catch { /* ignore */ }
     const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", onDown);
@@ -37,13 +37,18 @@ function UserMenu({ initial, name, email, avatar }: { initial: string; name: str
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
   }, [open]);
 
-  function toggleTheme() {
+  function chooseTheme(next: "light" | "dark" | "system") {
     const root = document.documentElement;
-    const next = root.classList.contains("dark") ? "light" : "dark";
+    const dark = next === "dark" || (next === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     root.classList.remove("light", "dark");
-    root.classList.add(next);
-    setDark(next === "dark");
+    root.classList.add(dark ? "dark" : "light");
+    setMode(next);
     try { localStorage.setItem("theme", next); } catch { /* private mode: ignore */ }
+    // Follow the device live while "Device" is chosen.
+    if (next === "system") {
+      const q = window.matchMedia("(prefers-color-scheme: dark)");
+      q.addEventListener("change", () => { try { if (localStorage.getItem("theme") !== "system") return; } catch { return; } root.classList.remove("light", "dark"); root.classList.add(q.matches ? "dark" : "light"); });
+    }
   }
 
   const item = "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800";
@@ -51,7 +56,7 @@ function UserMenu({ initial, name, email, avatar }: { initial: string; name: str
     <div className="relative" ref={ref}>
       <button
         type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="Account menu"
-        className="flex size-10 shrink-0 items-center justify-center rounded-full ring-2 ring-white/20 transition hover:ring-white/50"
+        className="flex size-10 shrink-0 items-center justify-center rounded-full ring-1 ring-white/20 transition hover:ring-white/50"
       >
         <Avatar name={name || email || initial} src={avatar} size={40} />
       </button>
@@ -63,9 +68,17 @@ function UserMenu({ initial, name, email, avatar }: { initial: string; name: str
           </div>
           <div className="pt-1">
             <Link role="menuitem" href="/settings" onClick={() => setOpen(false)} className={item}><Settings className="size-4" aria-hidden /> Settings</Link>
-            <button role="menuitem" type="button" onClick={toggleTheme} className={item}>
-              {dark ? <Sun className="size-4" aria-hidden /> : <Moon className="size-4" aria-hidden />} {dark ? "Light mode" : "Dark mode"}
-            </button>
+            <div role="group" aria-label="Appearance" className="px-3 pb-2 pt-2">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Appearance</div>
+              <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+                {([["light", "Light", Sun], ["dark", "Dark", Moon], ["system", "Device", Monitor]] as const).map(([k, label, Icon]) => (
+                  <button key={k} type="button" aria-pressed={mode === k} onClick={() => chooseTheme(k)}
+                    className={`flex min-h-10 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-semibold ${mode === k ? "bg-white text-navy shadow-sm dark:bg-slate-600 dark:text-white" : "text-slate-600 dark:text-slate-300"}`}>
+                    <Icon className="size-4" aria-hidden />{label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <form action={logoutAction}>
               <button role="menuitem" type="submit" className={item}><LogOut className="size-4" aria-hidden /> Sign out</button>
             </form>
@@ -81,7 +94,7 @@ export function Nav({ initial, name, email, avatar }: { initial: string; name: s
   const { ws, q } = useWs();
   return (
     <header className="sticky top-0 z-30 bg-navy pt-[env(safe-area-inset-top)] text-white shadow-[0_8px_24px_-14px_rgba(15,26,56,0.6)]">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 px-3 sm:gap-3 sm:px-6">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 pl-3 pr-4 sm:gap-3 sm:px-6">
         <Link href={`/budget${q(ws)}`} aria-label="WaiWai home" className="mr-1 shrink-0">
           <BrandName light />
         </Link>

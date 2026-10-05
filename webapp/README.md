@@ -207,3 +207,8 @@ What you owe on a credit card (its starting balance, and payments to it) is left
 
 ## Credit card payment plan
 Each card with a statement day gets a plan (lib/budget/card-plan.ts): pay down 2 days BEFORE the statement closes, aiming to report under 9% of the credit limit (everything owed if no limit is set), then pay the rest by the due date. Reminders show on the Budget and Accounts pages from 5 days ahead, the card page has a "Payment plan" box, and the bills calendar gets a "Pay down <card>" day. There are no push or email notifications yet; reminders are in the app.
+
+## Add transaction dialogs, header, appearance
+- Dialogs scroll inside themselves (header and Save stay visible). Add transaction shows only the essentials (direction, amount, date, payee, account, pocket); memo, who, tags, receipt and cleared are under "More".
+- Phone header: the WaiWai wordmark hides below 380px wide so the account icon is never cut off.
+- Appearance (account menu): Light, Dark, or Device (follows the phone/computer setting, including when it switches automatically).

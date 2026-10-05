@@ -18,7 +18,8 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 
 // Runs before first paint so the saved theme never flashes. Class names match
 // the spec: html.light / html.dark, saved in localStorage.
-const themeScript = `try{var t=localStorage.getItem('theme');if(t!=='dark')t='light';document.documentElement.classList.add(t)}catch(e){document.documentElement.classList.add('light')}`;
+// "theme" is light (default), dark, or system (follow the device, including when the device switches at sunset).
+const themeScript = `(function(){var r=document.documentElement,m='light';try{m=localStorage.getItem('theme')||'light'}catch(e){}var q=window.matchMedia('(prefers-color-scheme: dark)');function a(){var d=m==='dark'||(m==='system'&&q.matches);r.classList.remove('light','dark');r.classList.add(d?'dark':'light')}a();if(m==='system'){q.addEventListener('change',function(){var cur='light';try{cur=localStorage.getItem('theme')||'light'}catch(e){}if(cur==='system')a2()})}function a2(){r.classList.remove('light','dark');r.classList.add(q.matches?'dark':'light')}})()`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   let user = null;

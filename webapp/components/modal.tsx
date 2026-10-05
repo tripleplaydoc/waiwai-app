@@ -37,13 +37,13 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
   if (!open || typeof document === "undefined") return null;
   // Portaled to <body> so a transformed or scrolling parent (like the Flow popover) can't clip it.
   return createPortal(
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 sm:items-center" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`card w-full ${wide ? "max-w-3xl" : "max-w-lg"} p-5 shadow-xl`}>
-        <div className="mb-4 flex items-center justify-between gap-3">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`card flex max-h-[calc(100dvh-2rem)] w-full flex-col ${wide ? "max-w-3xl" : "max-w-lg"} p-4 shadow-xl sm:p-5`}>
+        <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
           <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
           <button type="button" onClick={onClose} className="btn size-10 !px-0" aria-label="Close (Esc)"><X className="size-4" aria-hidden /></button>
         </div>
-        {children}
+        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1">{children}</div>
       </div>
     </div>,
     document.body

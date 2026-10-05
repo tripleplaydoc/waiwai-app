@@ -95,45 +95,50 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
             </div>
           </div>
           <div>
-            <label htmlFor="tx-acct" className="label">Account</label>
-            <select id="tx-acct" name="accountId" className="input" value={acct} onChange={(e) => setAcct(e.target.value)}>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind ? ` (${a.kind})` : ""}</option>)}
-            </select>
-          </div>
-          {people.length > 1 && (
-            <div>
-              <label htmlFor="tx-who" className="label">Who</label>
-              <select id="tx-who" name="personId" className="input" defaultValue={currentUserId ?? ""}>
-                {people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-              </select>
-            </div>
-          )}
-          <div>
             <label htmlFor="tx-payee" className="label">Payee</label>
             <input id="tx-payee" name="payee" list="payee-list" autoComplete="off" maxLength={200} className="input" />
             <datalist id="payee-list">{payees.map((p) => <option key={p} value={p} />)}</datalist>
           </div>
-          <div>
-            <label htmlFor="tx-cat" className="label">Category</label>
-            <select id="tx-cat" name="categoryId" className="input" value={category} onChange={(e) => pickCategory(e.target.value)}>
-              <option value="">Uncategorized (decide later)</option>
-              <CategoryOptions options={direction === "inflow" ? [...categories].sort((a, b) => Number(b.type === "INCOME") - Number(a.type === "INCOME")) : categories.filter((c) => c.type !== "INCOME")} />
-            </select>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="tx-acct" className="label">Account</label>
+              <select id="tx-acct" name="accountId" className="input" value={acct} onChange={(e) => setAcct(e.target.value)}>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind ? ` (${a.kind})` : ""}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="tx-cat" className="label">Category</label>
+              <select id="tx-cat" name="categoryId" className="input" value={category} onChange={(e) => pickCategory(e.target.value)}>
+                <option value="">Uncategorized (decide later)</option>
+                <CategoryOptions options={direction === "inflow" ? [...categories].sort((a, b) => Number(b.type === "INCOME") - Number(a.type === "INCOME")) : categories.filter((c) => c.type !== "INCOME")} />
+              </select>
+            </div>
           </div>
-          <div>
-            <label htmlFor="tx-memo" className="label">Memo</label>
-            <input id="tx-memo" name="memo" maxLength={500} className="input" />
-          </div>
-          {direction === "outflow" && <TagChips idPrefix="tx-tag" />}
-          <ReceiptField id="tx-receipt" />
-          <div className="flex flex-wrap gap-x-6">
-            <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="cleared" className="size-5" /> Cleared</label>
-            {isBusiness && direction === "outflow" && (
-              <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" /> Tax-deductible</label>
-            )}
-          </div>
+          <details className="rounded-xl border border-[#E2E8F0] dark:border-slate-700">
+            <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold">More: memo, who, tags, receipt, cleared</summary>
+            <div className="space-y-3 px-3 pb-3">
+              <div>
+                <label htmlFor="tx-memo" className="label">Memo</label>
+                <input id="tx-memo" name="memo" maxLength={500} className="input" />
+              </div>
+              {people.length > 1 && (
+                <div>
+                  <label htmlFor="tx-who" className="label">Who</label>
+                  <select id="tx-who" name="personId" className="input" defaultValue={currentUserId ?? ""}>
+                    {people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {direction === "outflow" && <TagChips idPrefix="tx-tag" />}
+              <ReceiptField id="tx-receipt" />
+              <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="cleared" className="size-5" /> Cleared</label>
+            </div>
+          </details>
+          {isBusiness && direction === "outflow" && (
+            <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" /> Tax-deductible</label>
+          )}
           {state && !state.ok && <p role="alert" className="text-sm text-[#C9372C]">{state.error}</p>}
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="sticky bottom-0 -mx-1 flex justify-end gap-2 bg-white px-1 pb-1 pt-2 dark:bg-slate-900">
             <button type="button" className="btn" onClick={() => { setOpen(false); reset(); }}>Cancel <span className="kbd">Esc</span></button>
             <button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
           </div>

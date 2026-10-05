@@ -184,10 +184,6 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
         <input id="qa-payee" name="payee" list="qa-payees" autoComplete="off" maxLength={200} className="input" value={payeeText} onChange={(e) => setPayeeText(e.target.value)} />
         <datalist id="qa-payees">{data.payees.map((p) => <option key={p} value={p} />)}</datalist>
       </div>
-      <div>
-        <label htmlFor="qa-memo" className="label">Memo</label>
-        <input id="qa-memo" name="memo" maxLength={500} className="input" value={memoText} onChange={(e) => setMemoText(e.target.value)} />
-      </div>
       {direction === "outflow" && suggest && (suggest.suggestions.length > 0 || suggest.hint) && (
         <div role="group" aria-label="Suggested pockets" aria-live="polite" className="space-y-1.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Suggested pocket</p>
@@ -227,16 +223,6 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
           </select>
         </div>
       </div>
-      {data.people.length > 1 && (
-        <div>
-          <label htmlFor="qa-who" className="label">Who</label>
-          <select id="qa-who" name="personId" className="input" defaultValue={data.currentUserId ?? ""}>
-            {data.people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
-        </div>
-      )}
-      {direction === "outflow" && <TagChips idPrefix="qa-tag" />}
-      <ReceiptField id="qa-receipt" />
       {askUse && (
         <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
           <label htmlFor="qa-biz" className="label">How much of this is for the business?</label>
@@ -254,11 +240,30 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
           <p className="mt-1 text-xs text-slate-500">Business meals are generally only 50% deductible, and the IRS expects a note of who and why.</p>
         </div>
       )}
+      <details className="rounded-xl border border-[#E2E8F0] dark:border-slate-700">
+        <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold">More: memo, who, tags, receipt</summary>
+        <div className="space-y-3 px-3 pb-3">
+          <div>
+        <label htmlFor="qa-memo" className="label">Memo</label>
+        <input id="qa-memo" name="memo" maxLength={500} className="input" value={memoText} onChange={(e) => setMemoText(e.target.value)} />
+      </div>
+      {data.people.length > 1 && (
+            <div>
+              <label htmlFor="qa-who" className="label">Who</label>
+              <select id="qa-who" name="personId" className="input" defaultValue={data.currentUserId ?? ""}>
+                {data.people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+          )}
+          {direction === "outflow" && <TagChips idPrefix="qa-tag" />}
+          <ReceiptField id="qa-receipt" />
+        </div>
+      </details>
       {data.isBusiness && direction === "outflow" && (
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" checked={deductible} onChange={(e) => setDeductible(e.target.checked)} /> Tax-deductible{deductible && amountCents > 0 && data.isBusiness ? <span className="nums text-xs text-slate-500">· about {formatCents(taxSavingCents(deductibleCents, suggest?.taxBps ?? 3000))} less tax reserve needed{chosenType === "MEALS" ? " (meals count 50%)" : ""}</span> : null}</label>
       )}
       {state && !state.ok && <p role="alert" className="text-sm text-neg">{state.error}</p>}
-      <div className="flex justify-end gap-2 pt-1">
+      <div className="sticky bottom-0 -mx-1 flex justify-end gap-2 bg-white px-1 pb-1 pt-2 dark:bg-slate-900">
         <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>
         <button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
       </div>
