@@ -30,6 +30,8 @@ export interface PocketProgress {
   needThisMonthCents: number;
   /** How much more must be assigned this month to meet that. */
   stillNeededCents: number;
+  /** The part of stillNeeded that covers this month only (excludes any Months ahead cushion). */
+  stillThisMonthCents: number;
   /** 0..1 bar fill. Monthly costs: funded this month. Goals: balance toward the goal. */
   progress: number;
   state: PocketState;
@@ -42,7 +44,7 @@ const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 export function pocketProgress(p: PocketInput, month: Date): PocketProgress {
   const none: PocketProgress = {
     hasTarget: false, targetType: null, targetCents: 0, needThisMonthCents: 0,
-    stillNeededCents: 0, progress: 0, state: p.availableCents < 0 ? "overspent" : "none", monthsLeft: null,
+    stillNeededCents: 0, stillThisMonthCents: 0, progress: 0, state: p.availableCents < 0 ? "overspent" : "none", monthsLeft: null,
   };
   if (!p.targetType || !p.targetCents || p.targetCents <= 0) return none;
 
@@ -50,6 +52,7 @@ export function pocketProgress(p: PocketInput, month: Date): PocketProgress {
   const startBalance = p.availableCents - p.assignedCents - p.activityCents; // balance at end of last month
   let need: number;
   let still: number;
+  let stillMonth: number | null = null;
   let progress: number;
   let monthsLeft: number | null = null;
 
@@ -66,6 +69,7 @@ export function pocketProgress(p: PocketInput, month: Date): PocketProgress {
         still = Math.max(0, goal - p.availableCents);
         progress = clamp01(p.availableCents / goal);
         need = p.assignedCents + still;
+        stillMonth = paid ? 0 : Math.max(0, target - p.availableCents);
       } else {
         still = paid ? 0 : Math.max(0, target - p.assignedCents);
         progress = paid ? 1 : clamp01(p.assignedCents / target);
@@ -94,7 +98,7 @@ export function pocketProgress(p: PocketInput, month: Date): PocketProgress {
 
   return {
     hasTarget: true, targetType: p.targetType, targetCents: target,
-    needThisMonthCents: need, stillNeededCents: still, progress, state, monthsLeft,
+    needThisMonthCents: need, stillNeededCents: still, stillThisMonthCents: Math.min(still, stillMonth ?? still), progress, state, monthsLeft,
   };
 }
 
@@ -103,8 +107,10 @@ export interface BudgetHealth {
   monthlyCostCents: number;
   /** Extra needed each month to stay on pace for dated goals. */
   goalPaceCents: number;
-  /** Total still to assign this month to meet every target. */
+  /** Still to assign to cover this month's costs and goal pace (excludes Months ahead cushions). */
   stillNeededCents: number;
+  /** Extra still to assign to build every Months ahead cushion. */
+  cushionNeededCents: number;
   canCover: boolean;
   /** How much Ready to Assign falls short of stillNeeded (0 when covered). */
   shortfallCents: number;
@@ -120,10 +126,11 @@ export function budgetHealth(
   pockets: { input: PocketInput; progress: PocketProgress }[],
   readyToAssignCents: number
 ): BudgetHealth {
-  let monthlyCost = 0, goalPace = 0, still = 0, money = 0;
+  let monthlyCost = 0, goalPace = 0, still = 0, cushion = 0, money = 0;
   for (const { input, progress } of pockets) {
     money += Math.max(0, input.availableCents);
-    still += progress.stillNeededCents;
+    still += progress.stillThisMonthCents;
+    cushion += progress.stillNeededCents - progress.stillThisMonthCents;
     if (progress.targetType === "MONTHLY_FUNDING") monthlyCost += progress.targetCents;
     if (progress.targetType === "TARGET_BALANCE_BY_DATE") goalPace += progress.needThisMonthCents;
   }
@@ -132,6 +139,7 @@ export function budgetHealth(
     monthlyCostCents: monthlyCost,
     goalPaceCents: goalPace,
     stillNeededCents: still,
+    cushionNeededCents: cushion,
     canCover: rta >= still,
     shortfallCents: Math.max(0, still - rta),
     pocketMoneyCents: money,

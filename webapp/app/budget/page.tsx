@@ -101,7 +101,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const billAmount = (p: PocketVM) => (p.targetType === "MONTHLY_FUNDING" && p.targetCents ? p.targetCents : Math.max(p.assignedCents, 0));
   const billsStillDue = bills.filter((p) => p.bill!.state !== "paid").reduce((s, p) => s + billAmount(p), 0);
   const hasRanked = expenseRows.some((r) => r.priorityRank !== null);
-  const anyTargets = health.monthlyCostCents > 0 || health.stillNeededCents > 0 || goals.length > 0;
+  const anyTargets = health.monthlyCostCents > 0 || health.stillNeededCents > 0 || health.cushionNeededCents > 0 || goals.length > 0;
 
   const calItems: CalItem[] = [
     ...bills.map((p): CalItem => ({ id: p.id, kind: "pocket", name: p.name, dueIso: p.bill!.dueIso, amountCents: billAmount(p), status: p.bill!, manualPaid: p.manualPaid })),
@@ -201,6 +201,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
             <>
               <div className={`text-sm font-bold leading-tight ${health.canCover ? "text-pos" : "text-warn"}`} title={`Still to assign ${formatCents(health.stillNeededCents)} of ${formatCents(health.monthlyCostCents + health.goalPaceCents)} needed`}>{coverText}</div>
               <Meter value={health.stillNeededCents === 0 ? 1 : Math.max(0, rta) / health.stillNeededCents} tone={health.canCover ? "pos" : "warn"} />
+              {health.cushionNeededCents > 0 && <p className="nums text-[11px] text-slate-500">Months-ahead cushion: {formatCents(health.cushionNeededCents)} still to build</p>}
             </>
           )}
         </div>
