@@ -48,3 +48,8 @@ CREATE INDEX "historical_transactions_workspaceId_typeKey_idx" ON "historical_tr
 INSERT INTO "history_settings" ("workspaceId", "goLiveDate", "updatedAt")
 SELECT "id", DATE '2026-10-05', CURRENT_TIMESTAMP FROM "workspaces"
 ON CONFLICT ("workspaceId") DO NOTHING;
+
+-- Lock the public API out of these tables (the app connects as the owner, which bypasses RLS).
+ALTER TABLE "history_settings" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "history_accounts" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "historical_transactions" ENABLE ROW LEVEL SECURITY;
