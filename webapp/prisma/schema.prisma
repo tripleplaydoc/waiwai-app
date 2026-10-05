@@ -315,6 +315,7 @@ model User {
   workspaces   Workspace[]
   transactions Transaction[] @relation("TransactionPerson")
   expenseReviews ExpenseReview[]
+  stewardedAccounts Account[] @relation("AccountSteward")
 
   @@map("users")
 }
@@ -405,6 +406,10 @@ model Account {
   /// Assets: monthly income this asset produces. Liabilities: the monthly payment. Always positive.
   monthlyCashflowCents Int?
 
+  /// The household member who looks after this account; money assigned from it is attributed to them.
+  stewardId String?
+  steward   User?   @relation("AccountSteward", fields: [stewardId], references: [id], onDelete: SetNull)
+
   isArchived Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -420,6 +425,7 @@ model Account {
   taxPaymentsSourced     TaxPayment[]
 
   @@index([workspaceId])
+  @@index([stewardId])
   @@map("accounts")
 }
 

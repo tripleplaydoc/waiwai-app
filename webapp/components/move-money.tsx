@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { assignMoreAction, moveMoneyAction, releaseToReadyAction } from "@/app/actions/pockets";
-import { retagPocketAction } from "@/app/actions/funding";
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 
 const READY = "__ready__";
@@ -69,12 +68,12 @@ export function MoveForm({ workspaceId, month, pockets, initialFromId, onDone, o
 }
 
 /** Add money to a pocket's assigned amount, taken from Ready to Assign. */
-export interface FundingAccount { id: string; name: string; readyCents: number }
+export interface FundingAccount { id: string; name: string; readyCents: number; stewardName?: string | null }
 
-export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initialId, accounts = [], initialAccountId = null, byPocket = {}, onDone, onCancel }: {
+export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initialId, accounts = [], initialAccountId = null, onDone, onCancel }: {
   workspaceId: string; month: string; pockets: MovePocket[]; readyToAssignCents: number; initialId?: string; onDone: () => void; onCancel: () => void;
   /** Bank accounts with ready cash; the money added is tagged to the one chosen ("" = best match). */
-  accounts?: FundingAccount[]; initialAccountId?: string | null; byPocket?: Record<string, Record<string, number>>;
+  accounts?: FundingAccount[]; initialAccountId?: string | null;
 }) {
   const [acctId, setAcctId] = useState(initialAccountId && accounts.some((a) => a.id === initialAccountId) ? initialAccountId : "");
   const [id, setId] = useState(initialId && pockets.some((p) => p.id === initialId) ? initialId : pockets[0]?.id ?? "");
@@ -87,7 +86,6 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
   const adding = cents !== null && cents > 0 ? cents : 0;
   const chosen = accounts.find((a) => a.id === acctId);
   const ready = Math.max(0, chosen ? chosen.readyCents : readyToAssignCents);
-  const here = pocket ? byPocket[pocket.id] : undefined;
 
   return (
     <form
@@ -122,7 +120,7 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
           <label htmlFor="add-acct" className="label">From which account?</label>
           <select id="add-acct" className="input" value={acctId} onChange={(e) => setAcctId(e.target.value)}>
             <option value="">Any account ({formatCents(readyToAssignCents)} free)</option>
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} — {formatCents(a.readyCents)} free</option>)}
+            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.stewardName ? ` (${a.stewardName})` : ""} — {formatCents(a.readyCents)} free</option>)}
           </select>
         </div>
       )}
@@ -146,61 +144,6 @@ export function AddForm({ workspaceId, month, pockets, readyToAssignCents, initi
         <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>
         <button type="submit" className="btn btn-primary" disabled={pending || !id || ready <= 0}>{pending ? "Adding…" : "Add money"}</button>
       </div>
-    </form>
-  );
-}
-
-/** For one pocket: shows which account holds its money and moves some of it to another account. */
-export function RetagForm({ workspaceId, month, pocket, accounts, byPocket, onDone }: {
-  workspaceId: string; month: string; pocket: MovePocket; accounts: FundingAccount[]; byPocket: Record<string, Record<string, number>>; onDone: () => void;
-}) {
-  const here = byPocket[pocket.id] ?? {};
-  const label = (k: string) => (k === "none" ? "Not linked yet" : accounts.find((a) => a.id === k)?.name ?? "Account");
-  const sorted = Object.entries(here).sort((a, b) => b[1] - a[1]);
-  const biggest = sorted[0]?.[0] ?? "none";
-  const [fromKey, setFromKey] = useState(biggest);
-  const [toId, setToId] = useState(accounts.find((a) => a.id !== biggest)?.id ?? "");
-  const [amount, setAmount] = useState("");
-  const [error, setError] = useState<string>();
-  const [pending, start] = useTransition();
-  const fromHas = here[fromKey] ?? 0;
-  if (sorted.length === 0) return <p className="text-sm text-slate-500">Nothing in this pocket yet.</p>;
-
-  return (
-    <form
-      className="space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setError(undefined);
-        start(async () => {
-          const r = await retagPocketAction(workspaceId, month, pocket.id, fromKey, toId, amount);
-          if (r.ok) onDone(); else setError(r.error);
-        });
-      }}
-    >
-      <ul className="nums space-y-0.5 text-sm">
-        {sorted.map(([k, n]) => <li key={k} className="flex justify-between gap-3"><span className={k === "none" ? "text-warn" : ""}>{label(k)}</span><strong>{formatCents(n)}</strong></li>)}
-      </ul>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor="rt-from" className="label">Move from</label>
-          <select id="rt-from" className="input" value={fromKey} onChange={(e) => { setFromKey(e.target.value); if (e.target.value === toId) setToId(accounts.find((a) => a.id !== e.target.value)?.id ?? ""); }}>
-            {sorted.map(([k]) => <option key={k} value={k}>{label(k)}</option>)}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="rt-to" className="label">to</label>
-          <select id="rt-to" className="input" value={toId} onChange={(e) => setToId(e.target.value)}>
-            {accounts.filter((a) => a.id !== fromKey).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </div>
-      </div>
-      <div className="flex gap-2">
-        <input id="rt-amount" aria-label="Amount to move" required inputMode="decimal" placeholder="0.00" className="input nums" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <button type="button" className="btn shrink-0" disabled={fromHas <= 0} onClick={() => setAmount(centsToInput(fromHas))}>All</button>
-        <button type="submit" className="btn btn-primary shrink-0" disabled={pending || !toId || fromHas <= 0}>{pending ? "Saving…" : "Save"}</button>
-      </div>
-      {error && <p role="alert" className="text-sm text-neg">{error}</p>}
     </form>
   );
 }

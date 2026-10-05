@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { createAccountAction } from "@/app/actions/accounts";
 
-export function AddAccountButton({ workspaceId, today }: { workspaceId: string; today: string }) {
+export function AddAccountButton({ workspaceId, today, members = [], meId }: { workspaceId: string; today: string; members?: { id: string; name: string }[]; meId?: string }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(createAccountAction, undefined);
   const formRef = useRef<HTMLFormElement>(null);
@@ -44,6 +44,15 @@ export function AddAccountButton({ workspaceId, today }: { workspaceId: string; 
               <input id="acct-open" name="opening" inputMode="decimal" placeholder="0.00" className="input nums" />
             </div>
           </div>
+          {members.length > 1 && (
+            <div>
+              <label htmlFor="acct-steward" className="label">Steward</label>
+              <select id="acct-steward" name="stewardId" className="input" defaultValue={meId ?? members[0].id}>
+                {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">Who looks after this account. Money you assign from it is credited to them.</p>
+            </div>
+          )}
           <div>
             <label htmlFor="acct-date" className="label">{card ? "Owed as of" : "Balance as of"}</label>
             <input id="acct-date" name="openingDate" type="date" defaultValue={today} className="input" />

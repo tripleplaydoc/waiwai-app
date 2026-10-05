@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { assertAuthed } from "@/lib/auth";
+import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
 import { isoToDate } from "@/lib/utils/dates";
 import { HOLDING_DEFS, isHoldingKey, type HoldingKey } from "@/lib/holdings";
@@ -15,7 +15,18 @@ const schema = z.object({
   type: z.enum(["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH", "INVESTMENT", "LOAN", "PROPERTY", "OTHER_ASSET", "OTHER_LIABILITY"]),
   opening: z.string().optional(),
   openingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  stewardId: z.string().optional(),
 });
+
+/** The household member chosen as steward (blank = you). Returns null for "no steward". */
+async function resolveSteward(raw: string | undefined, fallbackToMe: boolean): Promise<{ ok: true; id: string | null } | { ok: false; error: string }> {
+  if (raw === undefined || raw === "") {
+    if (!fallbackToMe) return { ok: true, id: null };
+    return { ok: true, id: (await getCurrentUser())?.id ?? null };
+  }
+  const u = await prisma.user.findUnique({ where: { id: raw }, select: { id: true } });
+  return u ? { ok: true, id: u.id } : { ok: false, error: "Pick one of the household members as steward." };
+}
 
 const OFF_BUDGET = new Set(["INVESTMENT", "LOAN", "PROPERTY", "OTHER_ASSET", "OTHER_LIABILITY"]);
 
@@ -33,6 +44,8 @@ export async function createAccountAction(_prev: ActionResult | undefined, formD
   }
   const ws = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
   if (!ws) return { ok: false, error: "Workspace not found." };
+  const steward = await resolveSteward(d.stewardId, true);
+  if (!steward.ok) return steward;
 
   await prisma.account.create({
     data: {
@@ -42,6 +55,7 @@ export async function createAccountAction(_prev: ActionResult | undefined, formD
       onBudget: !OFF_BUDGET.has(d.type),
       openingBalanceCents: opening,
       openingBalanceDate: d.openingDate ? isoToDate(d.openingDate) : null,
+      stewardId: steward.id,
     },
   });
   revalidatePath("/accounts");
@@ -87,6 +101,8 @@ export async function updateAccountAction(_prev: ActionResult | undefined, formD
     }
   }
   const holdingClass = d.holdingClass && isHoldingKey(d.holdingClass) ? d.holdingClass : null;
+  const steward = d.stewardId === undefined ? null : await resolveSteward(d.stewardId, false);
+  if (steward && !steward.ok) return steward;
   await prisma.account.update({
     where: { id: account.id },
     data: {
@@ -95,6 +111,7 @@ export async function updateAccountAction(_prev: ActionResult | undefined, formD
       onBudget: !OFF_BUDGET.has(d.type),
       openingBalanceCents: opening,
       openingBalanceDate: d.openingDate ? isoToDate(d.openingDate) : account.openingBalanceDate,
+      ...(steward ? { stewardId: steward.id } : {}),
       ...(d.holdingClass !== undefined ? { holdingClass } : {}),
       ...(monthly !== undefined ? { monthlyCashflowCents: monthly } : {}),
     },

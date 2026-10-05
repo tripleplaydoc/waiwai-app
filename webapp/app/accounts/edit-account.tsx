@@ -6,7 +6,7 @@ import { Modal } from "@/components/modal";
 import { updateAccountAction } from "@/app/actions/accounts";
 import { centsToInput } from "@/lib/utils/currency";
 
-export interface EditableAccount { id: string; name: string; type: string; openingBalanceCents: number; openingBalanceDate: string | null; onBudget: boolean; txCount?: number }
+export interface EditableAccount { id: string; name: string; type: string; openingBalanceCents: number; openingBalanceDate: string | null; onBudget: boolean; stewardId?: string | null; txCount?: number }
 
 const TYPES: [string, string][] = [
   ["CHECKING", "Checking"], ["SAVINGS", "Savings"], ["CREDIT_CARD", "Credit card"], ["CASH", "Cash"],
@@ -16,7 +16,7 @@ const TYPES: [string, string][] = [
 const OFF = new Set(["INVESTMENT", "LOAN", "PROPERTY", "OTHER_ASSET", "OTHER_LIABILITY"]);
 
 /** Pencil button + dialog to change an account's name, type and starting balance. */
-export function EditAccountButton({ account, label }: { account: EditableAccount; label?: string }) {
+export function EditAccountButton({ account, label, members = [] }: { account: EditableAccount; label?: string; members?: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState(account.type);
   const [state, action, pending] = useActionState(updateAccountAction, undefined);
@@ -46,6 +46,15 @@ export function EditAccountButton({ account, label }: { account: EditableAccount
               <input id={`ea-open-${account.id}`} name="opening" inputMode="decimal" defaultValue={centsToInput(account.openingBalanceCents)} className="input nums" />
             </div>
           </div>
+          {members.length > 1 && !OFF.has(type) && (
+            <div>
+              <label htmlFor={`ea-steward-${account.id}`} className="label">Steward</label>
+              <select id={`ea-steward-${account.id}`} name="stewardId" className="input" defaultValue={account.stewardId ?? ""}>
+                <option value="">No steward</option>
+                {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label htmlFor={`ea-date-${account.id}`} className="label">Balance as of</label>
             <input id={`ea-date-${account.id}`} name="openingDate" type="date" defaultValue={account.openingBalanceDate ?? ""} className="input" />

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CalendarClock, ChevronLeft, ChevronRight, Droplets, Target } from "lucide-react";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
 import { getBudgetSummary, type EnvelopeRow } from "@/lib/budget/summary";
@@ -18,7 +18,7 @@ import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
 import { BillsCalendar, type CalItem } from "./bills-calendar";
 import { MoveMoneyHost } from "./move-money-host";
-import { CashChip, CashLensProvider, ReadyAmount } from "./cash-lens";
+import { FundingProvider, ReadyAmount } from "./funding-view";
 import { loadCashView } from "@/lib/budget/funding";
 import { toVM } from "@/lib/budget/to-vm";
 import { isCustomKey } from "@/lib/budget/expense-types";
@@ -43,6 +43,7 @@ import { inDays, shortDate as cycleDate } from "@/lib/cycle";
 
 export default async function BudgetPage({ searchParams }: { searchParams: SP }) {
   await requireAuth();
+  const me = await getCurrentUser();
   const sp = await searchParams;
   const wsKey = wsKeyFromParam(sp.ws);
   const workspace = await getWorkspace(wsKey);
@@ -140,7 +141,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const coverText = health.stillNeededCents === 0 ? "Everything funded" : health.canCover ? "You can cover it" : `Short ${formatCents(health.shortfallCents)}`;
 
   return (
-    <CashLensProvider cash={cash}>
+    <FundingProvider cash={cash} meId={me?.id ?? null}>
     <div className="space-y-2.5">
       <DailyVerse />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -160,7 +161,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
               </div>
               {billsList}
             </Popover>
-            <CashChip workspaceId={workspace.id} month={mp} today={today} />
             {goals.length > 0 && (
               <Popover icon={<Target className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={<>Goals {goals.length}</>}>
                 <p className="mb-2 text-xs font-bold text-slate-800 dark:text-slate-100">Goals</p>
@@ -240,6 +240,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         <span className="nums">Totals this month — assigned {formatCents(summary.totalAssignedCents)} · activity {formatCents(summary.totalActivityCents)} · available {formatCents(summary.totalAvailableCents)}</span>
       </section>
     </div>
-    </CashLensProvider>
+    </FundingProvider>
   );
 }

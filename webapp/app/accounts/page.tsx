@@ -12,6 +12,8 @@ import { AddAccountButton } from "./add-account";
 import { TransferButton } from "@/components/transfer-button";
 import { EditAccountButton } from "./edit-account";
 import { dateToIso } from "@/lib/utils/dates";
+import { loadMembers, type Member } from "@/lib/household";
+import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,8 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const workspace = await getWorkspace(wsKey);
   const accounts = await getAccountBalances(workspace.id);
   const cards = new Map((await loadCardStatuses(workspace.id, startOfMonthUTC(isoToDate(todayIso())))).map((c) => [c.id, c]));
+  const members = await loadMembers();
+  const me = await getCurrentUser();
   const wsQ = wsKey === "business" ? "?ws=business" : "";
   const onBudget = accounts.filter((a) => a.onBudget);
   const offBudget = accounts.filter((a) => !a.onBudget);
@@ -35,7 +39,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{workspace.name} accounts</h1>
-        <div className="ml-auto flex items-center gap-2"><TransferButton accounts={accounts.filter((a) => a.onBudget && a.type !== "CREDIT_CARD" && a.balanceMode !== "MANUAL").map((a) => ({ id: a.id, name: a.name }))} today={todayIso()} /><AddAccountButton workspaceId={workspace.id} today={todayIso()} /></div>
+        <div className="ml-auto flex items-center gap-2"><TransferButton accounts={accounts.filter((a) => a.onBudget && a.type !== "CREDIT_CARD" && a.balanceMode !== "MANUAL").map((a) => ({ id: a.id, name: a.name }))} today={todayIso()} /><AddAccountButton workspaceId={workspace.id} today={todayIso()} members={members} meId={me?.id} /></div>
       </div>
       <div className="flex gap-2 text-sm font-semibold" role="tablist" aria-label="Accounts view">
         <span role="tab" aria-selected className="rounded-full bg-navy px-4 py-2 text-white">Accounts</span>
@@ -47,16 +51,16 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
       )}
 
       {onBudget.length > 0 && (
-        <AccountTable title="On budget" rows={onBudget} wsQ={wsQ} cards={cards} footer={`Total on budget: ${formatCents(total)}`} />
+        <AccountTable title="On budget" rows={onBudget} wsQ={wsQ} cards={cards} members={members} footer={`Total on budget: ${formatCents(total)}`} />
       )}
       {offBudget.length > 0 && (
-        <AccountTable title="Off budget (counts toward net worth only)" rows={offBudget} wsQ={wsQ} />
+        <AccountTable title="Off budget (counts toward net worth only)" rows={offBudget} wsQ={wsQ} members={members} />
       )}
     </div>
   );
 }
 
-function AccountTable({ title, rows, wsQ, footer, cards }: { title: string; rows: Awaited<ReturnType<typeof getAccountBalances>>; wsQ: string; footer?: string; cards?: Map<string, { owedCents: number; shortCents: number; nextDue: { days: number } | null }> }) {
+function AccountTable({ title, rows, wsQ, footer, cards, members }: { members: Member[]; title: string; rows: Awaited<ReturnType<typeof getAccountBalances>>; wsQ: string; footer?: string; cards?: Map<string, { owedCents: number; shortCents: number; nextDue: { days: number } | null }> }) {
   return (
     <section className="card overflow-hidden">
       <h2 className="border-b border-[#E2E8F0] bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">{title}</h2>
@@ -67,6 +71,7 @@ function AccountTable({ title, rows, wsQ, footer, cards }: { title: string; rows
               <td className="td">
                 <Link href={`/accounts/${a.id}${wsQ}`} className="font-medium text-[#2E6BE6] hover:underline dark:text-indigo-300">{a.name}</Link>
                 <span className="ml-2 text-xs text-slate-500">{TYPE_LABEL[a.type]}</span>
+                {members.length > 1 && a.onBudget && <div className="text-xs text-slate-500">Steward: <span className="font-medium text-slate-700 dark:text-slate-200">{members.find((m) => m.id === a.stewardId)?.name ?? "none"}</span></div>}
                 {cards?.get(a.id) && (() => { const c = cards.get(a.id)!; return c.owedCents === 0 ? null : c.shortCents > 0
                   ? <div className="nums text-xs font-medium text-neg">{formatCents(c.shortCents)} short: not set aside yet</div>
                   : <div className="text-xs font-medium text-pos">All set aside ✓</div>; })()}
@@ -76,7 +81,7 @@ function AccountTable({ title, rows, wsQ, footer, cards }: { title: string; rows
               <td className="td w-12 !pl-0 text-right">
                 {a.balanceMode === "MANUAL"
                   ? <Link href={`/holdings${wsQ}`} className="btn btn-sm !min-h-10" aria-label={`Edit ${a.name} in assets & liabilities`}>Edit</Link>
-                  : <EditAccountButton account={{ id: a.id, name: a.name, type: a.type, openingBalanceCents: a.openingBalanceCents, openingBalanceDate: a.openingBalanceDate ? dateToIso(a.openingBalanceDate) : null, onBudget: a.onBudget }} />}
+                  : <EditAccountButton account={{ id: a.id, name: a.name, type: a.type, openingBalanceCents: a.openingBalanceCents, openingBalanceDate: a.openingBalanceDate ? dateToIso(a.openingBalanceDate) : null, onBudget: a.onBudget, stewardId: a.stewardId }} members={members} />}
               </td>
             </tr>
           ))}

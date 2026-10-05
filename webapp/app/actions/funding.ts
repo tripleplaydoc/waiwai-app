@@ -14,31 +14,6 @@ import type { ActionResult } from "./types";
 
 const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
 
-/**
- * Money that was assigned before accounts were tracked has no account tag. This tags all of it to one account,
- * with offsetting ledger rows (the ledger is append-only), pocket by pocket.
- */
-export async function tagUntaggedAction(workspaceId: string, month: string, accountId: string): Promise<ActionResult> {
-  await assertAuthed();
-  const m = monthSchema.safeParse(month);
-  if (!m.success) return { ok: false, error: "Bad request." };
-  const acct = await prisma.account.findFirst({ where: { id: accountId, workspaceId, onBudget: true, isArchived: false } });
-  if (!acct || acct.type === "CREDIT_CARD") return { ok: false, error: "Pick a bank account." };
-  const monthDate = new Date(`${m.data}-01T00:00:00.000Z`);
-  const pockets = await prisma.category.findMany({ where: { workspaceId, isArchived: false, type: { not: "INCOME" } }, select: { id: true } });
-  const tags = await loadPocketTags(prisma, pockets.map((p) => p.id), monthDate);
-  const rows = [...tags].flatMap(([categoryId, parts]) => {
-    const n = parts.find(([k]) => k === null)?.[1] ?? 0;
-    if (n <= 0) return [];
-    const base = { categoryId, month: monthDate, source: "CORRECTION" as const, note: `Tagged to ${acct.name}` };
-    return [{ ...base, amountCents: -n, fundingAccountId: null }, { ...base, amountCents: n, fundingAccountId: acct.id }];
-  });
-  if (rows.length === 0) return { ok: false, error: "Nothing to tag." };
-  await prisma.budgetAssignment.createMany({ data: rows });
-  revalidatePath("/budget");
-  return { ok: true, message: `Tagged to ${acct.name}.` };
-}
-
 const refresh = () => {
   revalidatePath("/budget");
   revalidatePath("/accounts", "layout");
@@ -98,28 +73,6 @@ export async function transferAction(_prev: ActionResult | undefined, formData: 
   const short = needFromPockets - movedWith;
   const parts = [`Moved ${formatCents(cents)} from ${from!.name} to ${to!.name}.`];
   if (movedWith > 0) parts.push(`${formatCents(movedWith)} of pocket money moved with it.`);
-  if (short > 0) parts.push(`${from!.name} now holds ${formatCents(short)} less than your budget expects. Check the Cash button.`);
+  if (short > 0) parts.push(`${from!.name} now holds ${formatCents(short)} less than your budget expects.`);
   return { ok: true, message: parts.join(" ") };
-}
-
-/** Says where a pocket's money really is: moves some of it from one account (or "not tagged") to another. */
-export async function retagPocketAction(workspaceId: string, month: string, categoryId: string, fromKey: string, toAccountId: string, amount: string): Promise<ActionResult> {
-  await assertAuthed();
-  const m = monthSchema.safeParse(month);
-  if (!m.success) return { ok: false, error: "Bad request." };
-  const cents = parseToCents(amount);
-  if (cents === null || cents <= 0) return { ok: false, error: "Enter an amount like 200.00" };
-  const cat = await prisma.category.findFirst({ where: { id: categoryId, workspaceId, isArchived: false, type: { not: "INCOME" } } });
-  if (!cat) return { ok: false, error: "Pocket not found." };
-  const from = fromKey === "none" ? null : fromKey;
-  if (from === toAccountId) return { ok: false, error: "Pick a different account." };
-  const accounts = await prisma.account.findMany({ where: { workspaceId, onBudget: true, isArchived: false, balanceMode: "TRANSACTION_DERIVED", type: { not: "CREDIT_CARD" } }, select: { id: true, name: true } });
-  const name = new Map(accounts.map((a) => [a.id, a.name]));
-  if (!name.has(toAccountId) || (from !== null && !name.has(from))) return { ok: false, error: "Pick one of your bank accounts." };
-  const monthDate = new Date(`${m.data}-01T00:00:00.000Z`);
-  const held = (await loadPocketBalances(prisma, workspaceId, [cat.id], monthDate)).get(cat.id)?.find(([k]) => k === from)?.[1] ?? 0;
-  if (cents > held) return { ok: false, error: `${cat.name} only has ${formatCents(held)} ${from ? `in ${name.get(from)}` : "that isn't tagged"}.` };
-  await prisma.budgetAssignment.createMany({ data: retagRows({ categoryId: cat.id, month: monthDate, cents, from, to: toAccountId, note: `Re-tagged to ${name.get(toAccountId)}` }) });
-  refresh();
-  return { ok: true, message: `${formatCents(cents)} of ${cat.name} is now in ${name.get(toAccountId)}.` };
 }

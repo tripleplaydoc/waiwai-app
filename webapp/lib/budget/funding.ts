@@ -136,6 +136,9 @@ export interface CashAccount {
   readyCents: number;
   /** Pocket money tagged to this account. */
   pocketsCents: number;
+  /** The household member who looks after the account (null = none). */
+  stewardId: string | null;
+  stewardName: string | null;
 }
 export interface CashView {
   accounts: CashAccount[];
@@ -151,7 +154,7 @@ export async function loadCashView(db: Db, workspaceId: string, month: Date, poc
   const end = endOfMonth(month);
   const periodEnd = new Date(end.getTime() + 1);
   const [accounts, txSums, pools, balances] = await Promise.all([
-    db.account.findMany({ where: { workspaceId, onBudget: true, isArchived: false, balanceMode: "TRANSACTION_DERIVED" }, orderBy: { name: "asc" } }),
+    db.account.findMany({ where: { workspaceId, onBudget: true, isArchived: false, balanceMode: "TRANSACTION_DERIVED" }, orderBy: { name: "asc" }, include: { steward: { select: { name: true, email: true } } } }),
     db.transaction.groupBy({ by: ["accountId"], where: { workspaceId, date: { lt: periodEnd } }, _sum: { amountCents: true } }),
     loadPools(db, workspaceId, end),
     loadPocketBalances(db, workspaceId, pockets.map((p) => p.id), month),
@@ -175,7 +178,7 @@ export async function loadCashView(db: Db, workspaceId: string, month: Date, poc
   const cash = accounts.filter((a) => a.type !== "CREDIT_CARD");
   const cards = accounts.filter((a) => a.type === "CREDIT_CARD");
   return {
-    accounts: cash.map((a) => ({ id: a.id, name: a.name, type: a.type, realCents: real(a), readyCents: pools.get(a.id) ?? 0, pocketsCents: pocketTotals.get(a.id) ?? 0 })),
+    accounts: cash.map((a) => ({ id: a.id, name: a.name, type: a.type, realCents: real(a), readyCents: pools.get(a.id) ?? 0, pocketsCents: pocketTotals.get(a.id) ?? 0, stewardId: a.stewardId, stewardName: a.steward ? (a.steward.name?.trim() || a.steward.email.split("@")[0]) : null })),
     byPocket,
     untaggedPocketCents: untagged,
     cardsOwedCents: cards.reduce((s, a) => s + Math.max(0, -real(a)), 0),
