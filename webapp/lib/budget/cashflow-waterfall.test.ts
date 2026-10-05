@@ -93,4 +93,18 @@ eq("cover: not enough anywhere", [c.coveredCents, c.uncoveredCents], [3000, 7000
 c = planCover({ shortfalls: [{ id: "o1", name: "A", cents: 333 }], taxId: "tax", taxBalanceCents: 1000, reservoir1Id: "r1", reservoir1BalanceCents: 1000, reservoir2Id: "r2", reservoir2BalanceCents: 0 });
 eq("odd cents", c.draws.map((d) => d.cents).reduce((s, n) => s + n, 0), 333);
 
+// Business setup: OPEX keeps 1 month ahead (needs include the cushion), Reservoir 1 = 2 months, Reservoir 2 = 3 months
+{
+  const monthly = 657669, opexNeed = 318193;
+  const wf: AssignInput = { ...base, monthlyOpexCents: monthly, opex: [{ id: "o1", needCents: opexNeed }], reservoir1: { id: "r1", balanceCents: 0, months: 2 }, reservoir2: { id: "r2", balanceCents: 0, months: 3, shareBps: 5000 } };
+  let q = planAssign({ ...wf, readyCents: 100000 });
+  eq("2-mo R1: small income -> tax then OPEX only", [q.totals.taxes, q.totals.opex, q.totals.reservoir1], [30000, 70000, 0]);
+  q = planAssign({ ...wf, readyCents: 500000 });
+  eq("2-mo R1: OPEX cushion filled before R1", [q.totals.taxes, q.totals.opex, q.totals.reservoir1, q.totals.reservoir2], [150000, opexNeed, 350000 - opexNeed, 0]);
+  eq("2-mo R1: target is two months", reserveTarget(monthly, 2), 1315338);
+  q = planAssign({ ...wf, readyCents: 3500000 });
+  eq("2-mo R1: R1 full then R2/cash split", [q.totals.reservoir1, q.totals.reservoir2 > 0, q.totals.cash > 0, q.leftoverCents], [1315338, true, true, 0]);
+  eq("2-mo R1: every cent placed", sum(q), 3500000);
+}
+
 if (failed) { console.error(`${failed} failed`); process.exit(1); } else console.log("all passed");
