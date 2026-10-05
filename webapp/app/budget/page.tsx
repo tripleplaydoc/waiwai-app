@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
 import { getBudgetSummary, type EnvelopeRow } from "@/lib/budget/summary";
 import { budgetHealth, pocketProgress } from "@/lib/budget/targets";
-import { billStatus } from "@/lib/budget/bills";
+import { billStatus, DUE_SOON_DAYS } from "@/lib/budget/bills";
 import type { GroupVM, PocketVM } from "@/lib/budget/board-types";
 import { formatCents } from "@/lib/utils/currency";
 import { monthFromParam, monthLabel, monthParam, shiftMonth, todayIso } from "@/lib/utils/dates";
@@ -16,8 +16,7 @@ import { loadPersonalFlow } from "@/lib/budget/personal-flow-state";
 import { loadFlow } from "@/lib/budget/waterfall-state";
 import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
-import { BillBadge, MarkPaidButton } from "./bill-controls";
-import { shortDate } from "@/lib/budget/bills";
+import { BillsCalendar, type CalItem } from "./bills-calendar";
 import { MoveMoneyHost } from "./move-money-host";
 import { toVM } from "@/lib/budget/to-vm";
 import { isCustomKey } from "@/lib/budget/expense-types";
@@ -100,25 +99,18 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const hasRanked = expenseRows.some((r) => r.priorityRank !== null);
   const anyTargets = health.monthlyCostCents > 0 || health.stillNeededCents > 0 || goals.length > 0;
 
-  const billsList = bills.length === 0 ? (
-    <p className="py-1 text-sm text-slate-500">Add a <strong>due day</strong> to a pocket (tap its pencil) to track what&apos;s due and what you&apos;ve paid.</p>
-  ) : (
-    <>
-      <div className="pb-2"><Meter value={billsPaid / bills.length} tone={billsOverdue > 0 ? "neg" : "pos"} /></div>
-      <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-800">
-        {bills.map((p) => (
-          <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2">
-            <div className="flex min-w-0 flex-1 basis-32 flex-col">
-              <span className="break-words text-sm font-semibold">{p.name}</span>
-              <span className="text-xs text-slate-500">Due {shortDate(p.bill!.dueIso)}{billAmount(p) > 0 ? ` · ${formatCents(billAmount(p))}` : ""}</span>
-            </div>
-            <BillBadge status={p.bill!} />
-            <MarkPaidButton workspaceId={workspace.id} categoryId={p.id} month={mp} status={p.bill!} manualPaid={p.manualPaid} size="md" />
-          </li>
-        ))}
-      </ul>
-    </>
-  );
+  const calItems: CalItem[] = [
+    ...bills.map((p): CalItem => ({ id: p.id, kind: "pocket", name: p.name, dueIso: p.bill!.dueIso, amountCents: billAmount(p), status: p.bill!, manualPaid: p.manualPaid })),
+    // Card payments due this month (only ones with a balance; the date comes from the card's due day).
+    ...cardStatuses
+      .filter((c) => c.owedCents > 0 && c.nextDue && c.nextDue.iso.startsWith(mp))
+      .map((c): CalItem => ({
+        id: `card-${c.id}`, kind: "card", name: c.name, dueIso: c.nextDue!.iso, amountCents: c.owedCents, manualPaid: false,
+        href: `/accounts/${c.id}${wsKey === "business" ? "?ws=business" : ""}`,
+        status: { state: c.nextDue!.days <= DUE_SOON_DAYS ? "due_soon" : "upcoming", dueIso: c.nextDue!.iso, daysUntil: c.nextDue!.days, autoPaid: false },
+      })),
+  ];
+  const billsList = <BillsCalendar workspaceId={workspace.id} monthIso={mp} todayIso={today} items={calItems} />;
 
   const goalsList = (
     <ul className="grid gap-3">
