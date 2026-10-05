@@ -57,6 +57,15 @@ export function ReadyAmount({ rtaCents }: { rtaCents: number }) {
     <div className="flex flex-col">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">{rtaCents < 0 ? "Over-assigned" : "Money in pool"}</span>
       <span className={`nums text-2xl font-bold leading-tight tracking-tight ${rtaCents < 0 ? "text-neg" : "text-pos"}`}>{formatCents(rtaCents)}</span>
+      {rtaCents < 0 && (() => {
+        const over = cash.accounts.filter((a) => a.readyCents < 0).sort((a, b) => a.readyCents - b.readyCents);
+        return (
+          <span className="nums text-[11px] text-slate-600 dark:text-slate-300">
+            {over.length > 0 ? `Assigned more than it holds: ${over.map((a) => `${a.name} ${formatCents(-a.readyCents)}`).join(" · ")}` : "You've assigned more than your accounts hold."}
+            {" "}Release money from a pocket to fix it.
+          </span>
+        );
+      })()}
       {split.length > 1 && <span className="nums text-[11px] text-slate-600 dark:text-slate-300">{split.map((s) => `${s.name} ${formatCents(s.cents)}`).join(" · ")}</span>}
     </div>
   );

@@ -19,11 +19,12 @@ export async function loadPools(db: Db, workspaceId: string, asOfDate: Date): Pr
   const periodEnd = new Date(Date.UTC(asOfDate.getUTCFullYear(), asOfDate.getUTCMonth(), asOfDate.getUTCDate() + 1));
   const [accounts, income, transfers, assigned] = await Promise.all([
     db.account.findMany({
-      where: { workspaceId, onBudget: true, balanceMode: "TRANSACTION_DERIVED", OR: [{ openingBalanceDate: null }, { openingBalanceDate: { lt: periodEnd } }] },
+      where: { workspaceId, onBudget: true, type: { not: "CREDIT_CARD" }, balanceMode: "TRANSACTION_DERIVED", OR: [{ openingBalanceDate: null }, { openingBalanceDate: { lt: periodEnd } }] },
       select: { id: true, openingBalanceCents: true },
     }),
     db.transaction.groupBy({ by: ["accountId"], where: { workspaceId, date: { lt: periodEnd }, account: { onBudget: true }, category: { type: "INCOME" } }, _sum: { amountCents: true } }),
-    db.transaction.groupBy({ by: ["accountId"], where: { workspaceId, date: { lt: periodEnd }, account: { onBudget: true }, transferGroupId: { not: null } }, _sum: { amountCents: true } }),
+    // Card payments are not cash moving between pockets' homes: leave transfers to or from a credit card out.
+    db.transaction.groupBy({ by: ["accountId"], where: { workspaceId, date: { lt: periodEnd }, account: { onBudget: true, type: { not: "CREDIT_CARD" } }, transferGroupId: { not: null }, OR: [{ transferAccountId: null }, { transferAccount: { type: { not: "CREDIT_CARD" } } }] }, _sum: { amountCents: true } }),
     db.budgetAssignment.groupBy({ by: ["fundingAccountId"], where: { category: { workspaceId }, month: { lt: periodEnd } }, _sum: { amountCents: true } }),
   ]);
   const pools = new Map<Key, number>();

@@ -201,3 +201,6 @@ If a loan's first payment in the app is **next month** (because this month's was
 
 ## Pay card or loan from the + button
 "+" menu > **Pay card or loan**. Pick the card or loan, the account you pay from, amount and date. Cards: money moves from the account to the card (a transfer, no pocket changes). Loans: the payment comes out of the account, counts in the loan's pocket (so the pocket shows paid), and the balance owed drops by the principal part (defaults to payment minus a month of interest; editable). "Pay it all off" fills the full balance.
+
+## Credit cards no longer reduce Ready to assign
+What you owe on a credit card (its starting balance, and payments to it) is left out of Ready to assign and the per-account cash pools. The debt is covered from the pockets that spent it (see the card's "set aside" status). When Ready to assign is negative, the budget header now names the accounts that were assigned more than they hold.
