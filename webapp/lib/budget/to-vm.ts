@@ -10,7 +10,7 @@ export function toVM(r: EnvelopeRow, month: Date, today: string): PocketVM {
     {
       assignedCents: r.assignedCents, activityCents: r.activityCents, availableCents: r.availableCents,
       targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate ? new Date(`${r.targetDate}T00:00:00.000Z`) : null,
-      manualPaid: r.manualPaid,
+      manualPaid: r.manualPaid, monthsAhead: r.monthsAhead,
     },
     month
   );
@@ -18,7 +18,7 @@ export function toVM(r: EnvelopeRow, month: Date, today: string): PocketVM {
     id: r.id, name: r.name, groupId: r.groupId, assignedCents: r.assignedCents, activityCents: r.activityCents,
     availableCents: r.availableCents, isSystemManaged: r.isSystemManaged, isTaxDeductible: r.isTaxDeductible,
     priorityRank: r.priorityRank, targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate,
-    allocationBps: r.allocationBps, dueDay: r.dueDay, paidFromId: r.paidFromId, manualPaid: r.manualPaid, kind: r.type, expenseType: r.expenseType, incomeKind: r.incomeKind, progress,
+    allocationBps: r.allocationBps, dueDay: r.dueDay, paidFromId: r.paidFromId, monthsAhead: r.monthsAhead, manualPaid: r.manualPaid, kind: r.type, expenseType: r.expenseType, incomeKind: r.incomeKind, progress,
     bill: r.type === "INCOME" ? null : billStatus({
       dueDay: r.dueDay, monthIso: monthParam(month), todayIso: today, manualPaid: r.manualPaid,
       spentCents: Math.max(0, -r.activityCents), targetCents: r.targetType === "MONTHLY_FUNDING" ? r.targetCents : null,

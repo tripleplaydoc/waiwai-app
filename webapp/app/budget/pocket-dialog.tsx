@@ -36,6 +36,7 @@ export function PocketDialog({
   const [kind, setKind] = useState<TT>(pocket?.targetType ?? "NONE");
   const [amount, setAmount] = useState(pocket?.targetCents ? centsToInput(pocket.targetCents) : "");
   const [date, setDate] = useState(pocket?.targetDate ?? "");
+  const [ahead, setAhead] = useState(String(pocket?.monthsAhead ?? 0));
   const [etype, setEtype] = useState(pocket?.expenseType ?? "");
   const [ikind, setIkind] = useState<string>(pocket?.incomeKind ?? "EARNED");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -48,7 +49,7 @@ export function PocketDialog({
   let preview = "";
   const cents = parseToCents(amount);
   if (cents && cents > 0) {
-    if (kind === "MONTHLY_FUNDING") preview = `Needs ${formatCents(cents)} every month.`;
+    if (kind === "MONTHLY_FUNDING") preview = Number(ahead) > 0 ? `Needs ${formatCents(cents)} every month, and keeps ${Number(ahead) === 1 ? "1 more month" : `${ahead} more months`} on hand (${formatCents(cents * (1 + Number(ahead)))} before the bill is paid).` : `Needs ${formatCents(cents)} every month.`;
     if (kind === "TARGET_BALANCE") preview = `Keeps a balance of ${formatCents(cents)}.`;
     if (kind === "TARGET_BALANCE_BY_DATE" && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
       const months = monthsBetweenInclusive(new Date(`${monthIso}-01T00:00:00.000Z`), new Date(`${date}T00:00:00.000Z`));
@@ -177,6 +178,16 @@ export function PocketDialog({
               <label htmlFor="pk-amount" className="label">{kind === "MONTHLY_FUNDING" ? "Cost per month" : "Goal amount"}</label>
               <input id="pk-amount" name="amount" inputMode="decimal" required placeholder="500.00" className="input nums" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
+            {kind === "MONTHLY_FUNDING" && (
+              <div>
+                <label htmlFor="pk-ahead" className="label">Months ahead</label>
+                <select id="pk-ahead" name="monthsAhead" className="input" value={ahead} onChange={(e) => setAhead(e.target.value)}>
+                  <option value="0">This month only</option>
+                  {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} month{n === 1 ? "" : "s"} ahead</option>)}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">Also keeps this many months of the cost on hand, beyond the current month.</p>
+              </div>
+            )}
             {kind === "TARGET_BALANCE_BY_DATE" && (
               <div>
                 <label htmlFor="pk-date" className="label">Reach it by</label>

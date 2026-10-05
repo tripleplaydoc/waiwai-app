@@ -110,3 +110,6 @@ Recording an expense follows the same rule: when you pick a pocket that is paid 
 The **Estimated Tax Reserve** pocket can be topped up by hand too: tap its amount, pick the account the tax money is coming from (for example Found), and add. It also has a **Paid from** choice in its pencil dialog. Money can only be added to it this way, not moved out; use the tax rebalance for that.
 
 A monthly cost that is **paid** for the month (ticked Mark paid, or enough spending recorded to reach its amount) drops out of "Cover this month?" / "Short" and out of the Assign buttons' needs for that month. It comes back next month.
+
+## Months ahead (monthly-cost pockets)
+For a pocket with a **Monthly cost**, the pencil dialog has **Months ahead** (This month only, or 1 to 6 months ahead). With it set, the pocket's need is measured on its balance: this month's cost plus that many more months while the bill is unpaid, and just the extra months once it is paid. For example, a $200 cost kept 1 month ahead needs $400 on hand; after you pay the $200 it needs the $200 cushion to stay in place, and next month it asks for $200 to rebuild up to $400. The Add money sheet's **Fill what's needed**, the "Cover this month?" check and the Assign buttons all use this. The pocket row shows "1 mo ahead". Leave it on "This month only" for variable costs.

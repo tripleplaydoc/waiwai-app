@@ -627,6 +627,8 @@ model Category {
   fundingTargetCents  Int?
   fundingTargetByDate DateTime?           @db.Date
   /// The bank account this pocket is usually paid from (null = any). Funding draws from it first.
+  /// Monthly-cost pockets: extra months of the cost to keep on hand beyond the current month (0 = this month only).
+  monthsAhead Int @default(0)
   paidFromAccountId String?
   paidFromAccount   Account?              @relation("PocketPaidFrom", fields: [paidFromAccountId], references: [id], onDelete: SetNull)
 

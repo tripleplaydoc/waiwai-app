@@ -18,6 +18,8 @@ export interface PocketVM {
   dueDay: number | null;
   /** Bank account this pocket is usually paid from. */
   paidFromId: string | null;
+  /** Monthly costs: extra months of the cost kept on hand beyond this month. */
+  monthsAhead: number;
   manualPaid: boolean;
   kind: "INCOME" | "EXPENSE" | "SYSTEM";
   expenseType: string | null;

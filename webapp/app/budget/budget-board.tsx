@@ -85,7 +85,7 @@ function PocketRowView({
   const pr = p.progress;
   const { cash } = useFunding();
   const paidFrom = cash.accounts.length > 1 && p.paidFromId ? cash.accounts.find((a) => a.id === p.paidFromId)?.name ?? null : null;
-  const sub = [typeLabel(p.expenseType), p.bill && !overlay ? (p.bill.state === "paid" ? "Paid" : p.bill.state === "overdue" ? "Overdue" : `Due ${shortDate(p.bill.dueIso)}`) : null, paidFrom ? `from ${paidFrom}` : null].filter(Boolean).join(" · ");
+  const sub = [typeLabel(p.expenseType), p.bill && !overlay ? (p.bill.state === "paid" ? "Paid" : p.bill.state === "overdue" ? "Overdue" : `Due ${shortDate(p.bill.dueIso)}`) : null, p.targetType === "MONTHLY_FUNDING" && p.monthsAhead > 0 ? `${p.monthsAhead} mo ahead` : null, paidFrom ? `from ${paidFrom}` : null].filter(Boolean).join(" · ");
   return (
     <div className={`grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 border-t border-[#E2E8F0] bg-white px-3 py-2.5 md:items-center md:gap-x-3 md:py-3 ${COLS} dark:border-slate-800 dark:bg-slate-900 ${overlay ? "rounded-xl border shadow-xl" : ""}`}>
       <button type="button" aria-label={`Drag ${p.name}`} className="hidden size-7 cursor-grab touch-none items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-500 active:cursor-grabbing md:flex dark:hover:bg-slate-800" {...handleProps}>

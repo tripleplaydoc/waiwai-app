@@ -34,6 +34,7 @@ const pocketSchema = z.object({
   customType: z.string().optional(),
   incomeKind: z.enum(["EARNED", "PORTFOLIO", "PASSIVE"]).optional(),
   paidFromId: z.string().optional(),
+  monthsAhead: z.string().optional(),
 });
 
 /** Creates or edits a pocket (an envelope inside a category). */
@@ -106,6 +107,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
     expenseType = d.expenseType;
   }
 
+  const monthsAhead = targetType === "MONTHLY_FUNDING" ? Math.min(12, Math.max(0, Math.floor(Number(d.monthsAhead ?? 0)) || 0)) : 0;
   let paidFromAccountId: string | null | undefined; // undefined = leave as is
   if (d.paidFromId !== undefined) {
     if (d.paidFromId === "" || isIncome) paidFromAccountId = null;
@@ -132,6 +134,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           fundingTargetType: targetType,
           fundingTargetCents: targetCents,
           fundingTargetByDate: targetDate,
+          monthsAhead,
           ...(paidFromAccountId !== undefined ? { paidFromAccountId } : {}),
         },
       });
@@ -152,6 +155,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           fundingTargetType: targetType,
           fundingTargetCents: targetCents,
           fundingTargetByDate: targetDate,
+          monthsAhead,
           paidFromAccountId: paidFromAccountId ?? null,
         },
       });

@@ -22,6 +22,7 @@ export interface EnvelopeRow {
   allocationBps: number | null;
   dueDay: number | null;
   paidFromId: string | null;
+  monthsAhead: number;
   manualPaid: boolean;
   expenseType: string | null;
   incomeKind: "EARNED" | "PORTFOLIO" | "PASSIVE" | null;
@@ -99,6 +100,7 @@ export async function getBudgetSummary(workspaceId: string, month: Date): Promis
       allocationBps: c.allocationBps,
       dueDay: c.dueDay,
       paidFromId: c.paidFromAccountId,
+      monthsAhead: c.monthsAhead,
       manualPaid: paidSet.has(c.id),
       expenseType: effectiveType(c),
       incomeKind: c.incomeKind,

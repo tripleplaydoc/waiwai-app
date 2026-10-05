@@ -7,7 +7,7 @@ export function healthFromSummary(summary: BudgetSummary, month: Date): BudgetHe
     const input = {
       assignedCents: r.assignedCents, activityCents: r.activityCents, availableCents: r.availableCents,
       targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate ? new Date(`${r.targetDate}T00:00:00.000Z`) : null,
-      manualPaid: r.manualPaid,
+      manualPaid: r.manualPaid, monthsAhead: r.monthsAhead,
     };
     return { input, progress: pocketProgress(input, month) };
   });

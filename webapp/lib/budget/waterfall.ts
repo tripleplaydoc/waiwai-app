@@ -55,7 +55,14 @@ async function computeShortfall(
         db.transaction.aggregate({ where: { categoryId: category.id, date: { gte: month, lt: addMonthsUTC(month, 1) }, transferGroupId: null }, _sum: { amountCents: true } }),
       ]);
       const spent = Math.max(0, -(spentAgg._sum.amountCents ?? 0));
-      if (paidMark || (spent > 0 && spent >= requiredThisMonth)) return { requiredThisMonth, alreadyAssignedThisMonth, shortfallCents: 0 };
+      const paid = !!paidMark || (spent > 0 && spent >= requiredThisMonth);
+      if (category.monthsAhead > 0) {
+        // Keeps this month's cost (until paid) plus N more months on hand, measured on the balance.
+        const balance = await getCategoryAvailableBalance(db, category.id, month);
+        const goal = requiredThisMonth * (paid ? category.monthsAhead : 1 + category.monthsAhead);
+        return { requiredThisMonth: goal, alreadyAssignedThisMonth, shortfallCents: Math.max(0, goal - balance) };
+      }
+      if (paid) return { requiredThisMonth, alreadyAssignedThisMonth, shortfallCents: 0 };
       const shortfallCents = Math.max(0, requiredThisMonth - alreadyAssignedThisMonth);
       return { requiredThisMonth, alreadyAssignedThisMonth, shortfallCents };
     }
