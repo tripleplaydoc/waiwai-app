@@ -8,12 +8,12 @@ import { removeLoanFromBudgetAction, saveLoanAction } from "@/app/actions/loans"
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 import { loanDueIso, suggestPayment } from "@/lib/loans";
 import { shortDate } from "@/lib/budget/bills";
-import type { AssetChoice, LoanVM } from "@/lib/budget/loans-types";
+import type { AssetChoice, LoanVM, PocketChoice } from "@/lib/budget/loans-types";
 
 type Group = { id: string; name: string };
 type Bank = { id: string; name: string };
 
-function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, banks, assets }: { open: boolean; onClose: () => void; workspaceId: string; loan: LoanVM | null; groups: Group[]; defaultGroupId: string; banks: Bank[]; assets: AssetChoice[] }) {
+function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, banks, assets, pockets }: { open: boolean; onClose: () => void; workspaceId: string; loan: LoanVM | null; groups: Group[]; defaultGroupId: string; banks: Bank[]; assets: AssetChoice[]; pockets: PocketChoice[] }) {
   const router = useRouter();
   const [state, action, pending] = useActionState(saveLoanAction, undefined);
   const [name, setName] = useState(loan?.name ?? "");
@@ -22,6 +22,7 @@ function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, 
   const [payment, setPayment] = useState(loan?.paymentCents ? centsToInput(loan.paymentCents) : "");
   const [first, setFirst] = useState(loan?.firstDueIso ?? "");
   const [rate, setRate] = useState(loan && loan.aprBps ? String(loan.aprBps / 100) : "");
+  const [pocketId, setPocketId] = useState("");
   const [removing, startRemove] = useTransition();
   const [removeError, setRemoveError] = useState<string>();
   useEffect(() => { if (state?.ok) { onClose(); router.refresh(); } }, [state, onClose, router]);
@@ -76,7 +77,21 @@ function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, 
             <p className="mt-1 text-xs text-slate-500">Tying them shows your equity (what it&apos;s worth minus what you owe) on the asset and in net worth. Add the car, home or other asset under Assets &amp; liabilities first if it isn&apos;t listed.</p>
           </div>
         )}
+        {!loan?.onBudget && pockets.length > 0 && (
+          <div>
+            <label htmlFor="ln-pocket" className="label">Pocket</label>
+            <select id="ln-pocket" name="pocketId" className="input" value={pocketId} onChange={(e) => setPocketId(e.target.value)}>
+              <option value="">Make a new pocket for this loan</option>
+              {[...new Set(pockets.map((p) => p.group))].map((g) => (
+                <optgroup key={g} label={g}>{pockets.filter((p) => p.group === g).map((p) => <option key={p.id} value={p.id}>Use {p.name}</option>)}</optgroup>
+              ))}
+            </select>
+            {pocketId && <p className="mt-1 text-xs text-slate-500">That pocket keeps its name, category and money. Its monthly target becomes the payment above and it gets the due date.</p>}
+          </div>
+        )}
+        {loan?.onBudget && loan.pocketName && <p className="text-xs text-slate-500">Paid from the pocket <strong className="font-semibold text-slate-700 dark:text-slate-200">{loan.pocketName}</strong>.</p>}
         <div className="grid gap-3 sm:grid-cols-2">
+          {!pocketId && (
           <div>
             <label htmlFor="ln-group" className="label">Budget category</label>
             <select id="ln-group" name="groupId" className="input" defaultValue={loan?.groupId ?? defaultGroupId}>
@@ -84,6 +99,7 @@ function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, 
               <option value="__new">Loans &amp; payments</option>
             </select>
           </div>
+          )}
           {banks.length > 1 && (
             <div>
               <label htmlFor="ln-from" className="label">Paid from</label>
@@ -124,7 +140,7 @@ function dueText(l: LoanVM): string {
 }
 
 /** The budget's Loans panel: every loan with its payment, due date and payments left, plus add / set up. */
-export function LoansPanel({ workspaceId, loans, groups, defaultGroupId, banks, assets }: { workspaceId: string; loans: LoanVM[]; groups: Group[]; defaultGroupId: string; banks: Bank[]; assets: AssetChoice[] }) {
+export function LoansPanel({ workspaceId, loans, groups, defaultGroupId, banks, assets, pockets }: { workspaceId: string; loans: LoanVM[]; groups: Group[]; defaultGroupId: string; banks: Bank[]; assets: AssetChoice[]; pockets: PocketChoice[] }) {
   const [dialog, setDialog] = useState<{ loan: LoanVM | null } | null>(null);
   const live = loans.filter((l) => l.onBudget && l.phase !== "finished");
   const done = loans.filter((l) => l.phase === "finished");
@@ -183,7 +199,7 @@ export function LoansPanel({ workspaceId, loans, groups, defaultGroupId, banks, 
         </div>
       )}
       {done.length > 0 && <p className="mt-2 text-xs text-slate-500">{done.length} paid off: {done.map((l) => l.name).join(", ")}</p>}
-      {dialog && <LoanDialog key={dialog.loan?.accountId ?? "new"} open onClose={() => setDialog(null)} workspaceId={workspaceId} loan={dialog.loan} groups={groups} defaultGroupId={defaultGroupId} banks={banks} assets={assets} />}
+      {dialog && <LoanDialog key={dialog.loan?.accountId ?? "new"} open onClose={() => setDialog(null)} workspaceId={workspaceId} loan={dialog.loan} groups={groups} defaultGroupId={defaultGroupId} banks={banks} assets={assets} pockets={pockets} />}
     </div>
   );
 }

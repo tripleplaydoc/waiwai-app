@@ -22,6 +22,7 @@ const schema = z.object({
   groupId: z.string().optional(),
   paidFromId: z.string().optional(),
   securedById: z.string().optional(),
+  pocketId: z.string().optional(),
 });
 
 /** Creates a loan (or adds terms to an existing loan account) and puts its payment on the budget as a monthly bill. */
@@ -58,8 +59,19 @@ export async function saveLoanAction(_prev: ActionResult | undefined, formData: 
     paidFromId = a.id;
   }
 
+  // An existing pocket to use instead of making a new one (it keeps its name, category and money; only its target and due date follow the loan).
+  let chosenPocketId: string | null = null;
+  if (d.pocketId) {
+    const c = await prisma.category.findFirst({ where: { id: d.pocketId, workspaceId: d.workspaceId, type: "EXPENSE", isArchived: false, isSystemManaged: false } });
+    if (!c) return { ok: false, error: "That pocket isn't available." };
+    if (c.loanAccountId && c.loanAccountId !== account?.id) return { ok: false, error: `${c.name} already pays another loan.` };
+    chosenPocketId = c.id;
+  }
+
   let groupId: string | null = null;
-  if (d.groupId && d.groupId !== "__new") {
+  if (chosenPocketId) {
+    // keeps the pocket's own category
+  } else if (d.groupId && d.groupId !== "__new") {
     const g = await prisma.categoryGroup.findFirst({ where: { id: d.groupId, workspaceId: d.workspaceId, isArchived: false } });
     if (!g) return { ok: false, error: "Pick a category for the loan." };
     groupId = g.id;
@@ -102,7 +114,12 @@ export async function saveLoanAction(_prev: ActionResult | undefined, formData: 
 
     const existing = await tx.category.findUnique({ where: { loanAccountId: account.id } });
     const pocketData = { name: d.name, categoryGroupId: groupId, fundingTargetType: "MONTHLY_FUNDING" as const, fundingTargetCents: pay, dueDay: day, paidFromAccountId: paidFromId, isArchived: false };
-    if (existing) await tx.category.update({ where: { id: existing.id }, data: pocketData });
+    if (chosenPocketId && existing?.id !== chosenPocketId) {
+      // Use the pocket you already have. The one made earlier for this loan (if any) is let go.
+      if (existing) await tx.category.update({ where: { id: existing.id }, data: { loanAccountId: null, isArchived: true } });
+      const keep = await tx.category.findUniqueOrThrow({ where: { id: chosenPocketId } });
+      await tx.category.update({ where: { id: chosenPocketId }, data: { loanAccountId: account.id, fundingTargetType: "MONTHLY_FUNDING", fundingTargetCents: pay, dueDay: day, paidFromAccountId: paidFromId ?? keep.paidFromAccountId } });
+    } else if (existing) await tx.category.update({ where: { id: existing.id }, data: chosenPocketId ? { fundingTargetType: "MONTHLY_FUNDING", fundingTargetCents: pay, dueDay: day, ...(paidFromId ? { paidFromAccountId: paidFromId } : {}), isArchived: false } : pocketData });
     else {
       const top = await tx.category.aggregate({ where: { workspaceId: d.workspaceId, categoryGroupId: groupId }, _max: { sortOrder: true } });
       await tx.category.create({ data: { workspaceId: d.workspaceId, type: "EXPENSE", loanAccountId: account.id, sortOrder: (top._max.sortOrder ?? 0) + 1, ...pocketData } });

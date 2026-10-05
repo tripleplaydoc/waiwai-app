@@ -22,9 +22,14 @@ export interface LoanVM {
   paidFromId: string | null;
   /** Owed balance recorded on the loan account (net worth). */
   balanceOwedCents: number;
+  /** Name of the budget pocket that pays this loan. */
+  pocketName: string | null;
   /** The asset this loan is secured by (car, home…), with its latest value. */
   securedBy: { id: string; name: string; valueCents: number } | null;
 }
+
+/** A pocket already on the budget that can be used to pay a loan. */
+export interface PocketChoice { id: string; name: string; group: string }
 
 /** An asset a loan can be tied to. */
 export interface AssetChoice { id: string; name: string; /** Name of another loan it is already tied to, if any. */ otherLoan: string | null }

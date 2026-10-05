@@ -4,12 +4,18 @@ import { loanStatus } from "@/lib/loans";
 import { dateToIso } from "@/lib/utils/dates";
 import type { EnvelopeRow } from "./summary";
 import { holdingOf, holdingSide } from "@/lib/holdings";
-import type { AssetChoice, LoanVM } from "./loans-types";
+import type { AssetChoice, LoanVM, PocketChoice } from "./loans-types";
 
 /**
  * Every loan account in the workspace with where it stands this month. Loans that have terms and a budget pocket also keep
  * that pocket in step with the schedule: no target before the first payment, archived after the last.
  */
+/** Pockets already on the budget that aren't paying a loan yet (so a loan can use one instead of making a new pocket). */
+export async function loadPocketChoices(workspaceId: string): Promise<PocketChoice[]> {
+  const cats = await prisma.category.findMany({ where: { workspaceId, type: "EXPENSE", isArchived: false, isSystemManaged: false, loanAccountId: null }, include: { categoryGroup: { select: { name: true, sortOrder: true } } }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+  return cats.sort((a, b) => (a.categoryGroup?.sortOrder ?? 999) - (b.categoryGroup?.sortOrder ?? 999)).map((c) => ({ id: c.id, name: c.name, group: c.categoryGroup?.name ?? "No category" }));
+}
+
 /** Hand-valued assets in the workspace that a loan can be secured by (car, home, boat…). */
 export async function loadAssetChoices(workspaceId: string): Promise<AssetChoice[]> {
   const accts = await prisma.account.findMany({ where: { workspaceId, isArchived: false, balanceMode: "MANUAL" }, include: { holdingDetail: { include: { linkedLoan: { select: { name: true } } } } }, orderBy: { name: "asc" } });
@@ -36,7 +42,7 @@ export async function loadLoans(workspaceId: string, monthIso: string, rows: Env
     const first = d?.firstPaymentDate ? dateToIso(d.firstPaymentDate) : null;
     const n = d?.termMonths ?? null;
     const owed = Math.max(0, -(a.manualBalanceEntries[0]?.balanceCents ?? 0));
-    const base = { accountId: a.id, name: a.name, paymentCents: pay, numPayments: n, firstDueIso: first, aprBps: d?.interestRateBps ?? 0, originalCents: d?.originalAmountCents ?? 0, groupId: pocket?.categoryGroupId ?? null, paidFromId: pocket?.paidFromAccountId ?? null, balanceOwedCents: owed, securedBy: securedBy.get(a.id) ?? null };
+    const base = { accountId: a.id, name: a.name, paymentCents: pay, numPayments: n, firstDueIso: first, aprBps: d?.interestRateBps ?? 0, originalCents: d?.originalAmountCents ?? 0, groupId: pocket?.categoryGroupId ?? null, paidFromId: pocket?.paidFromAccountId ?? null, balanceOwedCents: owed, pocketName: pocket?.name ?? null, securedBy: securedBy.get(a.id) ?? null };
     if (!first || !n || pay <= 0) {
       out.push({ ...base, onBudget: false, paymentsDone: 0, paymentsLeft: n ?? 0, nextDueIso: null, lastDueIso: null, phase: "unset", remainingCents: 0, paidThisMonth: false, overdue: false });
       continue;
