@@ -2,12 +2,14 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeftRight, Plus, ShoppingBag } from "lucide-react";
+import { ArrowLeftRight, Landmark, Plus, ShoppingBag } from "lucide-react";
 import { Affirmation, type Flow } from "@/components/affirmation";
 import { ReceiptField } from "@/components/receipt-field";
 import { TagChips } from "@/components/tag-picker";
 import { Modal } from "@/components/modal";
 import { createTransactionAction } from "@/app/actions/transactions";
+import { payCardAction } from "@/app/actions/cards";
+import { payLoanAction } from "@/app/actions/loans";
 import { assignMoreAction, moveMoneyAction } from "@/app/actions/pockets";
 import { getQuickAddDataAction, suggestPocketsAction, type QuickAddData, type SuggestData } from "@/app/actions/quick";
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
@@ -15,7 +17,7 @@ import { planPurchase, type AffordResult } from "@/lib/budget/afford";
 import { taxSavingCents } from "@/lib/budget/suggest";
 import { MIXED_USE_TYPES, deductibleShareBps } from "@/lib/budget/expense-types";
 
-type Mode = "tx" | "afford";
+type Mode = "tx" | "afford" | "pay";
 
 export function QuickAdd() {
   const ws = useSearchParams().get("ws") === "business" ? "business" : "personal";
@@ -52,6 +54,9 @@ export function QuickAdd() {
             <button role="menuitem" type="button" className={row} onClick={() => pick("tx")}>
               <span className="flex size-9 items-center justify-center rounded-full bg-blue-50 text-[#2E6BE6] dark:bg-blue-950"><ArrowLeftRight className="size-4" aria-hidden /></span> Add transaction
             </button>
+            <button role="menuitem" type="button" className={row} onClick={() => pick("pay")}>
+              <span className="flex size-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950"><Landmark className="size-4" aria-hidden /></span> Pay card or loan
+            </button>
             <button role="menuitem" type="button" className={row} onClick={() => pick("afford")}>
               <span className="flex size-9 items-center justify-center rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950"><ShoppingBag className="size-4" aria-hidden /></span> Can I buy this?
             </button>
@@ -66,13 +71,15 @@ export function QuickAdd() {
       </div>
 
       {mode && (
-        <Modal open onClose={close} title={mode === "tx" ? "Add transaction" : "Can I buy this?"}>
+        <Modal open onClose={close} title={mode === "tx" ? "Add transaction" : mode === "pay" ? "Pay a card or loan" : "Can I buy this?"}>
           {loadError ? (
             <p role="alert" className="text-sm text-neg">Couldn&apos;t load your accounts. Please try again.</p>
           ) : !data ? (
             <p className="py-6 text-center text-sm text-slate-500">Loading…</p>
           ) : mode === "tx" ? (
             <TxForm key={round} data={data} onDone={done} onCancel={close} onAnother={() => setRound((r) => r + 1)} />
+          ) : mode === "pay" ? (
+            <PayDebtForm data={data} onDone={done} onCancel={close} />
           ) : (
             <AffordForm data={data} onDone={done} onCancel={close} />
           )}
@@ -255,6 +262,66 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
         <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>
         <button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
       </div>
+    </form>
+  );
+}
+
+function PayDebtForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => void; onCancel: () => void }) {
+  const payFrom = data.accounts.filter((a) => a.kind === "debit" || a.kind === "savings" || a.kind === "cash");
+  const [debtId, setDebtId] = useState(data.debts[0]?.id ?? "");
+  const debt = data.debts.find((d) => d.id === debtId);
+  const [amount, setAmount] = useState(debt && debt.suggestCents > 0 ? centsToInput(debt.suggestCents) : "");
+  const [principal, setPrincipal] = useState("");
+  const [error, setError] = useState<string>();
+  const [pending, start] = useTransition();
+  // For a loan, guess how much of the payment lowers the balance: payment minus a month of interest.
+  const guess = (cents: number) => debt && debt.kind === "loan" ? Math.max(0, cents - Math.round((debt.owedCents * debt.aprBps) / 10000 / 12)) : 0;
+  function choose(id: string) {
+    setDebtId(id);
+    const d = data.debts.find((x) => x.id === id);
+    setAmount(d && d.suggestCents > 0 ? centsToInput(d.suggestCents) : ""); setPrincipal("");
+  }
+  if (data.debts.length === 0) return <p className="py-4 text-sm">You don&apos;t have a credit card or loan in {data.isBusiness ? "Business" : "Personal"} yet. Add one on the Accounts page.</p>;
+  if (payFrom.length === 0) return <p className="py-4 text-sm">Add a checking, savings or cash account to pay from first.</p>;
+  const cents = parseToCents(amount);
+  const principalHint = cents && debt?.kind === "loan" ? guess(cents) : 0;
+  function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(undefined);
+    const fd = new FormData(e.currentTarget);
+    if (debt?.kind === "loan") { fd.set("loanId", debtId); fd.set("principal", principal.trim() || (principalHint ? centsToInput(principalHint) : "")); } else fd.set("cardId", debtId);
+    start(async () => {
+      const r = debt?.kind === "loan" ? await payLoanAction(undefined, fd) : await payCardAction(undefined, fd);
+      if (!r.ok) { setError(r.error); return; }
+      onDone();
+    });
+  }
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <div>
+        <label htmlFor="pd-debt" className="label">What are you paying?</label>
+        <select id="pd-debt" className="input" value={debtId} onChange={(e) => choose(e.target.value)}>
+          {data.debts.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.kind === "card" ? "credit card" : "loan"}) · owe {formatCents(d.owedCents)}</option>)}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="pd-from" className="label">Pay from</label>
+        <select id="pd-from" name="fromAccountId" className="input" defaultValue={payFrom[0]?.id}>{payFrom.map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind ? ` (${a.kind})` : ""}</option>)}</select>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><label htmlFor="pd-amt" className="label">Amount</label><input id="pd-amt" name="amount" required inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="input nums" placeholder="0.00" /></div>
+        <div><label htmlFor="pd-date" className="label">Date</label><input id="pd-date" name="date" type="date" defaultValue={data.today} className="input" /></div>
+      </div>
+      {debt && debt.owedCents > 0 && <button type="button" className="rounded-full border border-[#E2E8F0] px-3 py-2 text-xs font-semibold dark:border-slate-700" onClick={() => setAmount(centsToInput(debt.owedCents))}>Pay it all off {formatCents(debt.owedCents)}</button>}
+      {debt?.kind === "loan" && (
+        <div>
+          <label htmlFor="pd-prin" className="label">Part that lowers what you owe (the rest is interest)</label>
+          <input id="pd-prin" inputMode="decimal" value={principal} onChange={(e) => setPrincipal(e.target.value)} className="input nums" placeholder={principalHint ? centsToInput(principalHint) : "0.00"} />
+        </div>
+      )}
+      <p className="text-xs text-slate-500">{debt?.kind === "loan" ? "This takes the payment out of the account you pick, counts it in the loan's pocket, and lowers the balance you owe." : "This moves money from your account to the card. It isn't spending, so none of your pockets change."}</p>
+      {error && <p role="alert" className="text-sm text-neg">{error}</p>}
+      <div className="flex justify-end gap-2 pt-1"><button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button><button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Saving…" : "Record payment"}</button></div>
     </form>
   );
 }

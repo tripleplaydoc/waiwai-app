@@ -23,6 +23,8 @@ export interface QuickAddData {
   payees: string[];
   people: { id: string; name: string }[];
   currentUserId: string | null;
+  /** Credit cards and loans that can be paid, with what is owed and a suggested payment. */
+  debts: { id: string; name: string; kind: "card" | "loan"; owedCents: number; suggestCents: number; aprBps: number }[];
 }
 
 /** Loaded when the floating + button is opened, for whichever workspace is showing. */
@@ -41,6 +43,13 @@ export async function getQuickAddDataAction(wsParam: string): Promise<QuickAddDa
     prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true } }),
     getCurrentUser(),
   ]);
+  const cardAccts = accounts.filter((a) => a.type === "CREDIT_CARD" && a.balanceMode === "TRANSACTION_DERIVED");
+  const sums = cardAccts.length ? await prisma.transaction.groupBy({ by: ["accountId"], where: { accountId: { in: cardAccts.map((c) => c.id) } }, _sum: { amountCents: true } }) : [];
+  const loanAccts = await prisma.account.findMany({ where: { workspaceId: ws.id, type: "LOAN", isArchived: false }, include: { holdingDetail: { select: { interestRateBps: true } }, manualBalanceEntries: { orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }], take: 1 } }, orderBy: { name: "asc" } });
+  const debts: QuickAddData["debts"] = [
+    ...cardAccts.map((c) => { const owed = Math.max(0, -(c.openingBalanceCents + (sums.find((s) => s.accountId === c.id)?._sum.amountCents ?? 0))); return { id: c.id, name: c.name, kind: "card" as const, owedCents: owed, suggestCents: owed, aprBps: 0 }; }),
+    ...loanAccts.map((l) => ({ id: l.id, name: l.name, kind: "loan" as const, owedCents: Math.max(0, -(l.manualBalanceEntries[0]?.balanceCents ?? 0)), suggestCents: l.monthlyCashflowCents ?? 0, aprBps: l.holdingDetail?.interestRateBps ?? 0 })),
+  ];
   const rowById = new Map(summary.rows.map((r) => [r.id, r]));
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
   return {
@@ -54,6 +63,7 @@ export async function getQuickAddDataAction(wsParam: string): Promise<QuickAddDa
     payees: payees.map((p) => p.name),
     people: people.map((u) => ({ id: u.id, name: u.name || u.email.split("@")[0] })),
     currentUserId: me?.id ?? null,
+    debts,
   };
 }
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { assertAuthed } from "@/lib/auth";
+import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
 import { isoToDate, todayIso } from "@/lib/utils/dates";
 import { balanceAfter, loanStatus, paymentsFor, suggestPayment } from "@/lib/loans";
@@ -179,4 +179,37 @@ export async function removeLoanFromBudgetAction(workspaceId: string, accountId:
   await prisma.category.update({ where: { id: pocket.id }, data: { isArchived: true, loanAccountId: null } });
   revalidatePath("/budget");
   return { ok: true, message: "Taken off the budget." };
+}
+
+/** Records a loan payment: money out of a bank account, counted in the loan's pocket, and the balance owed goes down by the principal part. */
+export async function payLoanAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
+  await assertAuthed();
+  const loan = await prisma.account.findUnique({ where: { id: String(formData.get("loanId") ?? "") }, include: { loanPocket: true, holdingDetail: true } });
+  if (!loan || loan.type !== "LOAN" || loan.isArchived) return { ok: false, error: "Loan not found." };
+  const from = await prisma.account.findUnique({ where: { id: String(formData.get("fromAccountId") ?? "") } });
+  if (!from || from.isArchived || from.workspaceId !== loan.workspaceId || from.balanceMode === "MANUAL") return { ok: false, error: "Pick the account you're paying from." };
+  const t = String(formData.get("amount") ?? "").trim();
+  const cents = t ? parseToCents(t) : null;
+  if (cents === null || cents <= 0) return { ok: false, error: "Enter the payment amount, like 250.00." };
+  const pt = String(formData.get("principal") ?? "").trim();
+  const principal = pt ? parseToCents(pt) : null;
+  if (pt && (principal === null || principal < 0 || principal > cents)) return { ok: false, error: "The part that lowers the loan can't be more than the payment." };
+  const dateText = String(formData.get("date") ?? "").trim() || todayIso();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return { ok: false, error: "Pick a date." };
+  const date = isoToDate(dateText);
+  const me = (await getCurrentUser())?.id ?? null;
+  const pocket = loan.loanPocket && !loan.loanPocket.isArchived ? loan.loanPocket : null;
+  const ops = [
+    prisma.transaction.create({ data: { workspaceId: loan.workspaceId, accountId: from.id, date, amountCents: -cents, clearedStatus: "UNCLEARED", needsReview: false, personId: me, categoryId: from.onBudget ? pocket?.id ?? null : null, memo: `Loan payment: ${loan.name}` } }),
+  ];
+  if (principal && principal > 0) {
+    const latest = await prisma.manualBalanceEntry.findFirst({ where: { accountId: loan.id }, orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }] });
+    const owed = Math.max(0, -(latest?.balanceCents ?? 0));
+    ops.push(prisma.manualBalanceEntry.deleteMany({ where: { accountId: loan.id, asOfDate: date } }) as never);
+    ops.push(prisma.manualBalanceEntry.create({ data: { accountId: loan.id, asOfDate: date, balanceCents: -Math.max(0, owed - principal), note: "Payment recorded" } }) as never);
+  }
+  await prisma.$transaction(ops);
+  for (const p of ["/budget", "/accounts", "/holdings", "/reports"]) revalidatePath(p, "layout");
+  revalidatePath(`/accounts/${from.id}`);
+  return { ok: true, message: "Payment recorded." };
 }

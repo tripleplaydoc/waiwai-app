@@ -198,3 +198,6 @@ If a loan's first payment in the app is **next month** (because this month's was
 - Accounts page is grouped: Cash in hand (Cash accounts), Bank accounts (checking/savings = debit), Credit cards. Account pickers (add transaction, quick add, transfer) show "(cash)", "(debit)" or "(credit card)" next to the name.
 - Credit limit per card (card page > "Limit, dates, interest rate & minimum payment"). New table `credit_limits` (migration 20261005320000, RLS on). The Accounts page shows a "Credit used" bar per card plus a combined bar; green under 30%, amber 50-80%, red above 80%. Pages still work before the SQL is run (no bars until then).
 - Date inputs no longer push past the right edge of dialogs on phones (global `input[type=date].input` + grid `min-width:0`).
+
+## Pay card or loan from the + button
+"+" menu > **Pay card or loan**. Pick the card or loan, the account you pay from, amount and date. Cards: money moves from the account to the card (a transfer, no pocket changes). Loans: the payment comes out of the account, counts in the loan's pocket (so the pocket shows paid), and the balance owed drops by the principal part (defaults to payment minus a month of interest; editable). "Pay it all off" fills the full balance.
