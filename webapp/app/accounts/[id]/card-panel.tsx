@@ -8,6 +8,7 @@ import { coverCardShortfallAction, payCardAction, saveCardTermsAction } from "@/
 import { centsToInput, formatCents } from "@/lib/utils/currency";
 import type { CardStatus } from "@/lib/budget/cards";
 import { inDays, shortDate } from "@/lib/cycle";
+import { CreditMeter } from "@/components/credit-meter";
 
 const Msg = ({ s }: { s: { ok: boolean; message?: string; error?: string } | undefined }) =>
   !s ? null : s.ok ? (s.message ? <p role="status" className="text-sm text-pos">{s.message}</p> : null) : <p role="alert" className="text-sm text-[#C9372C]">{s.error}</p>;
@@ -84,6 +85,7 @@ export function CardPanel({ card, payFrom, pockets, today, wsQ }: { card: CardSt
             {card.uncategorizedCents > 0 && <p className="pl-6 text-xs text-slate-600 dark:text-slate-300">{formatCents(card.uncategorizedCents)} of card spending has no pocket yet. Pick one for those transactions below.</p>}
           </div>
         )}
+        <CreditMeter owedCents={card.owedCents} limitCents={card.limitCents} />
         {(card.nextDue || card.nextStatement) && (
           <div className="grid grid-cols-2 gap-3 text-center">
             {card.nextStatement && (
@@ -108,9 +110,10 @@ export function CardPanel({ card, payFrom, pockets, today, wsQ }: { card: CardSt
           {card.owedCents > 0 && <Link href={`/holdings/payoff${wsQ}`} className="btn">Payoff plan</Link>}
         </div>
         <details className="rounded-xl border border-[#E2E8F0] dark:border-slate-700">
-          <summary className="cursor-pointer px-3 py-3 text-sm font-semibold">Dates, interest rate &amp; minimum payment{card.aprBps != null ? ` · ${card.aprBps / 100}%` : ""}</summary>
+          <summary className="cursor-pointer px-3 py-3 text-sm font-semibold">Limit, dates, interest rate &amp; minimum payment{card.aprBps != null ? ` · ${card.aprBps / 100}%` : ""}</summary>
           <form action={termsAction} className="space-y-3 px-3 pb-3">
             <input type="hidden" name="cardId" value={card.id} />
+            <div><label htmlFor="card-limit" className="label">Credit limit</label><input id="card-limit" name="limit" inputMode="decimal" defaultValue={card.limitCents ? centsToInput(card.limitCents) : ""} className="input nums" placeholder="5000.00" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><label htmlFor="card-stmt" className="label">Statement closes on day</label><input id="card-stmt" name="statementDay" inputMode="numeric" maxLength={2} defaultValue={card.statementDay ?? ""} className="input nums" placeholder="15" /></div>
               <div><label htmlFor="card-due" className="label">Payment due on day</label><input id="card-due" name="dueDay" inputMode="numeric" maxLength={2} defaultValue={card.dueDay ?? ""} className="input nums" placeholder="10" /></div>

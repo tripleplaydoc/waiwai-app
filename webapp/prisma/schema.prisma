@@ -423,6 +423,7 @@ model Account {
   transferTransactions  Transaction[]        @relation("TransferAccountTransactions")
   manualBalanceEntries  ManualBalanceEntry[]
   holdingDetail         HoldingDetail?       @relation("HoldingDetailOwner")
+  creditLimit           CreditLimit?
   holdingPositions      HoldingPosition[]
   balanceCheckpoints    BalanceCheckpoint[]
   securedByThis         HoldingDetail[]      @relation("HoldingDetailLoan")
@@ -1352,4 +1353,15 @@ model BalanceCheckpoint {
   @@index([accountId, date])
   @@index([workspaceId, createdAt])
   @@map("balance_checkpoints")
+}
+
+/// Credit limit of a credit card (own table so the live accounts table is untouched).
+model CreditLimit {
+  id         String   @id @default(cuid())
+  accountId  String   @unique
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  limitCents Int
+  updatedAt  DateTime @updatedAt
+
+  @@map("credit_limits")
 }

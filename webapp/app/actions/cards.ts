@@ -103,11 +103,18 @@ export async function saveCardTermsAction(_prev: ActionResult | undefined, formD
   const stmt = dayOf("statementDay", "Statement date"), due = dayOf("dueDay", "Due date");
   if ("error" in stmt) return { ok: false, error: stmt.error };
   if ("error" in due) return { ok: false, error: due.error };
+  const limText = blank(formData.get("limit"));
+  const limit = limText ? parseToCents(limText) : null;
+  if (limText && (limit === null || limit < 0)) return { ok: false, error: "Credit limit must be an amount like 5000.00." };
   const fields = { interestRateBps: bps, statementDay: stmt.day, dueDay: due.day };
   await prisma.$transaction([
     prisma.holdingDetail.upsert({ where: { accountId: card.id }, create: { accountId: card.id, ...fields }, update: fields }),
     prisma.account.update({ where: { id: card.id }, data: { monthlyCashflowCents: pay } }),
   ]);
+  try {
+    if (limit && limit > 0) await prisma.creditLimit.upsert({ where: { accountId: card.id }, create: { accountId: card.id, limitCents: limit }, update: { limitCents: limit } });
+    else await prisma.creditLimit.deleteMany({ where: { accountId: card.id } });
+  } catch { if (limit) return { ok: false, error: "The credit limit table isn't set up yet. Run the latest SQL first." }; }
   if (bps && bps > 0) await ensureInterestPocket(card.workspaceId);
   refresh(card.id);
   return { ok: true, message: "Card details saved." };

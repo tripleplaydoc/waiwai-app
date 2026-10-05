@@ -209,7 +209,7 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
         <div>
           <label htmlFor="qa-acct" className="label">Account</label>
           <select id="qa-acct" name="accountId" className="input" value={acct} onChange={(e) => setAcct(e.target.value)}>
-            {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind ? ` (${a.kind})` : ""}</option>)}
           </select>
         </div>
         <div>

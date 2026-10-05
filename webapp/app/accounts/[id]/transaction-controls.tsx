@@ -27,7 +27,7 @@ function CategoryOptions({ options }: { options: CatOption[] }) {
 }
 
 export function AddTransactionButton({ accountId, accounts, isBusiness, categories, payees, today, people, currentUserId }: {
-  people: { id: string; name: string }[]; currentUserId: string | null; accountId: string; accounts: { id: string; name: string }[]; isBusiness: boolean; categories: CatOption[]; payees: string[]; today: string;
+  people: { id: string; name: string }[]; currentUserId: string | null; accountId: string; accounts: { id: string; name: string; kind?: string }[]; isBusiness: boolean; categories: CatOption[]; payees: string[]; today: string;
 }) {
   const [open, setOpen] = useState(false);
   const [direction, setDirection] = useState<Flow>("outflow");
@@ -97,7 +97,7 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
           <div>
             <label htmlFor="tx-acct" className="label">Account</label>
             <select id="tx-acct" name="accountId" className="input" value={acct} onChange={(e) => setAcct(e.target.value)}>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind ? ` (${a.kind})` : ""}</option>)}
             </select>
           </div>
           {people.length > 1 && (

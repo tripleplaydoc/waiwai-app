@@ -17,6 +17,8 @@ export interface CardStatus {
   setAsideCents: number;
   parts: ShortPart[];
   uncategorizedCents: number;
+  /** Credit limit, when set (null = not entered or table not migrated yet). */
+  limitCents: number | null;
   aprBps: number | null;
   minPaymentCents: number;
   statementDay: number | null;
@@ -55,12 +57,15 @@ export async function loadCardStatuses(workspaceId: string, month: Date): Promis
   }
   const pockets = summary.rows.filter((r) => r.type !== "INCOME").map((r) => ({ id: r.id, name: r.name, availableCents: r.availableCents }));
   const short = computeCardShortfalls({ pockets, spend, uncategorized, owedCents: owed });
+  let limits: { accountId: string; limitCents: number }[] = [];
+  try { limits = await prisma.creditLimit.findMany({ where: { accountId: { in: ids } } }); } catch { /* table not migrated yet */ }
   const today = todayIso();
   return cards.map((c) => {
     const det = details.find((d) => d.accountId === c.id);
     return {
     id: c.id, name: c.name, owedCents: owed[c.id], shortCents: short[c.id].shortCents, setAsideCents: owed[c.id] - short[c.id].shortCents,
     parts: short[c.id].parts, uncategorizedCents: short[c.id].uncategorizedCents,
+    limitCents: limits.find((l) => l.accountId === c.id)?.limitCents ?? null,
     aprBps: det?.interestRateBps ?? null, minPaymentCents: c.monthlyCashflowCents ?? 0,
     statementDay: det?.statementDay ?? null, dueDay: det?.dueDay ?? null,
     nextStatement: det?.statementDay ? nextDayOfMonth(det.statementDay, today) : null,

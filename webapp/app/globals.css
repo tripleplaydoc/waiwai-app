@@ -81,6 +81,9 @@ html.dark {
   .input {
     @apply min-h-11 transition-shadow focus:border-[#2E6BE6] focus:outline-none focus:ring-4 focus:ring-indigo-500/15 w-full rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100;
   }
+  input[type="date"].input, input[type="month"].input, input[type="time"].input { min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; display: block; text-align: left; }
+  input[type="date"]::-webkit-date-and-time-value { text-align: left; min-height: 1.4em; }
+  .grid > * { min-width: 0; }
   .label { @apply mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400; }
   .nums { font-variant-numeric: tabular-nums; font-feature-settings: "tnum", "zero" 0, "cv11"; letter-spacing: -0.01em; }
   .th { @apply px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400; }

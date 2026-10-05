@@ -1,3 +1,4 @@
+import { accountKind } from "@/lib/account-kind";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Upload } from "lucide-react";
@@ -36,7 +37,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
     prisma.category.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     prisma.categoryGroup.findMany({ where: { workspaceId: account.workspaceId, isArchived: false } }),
     prisma.payee.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: { name: "asc" }, take: 500 }),
-    prisma.account.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: [{ onBudget: "desc" }, { name: "asc" }], select: { id: true, name: true } }),
+    prisma.account.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: [{ onBudget: "desc" }, { name: "asc" }], select: { id: true, name: true, type: true } }),
     prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true } }),
     getCurrentUser(),
   ]);
@@ -66,7 +67,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           <Link href={`/import${wsQ}${wsQ ? "&" : "?"}account=${account.id}`} className="btn"><Upload className="size-4" aria-hidden /> Import CSV</Link>
           <AddTransactionButton
             accountId={account.id}
-            accounts={allAccounts}
+            accounts={allAccounts.map((a) => ({ id: a.id, name: a.name, kind: accountKind(a.type) }))}
             people={people}
             currentUserId={me?.id ?? null}
             isBusiness={account.workspace.type === "BUSINESS"}

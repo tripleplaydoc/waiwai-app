@@ -193,3 +193,8 @@ Past years live in their **own tables** (`historical_transactions`, `history_acc
 
 ### Loans already paid up this month
 If a loan's first payment in the app is **next month** (because this month's was paid before you entered it), its pocket now shows the monthly payment and due day right away, with this month marked paid. Loans starting further out still show nothing until their first payment month.
+
+## Cash vs debit vs credit, credit limits, mobile date fix
+- Accounts page is grouped: Cash in hand (Cash accounts), Bank accounts (checking/savings = debit), Credit cards. Account pickers (add transaction, quick add, transfer) show "(cash)", "(debit)" or "(credit card)" next to the name.
+- Credit limit per card (card page > "Limit, dates, interest rate & minimum payment"). New table `credit_limits` (migration 20261005320000, RLS on). The Accounts page shows a "Credit used" bar per card plus a combined bar; green under 30%, amber 50-80%, red above 80%. Pages still work before the SQL is run (no bars until then).
+- Date inputs no longer push past the right edge of dialogs on phones (global `input[type=date].input` + grid `min-width:0`).

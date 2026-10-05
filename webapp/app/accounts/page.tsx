@@ -1,3 +1,4 @@
+import { accountKind } from "@/lib/account-kind";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
@@ -15,12 +16,14 @@ import { dateToIso } from "@/lib/utils/dates";
 import { loadMembers, type Member } from "@/lib/household";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { CreditMeter } from "@/components/credit-meter";
+import { utilization } from "@/lib/budget/utilization";
 import { proofFor, type ProofSummary } from "@/lib/proof-math";
 
 export const dynamic = "force-dynamic";
 
 const TYPE_LABEL: Record<string, string> = {
-  CHECKING: "Checking", SAVINGS: "Savings", CREDIT_CARD: "Credit card", CASH: "Cash", INVESTMENT: "Investment",
+  CHECKING: "Checking · debit", SAVINGS: "Savings", CREDIT_CARD: "Credit card", CASH: "Cash · in hand", INVESTMENT: "Investment",
   LOAN: "Loan", PROPERTY: "Property", OTHER_ASSET: "Other asset", OTHER_LIABILITY: "Other liability",
 };
 
@@ -41,6 +44,13 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const proofs = new Map<string, ProofSummary>(accounts.filter((a) => a.balanceMode === "TRANSACTION_DERIVED").map((a) => [a.id, proofFor(latest.get(a.id) ?? null, todayIso())]));
   const matched = [...proofs.values()].filter((p) => p.state === "matched").length;
   const onBudget = accounts.filter((a) => a.onBudget);
+  const cashAccts = onBudget.filter((a) => a.type === "CASH");
+  const bankAccts = onBudget.filter((a) => a.type !== "CASH" && a.type !== "CREDIT_CARD");
+  const cardAccts = onBudget.filter((a) => a.type === "CREDIT_CARD");
+  const cardList = [...cards.values()];
+  const withLimit = cardList.filter((c) => c.limitCents);
+  const allUtil = utilization(withLimit.reduce((s, c) => s + c.owedCents, 0), withLimit.reduce((s, c) => s + (c.limitCents ?? 0), 0));
+  const sub = (rows: typeof accounts) => `Subtotal: ${formatCents(rows.reduce((s, a) => s + a.balanceCents, 0))}`;
   const offBudget = accounts.filter((a) => !a.onBudget);
   const total = onBudget.reduce((s, a) => s + a.balanceCents, 0);
 
@@ -48,7 +58,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{workspace.name} accounts</h1>
-        <div className="ml-auto flex items-center gap-2"><TransferButton accounts={accounts.filter((a) => a.onBudget && a.type !== "CREDIT_CARD" && a.balanceMode !== "MANUAL").map((a) => ({ id: a.id, name: a.name }))} today={todayIso()} /><AddAccountButton workspaceId={workspace.id} today={todayIso()} members={members} meId={me?.id} /></div>
+        <div className="ml-auto flex items-center gap-2"><TransferButton accounts={accounts.filter((a) => a.onBudget && a.type !== "CREDIT_CARD" && a.balanceMode !== "MANUAL").map((a) => ({ id: a.id, name: a.name, kind: accountKind(a.type) }))} today={todayIso()} /><AddAccountButton workspaceId={workspace.id} today={todayIso()} members={members} meId={me?.id} /></div>
       </div>
       <div className="flex gap-2 text-sm font-semibold" role="tablist" aria-label="Accounts view">
         <span role="tab" aria-selected className="rounded-full bg-navy px-4 py-2 text-white">Accounts</span>
@@ -66,9 +76,27 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
         <div className="card p-5 text-sm">No accounts yet. Add your checking account first, with today’s balance as the opening balance.</div>
       )}
 
-      {onBudget.length > 0 && (
-        <AccountTable title="On budget" rows={onBudget} wsQ={wsQ} cards={cards} proofs={proofs} members={members} footer={`Total on budget: ${formatCents(total)}`} />
+      {cardList.length > 0 && (
+        <section className="card space-y-3 p-4" aria-label="Credit card limits">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Credit used</h2>
+            {allUtil && <span className="nums text-xs text-slate-500">{formatCents(allUtil.availableCents)} available across {withLimit.length} card{withLimit.length === 1 ? "" : "s"}</span>}
+          </div>
+          {allUtil && withLimit.length > 1 && <CreditMeter owedCents={allUtil.usedCents} limitCents={allUtil.limitCents} />}
+          <ul className="space-y-3">
+            {cardList.map((c) => (
+              <li key={c.id}>
+                <div className="mb-1 flex items-baseline justify-between gap-2 text-sm"><Link href={`/accounts/${c.id}${wsQ}`} className="font-medium text-[#2E6BE6] hover:underline dark:text-indigo-300">{c.name}</Link>{!c.limitCents && <Link href={`/accounts/${c.id}${wsQ}`} className="text-xs font-semibold text-[#2E6BE6] dark:text-indigo-300">Add credit limit</Link>}</div>
+                {c.limitCents ? <CreditMeter owedCents={c.owedCents} limitCents={c.limitCents} compact /> : <p className="nums text-xs text-slate-500">{formatCents(c.owedCents)} owed</p>}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
+      {cashAccts.length > 0 && <AccountTable title="Cash in hand (wallet, cash envelope)" rows={cashAccts} wsQ={wsQ} proofs={proofs} members={members} footer={sub(cashAccts)} />}
+      {bankAccts.length > 0 && <AccountTable title="Bank accounts (debit card, checking, savings)" rows={bankAccts} wsQ={wsQ} proofs={proofs} members={members} footer={sub(bankAccts)} />}
+      {cardAccts.length > 0 && <AccountTable title="Credit cards (balances show what you owe)" rows={cardAccts} wsQ={wsQ} cards={cards} proofs={proofs} members={members} footer={sub(cardAccts)} />}
+      {onBudget.length > 0 && <p className="nums text-right text-sm font-semibold text-slate-700 dark:text-slate-200">Total on budget: {formatCents(total)}</p>}
       {offBudget.length > 0 && (
         <AccountTable title="Off budget (counts toward net worth only)" rows={offBudget} wsQ={wsQ} members={members} proofs={proofs} />
       )}

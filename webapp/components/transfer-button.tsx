@@ -6,7 +6,7 @@ import { ArrowRightLeft } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { transferAction } from "@/app/actions/funding";
 
-export interface TransferAccount { id: string; name: string }
+export interface TransferAccount { id: string; name: string; kind?: string }
 
 /** Moves cash between two of your own bank accounts (not spending). */
 export function TransferButton({ accounts, today, className = "btn btn-sm", label = "Transfer" }: { accounts: TransferAccount[]; today: string; className?: string; label?: string }) {
@@ -36,13 +36,13 @@ export function TransferButton({ accounts, today, className = "btn btn-sm", labe
             <div>
               <label htmlFor="tr-from" className="label">From</label>
               <select id="tr-from" name="fromId" className="input" value={fromId} onChange={(e) => { setFromId(e.target.value); if (e.target.value === toId) setToId(accounts.find((a) => a.id !== e.target.value)?.id ?? ""); }}>
-                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind ? ` (${a.kind})` : ""}</option>)}
               </select>
             </div>
             <div>
               <label htmlFor="tr-to" className="label">To</label>
               <select id="tr-to" name="toId" className="input" value={toId} onChange={(e) => setToId(e.target.value)}>
-                {accounts.filter((a) => a.id !== fromId).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {accounts.filter((a) => a.id !== fromId).map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind ? ` (${a.kind})` : ""}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">

@@ -28,10 +28,10 @@ export function AddAccountButton({ workspaceId, today, members = [], meId }: { w
             <div>
               <label htmlFor="acct-type" className="label">Type</label>
               <select id="acct-type" name="type" className="input" value={type} onChange={(e) => setType(e.target.value)}>
-                <option value="CHECKING">Checking</option>
+                <option value="CHECKING">Checking (debit card)</option>
                 <option value="SAVINGS">Savings</option>
                 <option value="CREDIT_CARD">Credit card</option>
-                <option value="CASH">Cash</option>
+                <option value="CASH">Cash (wallet, cash in hand)</option>
                 <option value="INVESTMENT">Investment (off budget)</option>
                 <option value="LOAN">Loan (off budget)</option>
                 <option value="PROPERTY">Property (off budget)</option>
