@@ -9,9 +9,10 @@ import { TagChips } from "@/components/tag-picker";
 import { Modal } from "@/components/modal";
 import { createTransactionAction } from "@/app/actions/transactions";
 import { assignMoreAction, moveMoneyAction } from "@/app/actions/pockets";
-import { getQuickAddDataAction, type QuickAddData } from "@/app/actions/quick";
+import { getQuickAddDataAction, suggestPocketsAction, type QuickAddData, type SuggestData } from "@/app/actions/quick";
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 import { planPurchase, type AffordResult } from "@/lib/budget/afford";
+import { taxSavingCents } from "@/lib/budget/suggest";
 
 type Mode = "tx" | "afford";
 
@@ -108,7 +109,24 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
     const home = direction === "outflow" ? data.categories.find((c) => c.id === id)?.paidFromId : null;
     if (home && data.accounts.some((a) => a.id === home)) setAcct(home);
   };
-  const pickDirection = (d: Flow) => { setDirection(d); setCategory(d === "inflow" ? firstIncome : ""); };
+  const pickDirection = (d: Flow) => { setDirection(d); setCategory(d === "inflow" ? firstIncome : ""); setSuggest(null); };
+  // Smart suggestions: what is typed in Payee / Memo is matched to this workspace's history and to built-in vendor rules.
+  const [payeeText, setPayeeText] = useState("");
+  const [memoText, setMemoText] = useState("");
+  const [amountText, setAmountText] = useState("");
+  const [deductible, setDeductible] = useState(false);
+  const [suggest, setSuggest] = useState<SuggestData | null>(null);
+  const typed = `${payeeText} ${memoText}`.trim();
+  useEffect(() => {
+    if (direction !== "outflow" || typed.length < 2) { setSuggest(null); return; }
+    let live = true;
+    const t = setTimeout(() => {
+      suggestPocketsAction(data.isBusiness ? "business" : "personal", typed).then((r) => { if (live) setSuggest(r); }).catch(() => { if (live) setSuggest(null); });
+    }, 300);
+    return () => { live = false; clearTimeout(t); };
+  }, [typed, direction, data.isBusiness]);
+  const amountCents = parseToCents(amountText) ?? 0;
+  const chooseSuggestion = (id: string, deductibleToo: boolean) => { pickCategory(id); if (deductibleToo && data.isBusiness) setDeductible(true); };
   const [state, action, pending] = useActionState(createTransactionAction, undefined);
   useEffect(() => { if (state?.ok) setSaved(direction); // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
@@ -140,13 +158,46 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label htmlFor="qa-amount" className="label">Amount</label>
-          <input id="qa-amount" data-autofocus name="amount" required inputMode="decimal" placeholder="0.00" className="input nums" />
+          <input id="qa-amount" data-autofocus name="amount" required inputMode="decimal" placeholder="0.00" className="input nums" value={amountText} onChange={(e) => setAmountText(e.target.value)} />
         </div>
         <div>
           <label htmlFor="qa-date" className="label">Date</label>
           <input id="qa-date" name="date" type="date" required defaultValue={data.today} className="input" />
         </div>
       </div>
+      <div>
+        <label htmlFor="qa-payee" className="label">Payee</label>
+        <input id="qa-payee" name="payee" list="qa-payees" autoComplete="off" maxLength={200} className="input" value={payeeText} onChange={(e) => setPayeeText(e.target.value)} />
+        <datalist id="qa-payees">{data.payees.map((p) => <option key={p} value={p} />)}</datalist>
+      </div>
+      <div>
+        <label htmlFor="qa-memo" className="label">Memo</label>
+        <input id="qa-memo" name="memo" maxLength={500} className="input" value={memoText} onChange={(e) => setMemoText(e.target.value)} />
+      </div>
+      {direction === "outflow" && suggest && (suggest.suggestions.length > 0 || suggest.hint) && (
+        <div role="group" aria-label="Suggested pockets" aria-live="polite" className="space-y-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Suggested pocket</p>
+          {suggest.suggestions.map((sg) => {
+            const on = category === sg.categoryId;
+            const saves = sg.deductible && amountCents > 0 ? taxSavingCents(amountCents, suggest.taxBps) : 0;
+            return (
+              <button key={sg.categoryId} type="button" aria-pressed={on} onClick={() => chooseSuggestion(sg.categoryId, sg.deductible)}
+                className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left ${on ? "border-[#2E6BE6] bg-blue-50 dark:bg-blue-950/40" : "border-[#E2E8F0] hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`}>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{sg.name} <span className="font-normal text-slate-500">· {sg.group}</span></span>
+                  <span className="block text-xs text-slate-500">{sg.reason}</span>
+                </span>
+                {sg.deductible && (
+                  <span className="nums shrink-0 rounded-full bg-pos-soft px-2 py-0.5 text-[11px] font-semibold text-pos">Deductible{saves > 0 ? ` · saves ${formatCents(saves)}` : ""}</span>
+                )}
+              </button>
+            );
+          })}
+          {suggest.suggestions.length === 0 && suggest.hint && (
+            <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">This looks like <strong>{suggest.hint.label}</strong>, but you don&apos;t have a pocket for that yet. Pick the closest pocket below, or add one from the budget page.</p>
+          )}
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor="qa-acct" className="label">Account</label>
@@ -170,19 +221,10 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
           </select>
         </div>
       )}
-      <div>
-        <label htmlFor="qa-payee" className="label">Payee</label>
-        <input id="qa-payee" name="payee" list="qa-payees" autoComplete="off" maxLength={200} className="input" />
-        <datalist id="qa-payees">{data.payees.map((p) => <option key={p} value={p} />)}</datalist>
-      </div>
-      <div>
-        <label htmlFor="qa-memo" className="label">Memo</label>
-        <input id="qa-memo" name="memo" maxLength={500} className="input" />
-      </div>
       {direction === "outflow" && <TagChips idPrefix="qa-tag" />}
       <ReceiptField id="qa-receipt" />
       {data.isBusiness && direction === "outflow" && (
-        <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" /> Tax-deductible</label>
+        <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" checked={deductible} onChange={(e) => setDeductible(e.target.checked)} /> Tax-deductible{deductible && amountCents > 0 && data.isBusiness ? <span className="nums text-xs text-slate-500">· about {formatCents(taxSavingCents(amountCents, suggest?.taxBps ?? 3000))} less tax reserve needed</span> : null}</label>
       )}
       {state && !state.ok && <p role="alert" className="text-sm text-neg">{state.error}</p>}
       <div className="flex justify-end gap-2 pt-1">
