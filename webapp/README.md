@@ -151,3 +151,12 @@ After you paste or pick a statement, each money-out row gets a suggested pocket 
 
 ### Deductions to check (Reports → Overview, business)
 Lists spending in the period that looks like a business cost but is not counted: uncategorized purchases, purchases in non-deductible pockets, and business-type pockets not marked deductible (**Mark deductible** in one tap), each with the estimated tax saved at your rate. Guidance only, based on payee and memo wording.
+
+## History layer (past years, kept apart from the live budget)
+Past years live in their **own tables** (`historical_transactions`, `history_accounts`, `history_settings`), so by construction they can never change an account balance, Ready to Assign, a pocket or net worth. Only the **History** page (Reports → History) reads them. Tested: the budget page is identical with and without imported history.
+
+- **Go-live day** (set to Oct 5, 2026 by the migration). History for an account must end before the earlier of go-live and that account's first live transaction, so history and live data can never overlap or double count.
+- **Import past years** (`/history/import`): one account at a time, any number of years in one CSV, safe to re-import (rows already stored are skipped). Rows are typed automatically from the same vendor rules as Quick Add, transfers are set aside, and the rest are named in bulk by payee ("Name the biggest unknowns": pick a type once and every past row from that payee follows).
+- **Proof that history connects to today:** per account, enter the date and balance when its history begins. Start balance + all imported rows must equal the opening balance the live budget started from. It says **Connects** or **Off by $X** with likely causes (a missing or doubled deposit, a flipped sign, a swapped digit).
+- **Year by year:** revenue, expenses, profit, deductible expenses (meals 50%) and an estimated tax at your rate, with change versus the prior year and a by-type breakdown. The current year combines history and the live budget.
+- Migration `20261005280000_history_layer` adds only new tables, so the rest of the app works before it is run; the History page shows a setup note until it is.

@@ -101,6 +101,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
           <p className="text-sm text-slate-600 dark:text-slate-300">{tab === "assets" ? "Balances over time" : period.label}</p>
         </div>
         <div className="ml-auto flex gap-2 print:hidden">
+          <Link href={`/history${wsKey === "business" ? "?ws=business" : ""}`} className="btn btn-sm">History</Link>
           <a href={`/reports/export?${exportQ}&kind=pnl`} className="btn btn-sm"><Download className="size-4" aria-hidden /> CSV</a>
           <PrintButton />
         </div>

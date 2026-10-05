@@ -352,6 +352,9 @@ model Workspace {
   personalFlowConfig    PersonalFlowConfig?
   reserveDraws          ReserveDraw[]
   expenseReviews        ExpenseReview[]
+  historySettings       HistorySettings?
+  historyAccounts       HistoryAccount[]
+  historicalTransactions HistoricalTransaction[]
 
   @@index([ownerId])
   @@map("workspaces")
@@ -425,6 +428,8 @@ model Account {
   loanPocket            Category?            @relation("PocketLoan")
   importBatches         ImportBatch[]
   taxPaymentsSourced     TaxPayment[]
+  historyAccount         HistoryAccount?
+  historicalTransactions HistoricalTransaction[]
 
   @@index([workspaceId])
   @@index([stewardId])
@@ -1241,4 +1246,64 @@ model NetWorthSnapshot {
 
   @@unique([asOfDate])
   @@map("net_worth_snapshots")
+}
+
+/// ---------------------------------------------------------------------------
+/// History layer. Past years live in their OWN tables so they can never touch
+/// account balances, Ready to Assign, pockets or net worth. Only the History
+/// pages and year-over-year reports read them.
+/// ---------------------------------------------------------------------------
+
+model HistorySettings {
+  workspaceId String    @id
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  /// The day the live budget began. History must end before it.
+  goLiveDate  DateTime  @db.Date
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("history_settings")
+}
+
+/// What the account held when its history begins, so history can be proven against the opening balance.
+model HistoryAccount {
+  accountId         String    @id
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  workspaceId       String
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  startDate         DateTime? @db.Date
+  startBalanceCents Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([workspaceId])
+  @@map("history_accounts")
+}
+
+model HistoricalTransaction {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  date        DateTime @db.Date
+  /// Signed cents on the account: positive = money in.
+  amountCents Int
+  payee       String   @default("")
+  memo        String   @default("")
+  /// INCOME | EXPENSE | TRANSFER (transfers are kept so balances prove out, but never counted in reports).
+  kind        String
+  /// A WaiWai Type key (lib/budget/expense-types.ts); null = not classified yet.
+  typeKey         String?
+  isTaxDeductible Boolean @default(false)
+  /// Hash of account + date + amount + payee + memo (+ repeat number): re-importing a file skips rows already stored.
+  importHash String   @unique
+  source     String?
+  createdAt  DateTime @default(now())
+
+  @@index([workspaceId, date])
+  @@index([accountId, date])
+  @@index([workspaceId, typeKey])
+  @@map("historical_transactions")
 }

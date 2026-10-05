@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
@@ -20,6 +21,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-semibold tracking-tight">Import bank statement (CSV)</h1>
+      <p className="text-sm text-slate-600 dark:text-slate-300">For recent activity in your live budget. Importing past years? Use <Link className="font-semibold underline" href={`/history/import${wsKey === "business" ? "?ws=business" : ""}`}>History import</Link>, which keeps old data from changing your balances.</p>
       {accounts.length === 0 ? (
         <div className="card p-5 text-sm">Add an account first (Accounts page), then come back to import into it.</div>
       ) : (
