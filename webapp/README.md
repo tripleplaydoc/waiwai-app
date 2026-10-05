@@ -76,3 +76,8 @@ On the **Personal** workspace the Flow chip sets up a three-way split. **Assign*
 - **Loans**: rate, payment, original amount and term per loan; a live payoff calculator (extra monthly, one-time payment, "paid off in N years" payment, schedule) and a Debt payoff plan (avalanche / snowball) across all debts.
 - Env overrides for testing: `COINBASE_BASE`, `COINGECKO_BASE`, `YAHOO_BASE`, `STOOQ_BASE`, `FINNHUB_BASE`, `NHTSA_BASE`.
 - **Reinvested dividends / buying more**: open a position (pencil) → "Add shares". Adds to the share count, and to the cost basis when one is tracked (so gain stays accurate), with a history and undo. Cash dividends go in the account's Cash line.
+
+## Credit cards
+- Spending on a card comes out of the pocket you pick, exactly like cash. A card's status is computed (no extra pockets): **set aside** = what you owe minus the **short** part, where short = pockets overspent because of card charges + card spending with no pocket yet (never more than is owed).
+- The card page shows the status in plain words, **Pay card** (a two-sided transfer, not spending), **Cover the shortfall** (from Ready to Assign or another pocket), and interest rate / minimum payment (feeds the Debt payoff plan and creates an "Interest & fees" pocket). The Accounts list and Budget screen flag any short card.
+- When adding a card, type what you owe as a plain number; deleting one half of a payment removes both halves.

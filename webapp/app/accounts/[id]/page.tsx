@@ -8,6 +8,11 @@ import { dateToIso, formatShortDate, todayIso } from "@/lib/utils/dates";
 import { deleteTransactionAction } from "@/app/actions/transactions";
 import { TagEditor } from "@/components/tag-picker";
 import { EditAccountButton } from "../edit-account";
+import { loadCardStatuses } from "@/lib/budget/cards";
+import { getBudgetSummary } from "@/lib/budget/summary";
+import { startOfMonthUTC } from "@/lib/budget/dates";
+import { isoToDate } from "@/lib/utils/dates";
+import { CardPanel } from "./card-panel";
 import { AddTransactionButton, CategorySelect, ConfirmDeleteButton, PersonSelect, ReceiptCell } from "./transaction-controls";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +47,12 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
   const catOptions = categories.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroupId ? groupName.get(c.categoryGroupId) ?? "Other" : "Other", type: c.type }));
 
+  const isCard = account.type === "CREDIT_CARD" && account.onBudget && account.balanceMode !== "MANUAL";
+  const thisMonth = startOfMonthUTC(isoToDate(todayIso()));
+  const card = isCard ? (await loadCardStatuses(account.workspaceId, thisMonth)).find((c) => c.id === account.id) : undefined;
+  const cardPockets = card ? (await getBudgetSummary(account.workspaceId, thisMonth)).rows.filter((r) => r.type !== "INCOME").map((r) => ({ id: r.id, name: r.name, availableCents: r.availableCents })) : [];
+  const payFrom = (await prisma.account.findMany({ where: { workspaceId: account.workspaceId, isArchived: false, onBudget: true, balanceMode: "TRANSACTION_DERIVED", NOT: { OR: [{ id: account.id }, { type: "CREDIT_CARD" }] } }, orderBy: { name: "asc" }, select: { id: true, name: true } }));
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -65,6 +76,8 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           />
         </div>
       </div>
+
+      {card && <CardPanel card={card} payFrom={payFrom} pockets={cardPockets} today={todayIso()} wsQ={wsQ} />}
 
       {people.length > 1 && (
         <form method="get" className="flex flex-wrap items-center gap-2" aria-label="Filter by person">
@@ -90,10 +103,10 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
               </div>
               <div className={`nums shrink-0 text-[15px] font-semibold ${t.amountCents > 0 ? "text-pos" : ""}`}>{t.amountCents > 0 ? "+" : "−"}{formatCents(Math.abs(t.amountCents))}</div>
             </div>
-            <CategorySelect transactionId={t.id} current={t.categoryId ?? ""} options={catOptions} needsReview={t.needsReview} />
+            {t.transferGroupId ? <div className="text-xs font-medium text-slate-500">↔ Transfer (not spending)</div> : <CategorySelect transactionId={t.id} current={t.categoryId ?? ""} options={catOptions} needsReview={t.needsReview} />}
             <div className="flex flex-wrap items-center gap-2">
               {people.length > 1 && <div className="min-w-0 flex-1"><PersonSelect transactionId={t.id} current={t.personId ?? ""} people={people} /></div>}
-              {t.amountCents < 0 && <TagEditor transactionId={t.id} tags={t.tags} />}
+              {t.amountCents < 0 && !t.transferGroupId && <TagEditor transactionId={t.id} tags={t.tags} />}
               <ReceiptCell transactionId={t.id} receipt={t.receipt} />
               <form action={deleteTransactionAction} className="ml-auto">
                 <input type="hidden" name="transactionId" value={t.id} />
@@ -124,11 +137,11 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                   <div className="font-medium">{t.payee?.name ?? <span className="text-slate-400">No payee</span>}</div>
                   {t.memo && <div className="max-w-xs truncate text-xs text-slate-500">{t.memo}</div>}
                 </td>
-                <td className="td"><CategorySelect transactionId={t.id} current={t.categoryId ?? ""} options={catOptions} needsReview={t.needsReview} /></td>
+                <td className="td">{t.transferGroupId ? <span className="text-xs font-medium text-slate-500">↔ Transfer</span> : <CategorySelect transactionId={t.id} current={t.categoryId ?? ""} options={catOptions} needsReview={t.needsReview} />}</td>
                 <td className="td nums text-right">{t.amountCents < 0 ? formatCents(-t.amountCents) : ""}</td>
                 <td className="td nums text-right text-[#2E7D32]">{t.amountCents > 0 ? formatCents(t.amountCents) : ""}</td>
                 <td className="td">{people.length > 1 ? <PersonSelect transactionId={t.id} current={t.personId ?? ""} people={people} /> : <span className="text-slate-500">{people[0]?.name}</span>}</td>
-                <td className="td">{t.amountCents < 0 && <TagEditor transactionId={t.id} tags={t.tags} />}</td>
+                <td className="td">{t.amountCents < 0 && !t.transferGroupId && <TagEditor transactionId={t.id} tags={t.tags} />}</td>
                 <td className="td"><ReceiptCell transactionId={t.id} receipt={t.receipt} /></td>
                 <td className="td text-right">
                   <form action={deleteTransactionAction}>

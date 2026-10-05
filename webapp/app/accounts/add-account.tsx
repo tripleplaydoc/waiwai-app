@@ -9,6 +9,8 @@ export function AddAccountButton({ workspaceId, today }: { workspaceId: string; 
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(createAccountAction, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  const [type, setType] = useState("CHECKING");
+  const card = type === "CREDIT_CARD";
 
   useEffect(() => { if (state?.ok) { setOpen(false); formRef.current?.reset(); } }, [state]);
 
@@ -25,7 +27,7 @@ export function AddAccountButton({ workspaceId, today }: { workspaceId: string; 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="acct-type" className="label">Type</label>
-              <select id="acct-type" name="type" className="input" defaultValue="CHECKING">
+              <select id="acct-type" name="type" className="input" value={type} onChange={(e) => setType(e.target.value)}>
                 <option value="CHECKING">Checking</option>
                 <option value="SAVINGS">Savings</option>
                 <option value="CREDIT_CARD">Credit card</option>
@@ -38,15 +40,15 @@ export function AddAccountButton({ workspaceId, today }: { workspaceId: string; 
               </select>
             </div>
             <div>
-              <label htmlFor="acct-open" className="label">Opening balance</label>
+              <label htmlFor="acct-open" className="label">{card ? "What you owe today" : "Opening balance"}</label>
               <input id="acct-open" name="opening" inputMode="decimal" placeholder="0.00" className="input nums" />
             </div>
           </div>
           <div>
-            <label htmlFor="acct-date" className="label">Balance as of</label>
+            <label htmlFor="acct-date" className="label">{card ? "Owed as of" : "Balance as of"}</label>
             <input id="acct-date" name="openingDate" type="date" defaultValue={today} className="input" />
           </div>
-          <p className="text-xs text-slate-500">Use a minus sign for a credit card balance you owe, e.g. -450.00.</p>
+          <p className="text-xs text-slate-500">{card ? "Type what you owe as a plain number, like 450.00. Leave it blank if the card is paid off. You can add the interest rate and minimum payment on the card afterwards." : "Today’s balance. Use a minus sign for a debt, e.g. -450.00."}</p>
           {state && !state.ok && <p role="alert" className="text-sm text-[#C9372C]">{state.error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel <span className="kbd">Esc</span></button>

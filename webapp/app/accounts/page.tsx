@@ -4,6 +4,9 @@ import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
 import { getAccountBalances } from "@/lib/budget/summary";
 import { formatCents } from "@/lib/utils/currency";
 import { todayIso } from "@/lib/utils/dates";
+import { loadCardStatuses } from "@/lib/budget/cards";
+import { startOfMonthUTC } from "@/lib/budget/dates";
+import { isoToDate } from "@/lib/utils/dates";
 import { AddAccountButton } from "./add-account";
 import { EditAccountButton } from "./edit-account";
 import { dateToIso } from "@/lib/utils/dates";
@@ -20,6 +23,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const wsKey = wsKeyFromParam((await searchParams).ws);
   const workspace = await getWorkspace(wsKey);
   const accounts = await getAccountBalances(workspace.id);
+  const cards = new Map((await loadCardStatuses(workspace.id, startOfMonthUTC(isoToDate(todayIso())))).map((c) => [c.id, c]));
   const wsQ = wsKey === "business" ? "?ws=business" : "";
   const onBudget = accounts.filter((a) => a.onBudget);
   const offBudget = accounts.filter((a) => !a.onBudget);
@@ -41,7 +45,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
       )}
 
       {onBudget.length > 0 && (
-        <AccountTable title="On budget" rows={onBudget} wsQ={wsQ} footer={`Total on budget: ${formatCents(total)}`} />
+        <AccountTable title="On budget" rows={onBudget} wsQ={wsQ} cards={cards} footer={`Total on budget: ${formatCents(total)}`} />
       )}
       {offBudget.length > 0 && (
         <AccountTable title="Off budget (counts toward net worth only)" rows={offBudget} wsQ={wsQ} />
@@ -50,7 +54,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-function AccountTable({ title, rows, wsQ, footer }: { title: string; rows: Awaited<ReturnType<typeof getAccountBalances>>; wsQ: string; footer?: string }) {
+function AccountTable({ title, rows, wsQ, footer, cards }: { title: string; rows: Awaited<ReturnType<typeof getAccountBalances>>; wsQ: string; footer?: string; cards?: Map<string, { owedCents: number; shortCents: number }> }) {
   return (
     <section className="card overflow-hidden">
       <h2 className="border-b border-[#E2E8F0] bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">{title}</h2>
@@ -61,6 +65,9 @@ function AccountTable({ title, rows, wsQ, footer }: { title: string; rows: Await
               <td className="td">
                 <Link href={`/accounts/${a.id}${wsQ}`} className="font-medium text-[#2E6BE6] hover:underline dark:text-indigo-300">{a.name}</Link>
                 <span className="ml-2 text-xs text-slate-500">{TYPE_LABEL[a.type]}</span>
+                {cards?.get(a.id) && (() => { const c = cards.get(a.id)!; return c.owedCents === 0 ? null : c.shortCents > 0
+                  ? <div className="nums text-xs font-medium text-neg">{formatCents(c.shortCents)} short: not set aside yet</div>
+                  : <div className="text-xs font-medium text-pos">All set aside ✓</div>; })()}
               </td>
               <td className={`td nums text-right font-medium ${a.balanceCents < 0 ? "text-[#C9372C]" : ""}`}>{formatCents(a.balanceCents)}</td>
               <td className="td w-12 !pl-0 text-right">

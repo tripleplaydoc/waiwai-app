@@ -32,7 +32,7 @@ export default async function HoldingsPage({ searchParams }: { searchParams: Pro
     HOLDING_DEFS.filter((d) => d.side === side).map((d) => ({ def: d, items: rows.filter((r) => r.cls === d.key) })).filter((s) => s.items.length > 0);
   const monthlyIncome = rows.filter((r) => r.side === "ASSET").reduce((s, r) => s + r.monthlyCashflowCents, 0);
   const monthlyPayments = rows.filter((r) => r.side === "LIABILITY").reduce((s, r) => s + r.monthlyCashflowCents, 0);
-  const meta = await loadHoldingMeta(rows.filter((r) => r.manual).map((r) => r.id));
+  const meta = await loadHoldingMeta(rows.map((r) => r.id));
   const hasPositions = [...meta.values()].some((m) => m.positions.length > 0);
   const hasDebt = rows.some((r) => r.side === "LIABILITY" && r.valueCents > 0);
   const owedById = new Map(rows.map((r) => [r.id, r.valueCents]));

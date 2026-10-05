@@ -37,6 +37,8 @@ function Meter({ value, tone }: { value: number; tone: "pos" | "warn" | "neg" | 
   );
 }
 
+import { loadCardStatuses } from "@/lib/budget/cards";
+
 export default async function BudgetPage({ searchParams }: { searchParams: SP }) {
   await requireAuth();
   const sp = await searchParams;
@@ -53,6 +55,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
     prisma.categoryGroup.findMany({ where: { workspaceId: workspace.id, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
 
+  const cardsShort = (await loadCardStatuses(workspace.id, month)).filter((c) => c.shortCents > 0);
   const isPersonal = workspace.type === "PERSONAL";
   const { vm: flow } = await loadFlow(workspace.id, month, summary.rows);
   const pflow = isPersonal ? (await loadPersonalFlow(workspace.id, month, summary.rows)).vm : null;
@@ -215,6 +218,11 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
           {needsReview > 0 && null}
         </div>
       )}
+      {cardsShort.map((c) => (
+        <Link key={c.id} href={`/accounts/${c.id}${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-red-300 bg-neg-soft px-3 py-2 text-xs font-medium text-neg dark:border-red-800">
+          {c.name} is {formatCents(c.shortCents)} short: money spent on it isn&apos;t set aside yet. Tap to fix.
+        </Link>
+      ))}
       {needsReview > 0 && (
         <Link href={`/accounts${wsKey === "business" ? "?ws=business" : ""}`} className="inline-block rounded-xl border border-amber-300 bg-warn-soft px-3 py-2 text-xs font-medium text-warn dark:border-amber-700">
           {needsReview} transaction{needsReview === 1 ? "" : "s"} need a category

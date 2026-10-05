@@ -120,9 +120,12 @@ export async function deleteTransactionAction(formData: FormData): Promise<void>
   const id = z.string().min(1).parse(formData.get("transactionId"));
   const tx = await prisma.transaction.findUnique({ where: { id } });
   if (!tx) return;
-  await prisma.transaction.delete({ where: { id } });
+  // A transfer (like a card payment) has two halves; removing one removes both so the books stay balanced.
+  const halves = tx.transferGroupId ? await prisma.transaction.findMany({ where: { transferGroupId: tx.transferGroupId }, select: { id: true, accountId: true } }) : [];
+  await prisma.transaction.deleteMany({ where: { id: { in: halves.length ? halves.map((h) => h.id) : [id] } } });
   revalidatePath("/budget");
   revalidatePath(`/accounts/${tx.accountId}`);
+  for (const h of halves) revalidatePath(`/accounts/${h.accountId}`);
 }
 
 const importSchema = z.object({

@@ -29,7 +29,7 @@ export async function createAccountAction(_prev: ActionResult | undefined, formD
   if (d.opening && d.opening.trim() !== "") {
     const c = parseToCents(d.opening);
     if (c === null) return { ok: false, error: "Opening balance must be an amount like 1250.00 (use a minus sign for a debt)." };
-    opening = c;
+    opening = d.type === "CREDIT_CARD" && c > 0 ? -c : c; // for a card, a plain number is what you owe
   }
   const ws = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
   if (!ws) return { ok: false, error: "Workspace not found." };
@@ -74,7 +74,7 @@ export async function updateAccountAction(_prev: ActionResult | undefined, formD
     else {
       const c = parseToCents(d.opening);
       if (c === null) return { ok: false, error: "Starting balance must be an amount like 1250.00 (use a minus sign for a debt)." };
-      opening = c;
+      opening = d.type === "CREDIT_CARD" && c > 0 ? -c : c; // for a card, a plain number is what you owe
     }
   }
   let monthly: number | null | undefined;
