@@ -7,7 +7,7 @@ import { archiveHoldingAction, createHoldingAction, moveHoldingAction, updateHol
 import { HOLDING_DEFS, type HoldingKey } from "@/lib/holdings";
 import { centsToInput } from "@/lib/utils/currency";
 
-export interface HoldingEdit { id: string; name: string; cls: HoldingKey; valueCents: number; monthlyCents: number; manual: boolean }
+export interface HoldingEdit { id: string; name: string; cls: HoldingKey; valueCents: number; monthlyCents: number; manual: boolean; hasPositions?: boolean }
 
 export function HoldingButton({ workspaceId, today, edit, moveTo }: { workspaceId: string; today: string; edit?: HoldingEdit; moveTo?: { id: string; name: string } }) {
   const [open, setOpen] = useState(false);
@@ -19,6 +19,7 @@ export function HoldingButton({ workspaceId, today, edit, moveTo }: { workspaceI
   const [moving, startMove] = useTransition();
   useEffect(() => { if (state?.ok) setOpen(false); }, [state]);
   const side = HOLDING_DEFS.find((h) => h.key === cls)!.side;
+  const handValued = !edit || (edit.manual && !edit.hasPositions);
   const id = edit?.id ?? "new";
   return (
     <>
@@ -41,11 +42,11 @@ export function HoldingButton({ workspaceId, today, edit, moveTo }: { workspaceI
               <optgroup label="Liabilities (you owe)">{HOLDING_DEFS.filter((h) => h.side === "LIABILITY").map((h) => <option key={h.key} value={h.key}>{h.label}</option>)}</optgroup>
             </select>
           </div>
-          {(!edit || edit.manual) && (
+          {handValued && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor={`h-val-${id}`} className="label">{side === "ASSET" ? "Worth now" : "Owed now"}</label>
-                <input id={`h-val-${id}`} name="value" inputMode="decimal" required={!edit} defaultValue={edit ? centsToInput(edit.valueCents) : ""} className="input nums" placeholder="0.00" />
+                <label htmlFor={`h-val-${id}`} className="label">{cls === "CRYPTO" || cls === "STOCKS_FUNDS" ? "Worth now (optional)" : side === "ASSET" ? "Worth now" : "Owed now"}</label>
+                <input id={`h-val-${id}`} name="value" inputMode="decimal" required={!edit && cls !== "CRYPTO" && cls !== "STOCKS_FUNDS"} defaultValue={edit ? centsToInput(edit.valueCents) : ""} className="input nums" placeholder="0.00" />
               </div>
               <div>
                 <label htmlFor={`h-date-${id}`} className="label">As of</label>
@@ -53,12 +54,14 @@ export function HoldingButton({ workspaceId, today, edit, moveTo }: { workspaceI
               </div>
             </div>
           )}
-          {edit && !edit.manual && <input type="hidden" name="asOf" value={today} />}
-          {edit && !edit.manual && <input type="hidden" name="value" value="" />}
+          {!handValued && <input type="hidden" name="asOf" value={today} />}
+          {!handValued && <input type="hidden" name="value" value="" />}
+          {edit?.hasPositions && <p className="text-xs text-slate-500">This is valued from its coins or shares at live prices. Open it to change them.</p>}
           <div>
             <label htmlFor={`h-mo-${id}`} className="label">{side === "ASSET" ? "Income it produces each month" : "Payment each month"} <span className="font-normal text-slate-500">(optional)</span></label>
             <input id={`h-mo-${id}`} name="monthly" inputMode="decimal" defaultValue={edit && edit.monthlyCents ? centsToInput(edit.monthlyCents) : ""} className="input nums" placeholder="0.00" />
           </div>
+          {(cls === "CRYPTO" || cls === "STOCKS_FUNDS") && <p className="text-xs text-slate-500">After saving, tap it to add your {cls === "CRYPTO" ? "coins" : "stocks and funds"}. WaiWai then looks up live prices and keeps the value current.</p>}
           <p className="text-xs text-slate-500">Each time you update the value, WaiWai keeps the old one, so the reports can show growth over time.</p>
           {state && !state.ok && <p role="alert" className="text-sm text-[#C9372C]">{state.error}</p>}
           {err && <p role="alert" className="text-sm text-[#C9372C]">{err}</p>}

@@ -135,11 +135,14 @@ export async function createHoldingAction(_prev: ActionResult | undefined, formD
   const value = parseMoney(d.value, "Value"), monthly = parseMoney(d.monthly, "Monthly amount");
   if ("error" in value) return { ok: false, error: value.error };
   if ("error" in monthly) return { ok: false, error: monthly.error };
-  if (value.cents === null) return { ok: false, error: "Enter what it's worth (or what you owe)." };
+  // Coins and shares are valued from their positions (added next), so these two can start at zero.
+  const priced = cls === "CRYPTO" || cls === "STOCKS_FUNDS";
+  if (value.cents === null && !priced) return { ok: false, error: "Enter what it's worth (or what you owe)." };
+  const startCents = value.cents ?? 0;
   const ws = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
   if (!ws) return { ok: false, error: "Workspace not found." };
   const def = HOLDING_DEFS.find((h) => h.key === cls)!;
-  const signed = def.side === "ASSET" ? value.cents : -value.cents;
+  const signed = def.side === "ASSET" ? startCents : -startCents;
   await prisma.account.create({
     data: {
       workspaceId: d.workspaceId, name: d.name, type: def.accountType, onBudget: false, balanceMode: "MANUAL", holdingClass: cls,

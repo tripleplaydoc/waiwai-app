@@ -412,6 +412,9 @@ model Account {
   transactions          Transaction[]        @relation("AccountTransactions")
   transferTransactions  Transaction[]        @relation("TransferAccountTransactions")
   manualBalanceEntries  ManualBalanceEntry[]
+  holdingDetail         HoldingDetail?       @relation("HoldingDetailOwner")
+  holdingPositions      HoldingPosition[]
+  securedByThis         HoldingDetail[]      @relation("HoldingDetailLoan")
   importBatches         ImportBatch[]
   taxPaymentsSourced     TaxPayment[]
 
@@ -432,6 +435,73 @@ model ManualBalanceEntry {
 
   @@index([accountId, asOfDate])
   @@map("manual_balance_entries")
+}
+
+/// What a holding is made of, priced from live markets.
+enum PositionKind {
+  CRYPTO
+  STOCK
+}
+
+/// Extra facts about an asset or liability: cost basis, loan terms, vehicle info, notes.
+model HoldingDetail {
+  id        String  @id @default(cuid())
+  accountId String  @unique
+  account   Account @relation("HoldingDetailOwner", fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// Assets: what was paid in total (for gain/loss). Optional.
+  costBasisCents Int?
+  purchaseDate   DateTime? @db.Date
+  notes          String?
+  /// Uninvested cash sitting in a brokerage/crypto account (added to the priced positions).
+  cashCents      Int       @default(0)
+  /// The loan that is secured by this asset (home, car) — equity = value - what is owed.
+  linkedLoanId   String?
+  linkedLoan     Account?  @relation("HoldingDetailLoan", fields: [linkedLoanId], references: [id], onDelete: SetNull)
+
+  /// Loans: yearly interest rate in hundredths of a percent (6.25% = 625).
+  interestRateBps     Int?
+  termMonths          Int?
+  originalAmountCents Int?
+  loanStartDate       DateTime? @db.Date
+
+  /// Vehicles.
+  vin          String?
+  vehicleYear  Int?
+  vehicleMake  String?
+  vehicleModel String?
+  vehicleTrim  String?
+  mileage      Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("holding_details")
+}
+
+/// A number of coins or shares of one symbol, valued at the latest market price.
+model HoldingPosition {
+  id         String       @id @default(cuid())
+  accountId  String
+  account    Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  kind       PositionKind
+  /// Ticker (AAPL, VTI) or coin symbol (BTC, ETH), upper-case.
+  symbol     String
+  name       String?
+  /// Units held. Decimal because coins are fractional; value is rounded to cents only at the end.
+  quantity   Decimal      @db.Decimal(30, 12)
+  /// Total paid for this position (optional, for gain/loss).
+  costBasisCents Int?
+  /// Latest USD price per unit and when/where it came from.
+  lastPrice    Decimal?  @db.Decimal(30, 12)
+  priceAt      DateTime?
+  priceSource  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([accountId, kind, symbol])
+  @@index([accountId])
+  @@map("holding_positions")
 }
 
 // ----------------------------------------------------------------------------

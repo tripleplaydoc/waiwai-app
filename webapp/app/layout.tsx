@@ -7,6 +7,7 @@ import { BottomTabs, Nav } from "@/components/nav";
 import { LiveRefresh } from "@/components/live-refresh";
 import { avatarUrl } from "@/components/avatar";
 import { QuickAdd } from "@/components/quick-add";
+import { AutoPrices } from "@/components/auto-prices";
 
 export const metadata: Metadata = {
   title: "WaiWai",
@@ -41,6 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <BottomTabs />
             <QuickAdd />
             <LiveRefresh />
+            <AutoPrices />
           </Suspense>
         )}
       </body>
