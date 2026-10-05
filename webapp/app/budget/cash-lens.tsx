@@ -48,25 +48,20 @@ export function ReadyAmount({ rtaCents }: { rtaCents: number }) {
   );
 }
 
-function diffText(diff: number): { text: string; tone: string } {
-  if (Math.abs(diff) < 1) return { text: "Matches your budget", tone: "text-pos" };
-  return diff > 0
-    ? { text: `${formatCents(diff)} more in the bank than your budget holds here`, tone: "text-slate-600 dark:text-slate-300" }
-    : { text: `${formatCents(-diff)} less in the bank than your budget expects here`, tone: "text-warn" };
-}
-
-/** The Cash chip and its "Where's my cash" panel. */
+/** The Cash chip: a short list of accounts to tap. Hidden when there is only one account (nothing to choose). */
 export function CashChip({ workspaceId, month, today }: { workspaceId: string; month: string; today: string }) {
   const { cash, account, setAccount } = useCashLens();
   const router = useRouter();
   const [tagTo, setTagTo] = useState(cash.accounts[0]?.id ?? "");
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
-  if (cash.accounts.length === 0) return null;
+  if (cash.accounts.length < 2) return null;
   const picked = cash.accounts.find((a) => a.id === account);
   const totalReal = cash.accounts.reduce((s, a) => s + a.realCents, 0);
+  const off = (a: (typeof cash.accounts)[number]) => Math.abs(a.realCents - a.readyCents - a.pocketsCents);
+  const anyOff = cash.accounts.some((a) => off(a) >= 1);
 
-  const row = (key: string, title: string, big: number, detail: ReactNode, hint: { text: string; tone: string } | null, on: boolean, onPick: () => void) => (
+  const row = (key: string, title: string, big: number, detail: ReactNode, warn: string | null, on: boolean, onPick: () => void) => (
     <li key={key}>
       <button type="button" aria-pressed={on} onClick={onPick}
         className={`w-full rounded-xl border px-3 py-2 text-left ${on ? "border-[#2E6BE6] bg-blue-50 dark:border-blue-400 dark:bg-blue-950/40" : "border-[#E2E8F0] hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`}>
@@ -75,7 +70,7 @@ export function CashChip({ workspaceId, month, today }: { workspaceId: string; m
           <span className="nums text-[15px] font-bold">{formatCents(big)}</span>
         </span>
         <span className="nums block text-xs text-slate-500">{detail}</span>
-        {hint && <span className={`block text-[11px] ${hint.tone}`}>{hint.text}</span>}
+        {warn && <span className="block text-[11px] font-semibold text-warn">{warn}</span>}
       </button>
     </li>
   );
@@ -85,29 +80,27 @@ export function CashChip({ workspaceId, month, today }: { workspaceId: string; m
       icon={<Landmark className="size-3.5 text-[#2E6BE6]" aria-hidden />}
       label={picked ? <>Cash <span className="rounded-full bg-blue-50 px-1.5 text-[#1E4FBF] dark:bg-blue-950 dark:text-blue-300">{picked.name}</span></> : "Cash"}
     >
-      <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Where&apos;s my cash</p>
-      <p className="mb-2 text-xs text-slate-500">Pick an account to see the budget as that account&apos;s money: Ready to assign and every pocket show only what sits there.</p>
+      <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Your accounts</p>
+      <p className="mb-2 text-xs text-slate-500">Tap one to see the budget as just that account&apos;s money.</p>
       <ul className="space-y-1.5">
-        {row("all", "All accounts", totalReal, "Everything in the bank", null, account === null, () => setAccount(null))}
+        {row("all", "All accounts", totalReal, "Everything", null, account === null, () => setAccount(null))}
         {cash.accounts.map((a) =>
-          row(a.id, a.name, a.realCents,
-            <>Ready {formatCents(a.readyCents)} · Pockets {formatCents(a.pocketsCents)}</>,
-            diffText(a.realCents - a.readyCents - a.pocketsCents), account === a.id, () => setAccount(a.id)))}
+          row(a.id, a.name, a.realCents, <>Free {formatCents(a.readyCents)} · In pockets {formatCents(a.pocketsCents)}</>,
+            off(a) >= 1 ? `Off by ${formatCents(off(a))}` : null, account === a.id, () => setAccount(a.id)))}
       </ul>
+      {anyOff && <p className="mt-2 text-[11px] text-slate-500">&ldquo;Off by&rdquo; means the bank balance and your budget disagree. Usually a purchase or a move between accounts hasn&apos;t been entered yet.</p>}
       <div className="mt-2"><TransferButton accounts={cash.accounts.map((a) => ({ id: a.id, name: a.name }))} today={today} className="btn btn-sm w-full" label="Move cash between accounts" /></div>
-      {cash.cardsOwedCents > 0 && <p className="nums mt-2 text-xs text-slate-500">Credit cards owe {formatCents(cash.cardsOwedCents)}. Money spent on a card stays in the bank until you pay it.</p>}
 
       {cash.untaggedPocketCents > 0 && (
         <div className="mt-3 rounded-xl border border-amber-300 bg-warn-soft p-3 dark:border-amber-700">
-          <p className="text-xs font-semibold text-warn">{formatCents(cash.untaggedPocketCents)} in your pockets isn&apos;t tagged to an account yet.</p>
-          <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">It was assigned before accounts were tracked. Tag all of it to one account here, or go pocket by pocket: tap a pocket&apos;s amount, then <strong>Where it is</strong>.</p>
+          <p className="text-xs font-semibold text-warn">{formatCents(cash.untaggedPocketCents)} in your pockets isn&apos;t linked to an account yet.</p>
           <div className="mt-2 flex gap-2">
-            <select aria-label="Account to tag it to" className="input !min-h-10 flex-1" value={tagTo} onChange={(e) => setTagTo(e.target.value)}>
+            <select aria-label="Account that holds it" className="input !min-h-10 flex-1" value={tagTo} onChange={(e) => setTagTo(e.target.value)}>
               {cash.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
             <button type="button" className="btn btn-primary" disabled={pending || !tagTo}
               onClick={() => { setError(undefined); start(async () => { const r = await tagUntaggedAction(workspaceId, month, tagTo); if (r.ok) router.refresh(); else setError(r.error); }); }}>
-              {pending ? "Tagging…" : "Tag it"}
+              {pending ? "Saving…" : "Link it"}
             </button>
           </div>
           {error && <p role="alert" className="mt-1 text-xs text-neg">{error}</p>}
