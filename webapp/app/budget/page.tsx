@@ -19,7 +19,7 @@ import { BudgetBoard } from "./budget-board";
 import { BillBadge, MarkPaidButton } from "./bill-controls";
 import { shortDate } from "@/lib/budget/bills";
 import { MoveMoneyHost } from "./move-money-host";
-import { IncomeSection } from "./income-section";
+import { toVM } from "@/lib/budget/to-vm";
 import { isCustomKey } from "@/lib/budget/expense-types";
 import { DailyVerse } from "@/components/daily-verse";
 import { Popover } from "@/components/popover";
@@ -27,26 +27,6 @@ import { Popover } from "@/components/popover";
 export const dynamic = "force-dynamic";
 
 type SP = Promise<{ ws?: string; month?: string }>;
-
-function toVM(r: EnvelopeRow, month: Date, today: string): PocketVM {
-  const progress = pocketProgress(
-    {
-      assignedCents: r.assignedCents, activityCents: r.activityCents, availableCents: r.availableCents,
-      targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate ? new Date(`${r.targetDate}T00:00:00.000Z`) : null,
-    },
-    month
-  );
-  return {
-    id: r.id, name: r.name, groupId: r.groupId, assignedCents: r.assignedCents, activityCents: r.activityCents,
-    availableCents: r.availableCents, isSystemManaged: r.isSystemManaged, isTaxDeductible: r.isTaxDeductible,
-    priorityRank: r.priorityRank, targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate,
-    allocationBps: r.allocationBps, dueDay: r.dueDay, manualPaid: r.manualPaid, kind: r.type, expenseType: r.expenseType, incomeKind: r.incomeKind, progress,
-    bill: r.type === "INCOME" ? null : billStatus({
-      dueDay: r.dueDay, monthIso: monthParam(month), todayIso: today, manualPaid: r.manualPaid,
-      spentCents: Math.max(0, -r.activityCents), targetCents: r.targetType === "MONTHLY_FUNDING" ? r.targetCents : null,
-    }),
-  };
-}
 
 function Meter({ value, tone }: { value: number; tone: "pos" | "warn" | "neg" | "blue" }) {
   const color = { pos: "bg-pos", warn: "bg-warn", neg: "bg-neg", blue: "bg-[#2E6BE6]" }[tone];
@@ -79,7 +59,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const flowOn = pflow ? pflow.enabled : flow.enabled;
   const today = todayIso();
   const rta = summary.readyToAssignCents;
-  const incomeRows = summary.rows.filter((r) => r.type === "INCOME").map((r) => toVM(r, month, today));
   const expenseRows = summary.rows.filter((r) => r.type !== "INCOME");
 
   // Board groups: every category that isn't income-only (empty ones stay visible).
@@ -244,7 +223,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
 
       <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} pockets={allPockets.filter((p) => !p.isSystemManaged).map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents }))} />
 
-      <IncomeSection customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} rows={incomeRows} allGroups={allGroups} />
 
       <BudgetBoard customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />
 

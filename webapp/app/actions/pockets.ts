@@ -147,6 +147,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
     return { ok: false, error: "Couldn't save that pocket." };
   }
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true };
 }
 
@@ -165,6 +166,7 @@ export async function saveGroupAction(_prev: ActionResult | undefined, formData:
     await prisma.categoryGroup.create({ data: { workspaceId, name, sortOrder: (top._max.sortOrder ?? 0) + 1 } });
   }
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true };
 }
 
@@ -227,6 +229,7 @@ export async function archiveGroupAction(workspaceId: string, id: string): Promi
   await prisma.categoryGroup.update({ where: { id }, data: { isArchived: true } });
   await unlinkFlows(workspaceId, [id], pockets.map((p) => p.id));
   revalidatePath("/budget");
+  revalidatePath("/reports");
   const n = pockets.length;
   return { ok: true, message: `Deleted “${g.name}”${n ? ` and its ${n} pocket${n === 1 ? "" : "s"}` : ""}.${r.releasedCents > 0 ? ` ${formatCents(r.releasedCents)} is back in Ready to assign.` : ""}` };
 }
@@ -241,6 +244,7 @@ export async function archivePocketAction(workspaceId: string, id: string): Prom
   if (!r.ok) return r;
   await unlinkFlows(workspaceId, [], [id]);
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true, message: `Deleted “${c.name}”.${r.releasedCents > 0 ? ` ${formatCents(r.releasedCents)} is back in Ready to assign.` : ""}` };
 }
 
@@ -274,6 +278,7 @@ export async function reorderAction(workspaceId: string, payload: string): Promi
   }
   await prisma.$transaction(ops);
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true };
 }
 
@@ -312,6 +317,7 @@ export async function saveAllocationAction(workspaceId: string, payload: string)
     ...pockets.map((p) => prisma.category.update({ where: { id: p.id }, data: { allocationBps: p.bps } })),
   ]);
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true };
 }
 
@@ -367,6 +373,7 @@ export async function applyAllocationAction(workspaceId: string, month: string, 
     data: preview.lines.map((l) => ({ categoryId: l.id, month: monthDate, amountCents: l.cents, source: "AUTO_PERCENT" as const })),
   });
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true, message: `Assigned across ${preview.lines.length} pocket${preview.lines.length === 1 ? "" : "s"}.` };
 }
 
@@ -382,6 +389,7 @@ export async function renamePocketAction(workspaceId: string, id: string, name: 
   if (c.isSystemManaged) return { ok: false, error: "This pocket is managed by the app and can't be renamed." };
   await prisma.category.update({ where: { id }, data: { name: n.data } });
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true };
 }
 
@@ -394,6 +402,7 @@ export async function renameGroupAction(workspaceId: string, id: string, name: s
   if (!g) return { ok: false, error: "Category not found." };
   await prisma.categoryGroup.update({ where: { id }, data: { name: n.data } });
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true };
 }
 
@@ -415,6 +424,7 @@ export async function setPaidAction(workspaceId: string, categoryId: string, mon
     await prisma.billPayment.deleteMany({ where: { categoryId, month: monthDate } });
   }
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true };
 }
 
@@ -432,6 +442,7 @@ export async function assignMoreAction(workspaceId: string, categoryId: string, 
   if (cents > rta) return { ok: false, error: `Only ${(Math.max(0, rta) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} is ready to assign.` };
   await prisma.budgetAssignment.create({ data: { categoryId, month: monthDate, amountCents: cents, source: "MANUAL" } });
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true };
 }
 
@@ -467,5 +478,6 @@ export async function moveMoneyAction(workspaceId: string, fromId: string, toId:
     prisma.budgetAssignment.create({ data: { categoryId: to.id, month: monthDate, amountCents: cents, source: "MANUAL", note: `Moved from ${from.name}` } }),
   ]);
   revalidatePath("/budget");
+  revalidatePath("/reports");
   return { ok: true, message: `Moved to ${to.name}.` };
 }

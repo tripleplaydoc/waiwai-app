@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { Paperclip } from "lucide-react";
 import { TagChips } from "@/components/tag-picker";
+import { Affirmation, type Flow } from "@/components/affirmation";
 import { ReceiptField } from "@/components/receipt-field";
 import { attachReceiptAction, createTransactionAction, removeReceiptAction, setTransactionCategoryAction, setTransactionPersonAction } from "@/app/actions/transactions";
 
@@ -29,9 +30,15 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
   people: { id: string; name: string }[]; currentUserId: string | null; accountId: string; accounts: { id: string; name: string }[]; isBusiness: boolean; categories: CatOption[]; payees: string[]; today: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [direction, setDirection] = useState<"outflow" | "inflow">("outflow");
+  const [direction, setDirection] = useState<Flow>("outflow");
+  const [saved, setSaved] = useState<Flow | null>(null);
+  // An inflow only counts toward Ready to assign when it has an income category, so pick one for you.
+  const firstIncome = categories.find((c) => c.type === "INCOME")?.id ?? "";
+  const [category, setCategory] = useState("");
+  const pickDirection = (d: Flow) => { setDirection(d); setCategory(d === "inflow" ? firstIncome : ""); };
   const [state, action, pending] = useActionState(createTransactionAction, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  const reset = () => { formRef.current?.reset(); setDirection("outflow"); setCategory(""); setSaved(null); };
 
   // Hotkey: N opens "new transaction" unless you're typing in a field.
   useEffect(() => {
@@ -47,7 +54,7 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
   }, []);
 
   useEffect(() => {
-    if (state?.ok) { setOpen(false); formRef.current?.reset(); setDirection("outflow"); }
+    if (state?.ok) setSaved(direction); // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
   return (
@@ -55,8 +62,9 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
       <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
         <Plus className="size-4" aria-hidden /> Add transaction <span className="kbd hidden sm:inline-flex !border-indigo-300 !bg-indigo-500 !text-white">N</span>
       </button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Add transaction">
-        <form ref={formRef} action={action} className="space-y-3">
+      <Modal open={open} onClose={() => { setOpen(false); reset(); }} title="Add transaction">
+        {saved && <Affirmation flow={saved} onDone={() => { setOpen(false); reset(); }} onAnother={reset} />}
+        <form ref={formRef} action={action} className={`space-y-3 ${saved ? "hidden" : ""}`}>
           <fieldset className="flex gap-2" aria-label="Direction">
             {(["outflow", "inflow"] as const).map((d) => (
               <label key={d} className={`flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-xl border px-4 text-sm font-medium capitalize has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[#2E6BE6] ${
@@ -64,7 +72,7 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
                   ? d === "outflow" ? "border-[#C9372C] bg-red-50 text-[#C9372C] dark:bg-red-950" : "border-[#2E7D32] bg-emerald-50 text-[#2E7D32] dark:bg-emerald-950"
                   : "border-[#E2E8F0] dark:border-slate-700"
               }`}>
-                <input type="radio" name="direction" value={d} checked={direction === d} onChange={() => setDirection(d)} className="sr-only" />
+                <input type="radio" name="direction" value={d} checked={direction === d} onChange={() => pickDirection(d)} className="sr-only" />
                 {d}
               </label>
             ))}
@@ -80,7 +88,7 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
             </div>
           </div>
           <div>
-            <label htmlFor="tx-acct" className="label">Paid from / received into</label>
+            <label htmlFor="tx-acct" className="label">Account</label>
             <select id="tx-acct" name="accountId" className="input" defaultValue={accountId}>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
@@ -100,9 +108,9 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
           </div>
           <div>
             <label htmlFor="tx-cat" className="label">Category</label>
-            <select id="tx-cat" name="categoryId" className="input" defaultValue="">
+            <select id="tx-cat" name="categoryId" className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">Uncategorized (decide later)</option>
-              <CategoryOptions options={categories} />
+              <CategoryOptions options={direction === "inflow" ? [...categories].sort((a, b) => Number(b.type === "INCOME") - Number(a.type === "INCOME")) : categories.filter((c) => c.type !== "INCOME")} />
             </select>
           </div>
           <div>
@@ -119,7 +127,7 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
           </div>
           {state && !state.ok && <p role="alert" className="text-sm text-[#C9372C]">{state.error}</p>}
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel <span className="kbd">Esc</span></button>
+            <button type="button" className="btn" onClick={() => { setOpen(false); reset(); }}>Cancel <span className="kbd">Esc</span></button>
             <button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
           </div>
         </form>

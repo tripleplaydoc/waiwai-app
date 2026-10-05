@@ -1,6 +1,7 @@
 import { buildCashflowStatement } from "@/lib/reports/cashflow-statement";
 import { holdingLabel } from "@/lib/holdings";
 import { formatCents } from "@/lib/utils/currency";
+import { IncomeSources } from "./income-sources";
 
 function Block({ title, children, tone }: { title: string; children: React.ReactNode; tone: string }) {
   return (
@@ -80,7 +81,8 @@ export async function CashflowTab({ workspaceId, period, today }: { workspaceId:
           )}
         </div>
       </div>
-      <p className="text-xs text-slate-500">Income and expenses are what actually happened in {period.label}. Tag each income source as earned, portfolio or passive by tapping its pencil on the budget page. Balances are as of {period.to > today ? today : period.to}.</p>
+      <IncomeSources workspaceId={workspaceId} today={today} />
+      <p className="text-xs text-slate-500">Income and expenses are what actually happened in {period.label}. Tag each income source as earned, portfolio or passive in Income sources below. Balances are as of {period.to > today ? today : period.to}.</p>
     </div>
   );
 }

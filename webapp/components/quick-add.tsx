@@ -2,10 +2,10 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeftRight, ArrowRightLeft, HandCoins, Plus, ShoppingBag } from "lucide-react";
+import { ArrowLeftRight, Plus, ShoppingBag } from "lucide-react";
+import { Affirmation, type Flow } from "@/components/affirmation";
 import { ReceiptField } from "@/components/receipt-field";
 import { TagChips } from "@/components/tag-picker";
-import { MoveForm } from "@/components/move-money";
 import { Modal } from "@/components/modal";
 import { createTransactionAction } from "@/app/actions/transactions";
 import { assignMoreAction, moveMoneyAction } from "@/app/actions/pockets";
@@ -13,7 +13,7 @@ import { getQuickAddDataAction, type QuickAddData } from "@/app/actions/quick";
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 import { planPurchase, type AffordResult } from "@/lib/budget/afford";
 
-type Mode = "tx" | "assign" | "move" | "afford";
+type Mode = "tx" | "afford";
 
 export function QuickAdd() {
   const ws = useSearchParams().get("ws") === "business" ? "business" : "personal";
@@ -22,6 +22,7 @@ export function QuickAdd() {
   const [mode, setMode] = useState<Mode | null>(null);
   const [data, setData] = useState<QuickAddData | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [round, setRound] = useState(0);
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,12 +53,6 @@ export function QuickAdd() {
             <button role="menuitem" type="button" className={row} onClick={() => pick("afford")}>
               <span className="flex size-9 items-center justify-center rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950"><ShoppingBag className="size-4" aria-hidden /></span> Can I buy this?
             </button>
-            <button role="menuitem" type="button" className={row} onClick={() => pick("assign")}>
-              <span className="flex size-9 items-center justify-center rounded-full bg-pos-soft text-pos"><HandCoins className="size-4" aria-hidden /></span> Assign money
-            </button>
-            <button role="menuitem" type="button" className={row} onClick={() => pick("move")}>
-              <span className="flex size-9 items-center justify-center rounded-full bg-cyan-50 text-water dark:bg-cyan-950"><ArrowRightLeft className="size-4" aria-hidden /></span> Move money
-            </button>
           </div>
         )}
         <button
@@ -69,22 +64,15 @@ export function QuickAdd() {
       </div>
 
       {mode && (
-        <Modal open onClose={close} title={mode === "tx" ? "Add transaction" : mode === "afford" ? "Can I buy this?" : mode === "move" ? "Move money between pockets" : "Assign money"}>
+        <Modal open onClose={close} title={mode === "tx" ? "Add transaction" : "Can I buy this?"}>
           {loadError ? (
             <p role="alert" className="text-sm text-neg">Couldn&apos;t load your accounts. Please try again.</p>
           ) : !data ? (
             <p className="py-6 text-center text-sm text-slate-500">Loading…</p>
           ) : mode === "tx" ? (
-            <TxForm data={data} onDone={done} onCancel={close} />
-          ) : mode === "afford" ? (
-            <AffordForm data={data} onDone={done} onCancel={close} />
-          ) : mode === "move" ? (
-            <MoveForm
-              workspaceId={data.workspaceId} month={data.month} onDone={done} onCancel={close}
-              pockets={data.categories.filter((c) => c.type === "EXPENSE").map((c) => ({ id: c.id, name: c.name, group: c.group, availableCents: c.availableCents }))}
-            />
+            <TxForm key={round} data={data} onDone={done} onCancel={close} onAnother={() => setRound((r) => r + 1)} />
           ) : (
-            <AssignForm data={data} onDone={done} onCancel={close} />
+            <AffordForm data={data} onDone={done} onCancel={close} />
           )}
         </Modal>
       )}
@@ -107,10 +95,18 @@ function CategoryOptions({ options }: { options: QuickAddData["categories"] }) {
   );
 }
 
-function TxForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => void; onCancel: () => void }) {
-  const [direction, setDirection] = useState<"outflow" | "inflow">("outflow");
+function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onDone: () => void; onCancel: () => void; onAnother: () => void }) {
+  const [direction, setDirection] = useState<Flow>("outflow");
+  const [saved, setSaved] = useState<Flow | null>(null);
+  // An inflow only counts toward Ready to assign when it has an income category, so pick one for you.
+  const firstIncome = data.categories.find((c) => c.type === "INCOME")?.id ?? "";
+  const [category, setCategory] = useState("");
+  const pickDirection = (d: Flow) => { setDirection(d); setCategory(d === "inflow" ? firstIncome : ""); };
   const [state, action, pending] = useActionState(createTransactionAction, undefined);
-  useEffect(() => { if (state?.ok) onDone(); }, [state, onDone]);
+  useEffect(() => { if (state?.ok) setSaved(direction); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
+  if (saved) return <Affirmation flow={saved} onDone={onDone} onAnother={onAnother} />;
 
   if (data.accounts.length === 0) {
     return (
@@ -129,8 +125,8 @@ function TxForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => 
               ? d === "outflow" ? "border-[#C9372C] bg-neg-soft text-neg" : "border-[#2E7D32] bg-pos-soft text-pos"
               : "border-[#E2E8F0] dark:border-slate-700"
           }`}>
-            <input type="radio" name="direction" value={d} checked={direction === d} onChange={() => setDirection(d)} className="sr-only" />
-            {d === "outflow" ? "Spent" : "Received"}
+            <input type="radio" name="direction" value={d} checked={direction === d} onChange={() => pickDirection(d)} className="sr-only" />
+            {d}
           </label>
         ))}
       </fieldset>
@@ -146,16 +142,16 @@ function TxForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => 
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label htmlFor="qa-acct" className="label">Paid from / received into</label>
+          <label htmlFor="qa-acct" className="label">Account</label>
           <select id="qa-acct" name="accountId" className="input" defaultValue={data.accounts[0].id}>
             {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </div>
         <div>
           <label htmlFor="qa-cat" className="label">Pocket</label>
-          <select id="qa-cat" name="categoryId" className="input" defaultValue="">
+          <select id="qa-cat" name="categoryId" className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">Uncategorized (decide later)</option>
-            <CategoryOptions options={data.categories} />
+            <CategoryOptions options={direction === "inflow" ? [...data.categories].sort((a, b) => Number(b.type === "INCOME") - Number(a.type === "INCOME")) : data.categories.filter((c) => c.type !== "INCOME")} />
           </select>
         </div>
       </div>
@@ -185,53 +181,6 @@ function TxForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => 
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>
         <button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
-      </div>
-    </form>
-  );
-}
-
-function AssignForm({ data, onDone, onCancel }: { data: QuickAddData; onDone: () => void; onCancel: () => void }) {
-  const pockets = data.categories.filter((c) => c.type === "EXPENSE");
-  const [categoryId, setCategoryId] = useState(pockets[0]?.id ?? "");
-  const [amount, setAmount] = useState("");
-  const [error, setError] = useState<string>();
-  const [pending, start] = useTransition();
-  const rta = Math.max(0, data.readyToAssignCents);
-
-  if (pockets.length === 0) return <p className="text-sm">Add a pocket first, then you can assign money to it.</p>;
-  return (
-    <form
-      className="space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setError(undefined);
-        start(async () => {
-          const r = await assignMoreAction(data.workspaceId, categoryId, data.month, amount);
-          if (r.ok) onDone(); else setError(r.error);
-        });
-      }}
-    >
-      <div className="flex items-center justify-between rounded-xl bg-pos-soft px-4 py-3">
-        <span className="text-sm text-pos">Ready to assign</span>
-        <span className="nums text-lg font-bold text-pos">{formatCents(data.readyToAssignCents)}</span>
-      </div>
-      <div>
-        <label htmlFor="as-pocket" className="label">Pocket</label>
-        <select id="as-pocket" className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-          <CategoryOptions options={pockets} />
-        </select>
-      </div>
-      <div>
-        <label htmlFor="as-amount" className="label">Amount to add</label>
-        <div className="flex gap-2">
-          <input id="as-amount" data-autofocus inputMode="decimal" placeholder="0.00" className="input nums" value={amount} onChange={(e) => setAmount(e.target.value)} required />
-          <button type="button" className="btn shrink-0" onClick={() => setAmount(centsToInput(rta))} disabled={rta === 0}>All</button>
-        </div>
-      </div>
-      {error && <p role="alert" className="text-sm text-neg">{error}</p>}
-      <div className="flex justify-end gap-2 pt-1">
-        <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>
-        <button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Assigning…" : "Assign"}</button>
       </div>
     </form>
   );

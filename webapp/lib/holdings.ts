@@ -1,6 +1,6 @@
 /** Assets and liabilities: classes, labels and how a plain Account maps onto them. Client-safe (no database). */
 export type HoldingKey =
-  | "CASH_SAVINGS" | "STOCKS_FUNDS" | "REAL_ESTATE" | "BUSINESS" | "VEHICLE" | "OTHER_ASSET"
+  | "CASH_SAVINGS" | "STOCKS_FUNDS" | "REAL_ESTATE" | "BUSINESS" | "VEHICLE" | "CRYPTO" | "COLLECTIBLES" | "OTHER_ASSET"
   | "MORTGAGE" | "STUDENT_LOAN" | "CAR_LOAN" | "CREDIT_CARD" | "BANK_LOAN" | "OTHER_LIABILITY";
 
 export const HOLDING_DEFS: { key: HoldingKey; label: string; side: "ASSET" | "LIABILITY"; accountType: "INVESTMENT" | "PROPERTY" | "OTHER_ASSET" | "LOAN" | "OTHER_LIABILITY" }[] = [
@@ -9,6 +9,8 @@ export const HOLDING_DEFS: { key: HoldingKey; label: string; side: "ASSET" | "LI
   { key: "REAL_ESTATE", label: "Real estate", side: "ASSET", accountType: "PROPERTY" },
   { key: "BUSINESS", label: "Business ownership", side: "ASSET", accountType: "OTHER_ASSET" },
   { key: "VEHICLE", label: "Vehicles", side: "ASSET", accountType: "OTHER_ASSET" },
+  { key: "CRYPTO", label: "Crypto", side: "ASSET", accountType: "INVESTMENT" },
+  { key: "COLLECTIBLES", label: "Collectibles (art, cards, watches…)", side: "ASSET", accountType: "OTHER_ASSET" },
   { key: "OTHER_ASSET", label: "Other assets", side: "ASSET", accountType: "OTHER_ASSET" },
   { key: "MORTGAGE", label: "Mortgage", side: "LIABILITY", accountType: "LOAN" },
   { key: "STUDENT_LOAN", label: "Student loans", side: "LIABILITY", accountType: "LOAN" },
