@@ -59,6 +59,9 @@ function ProgressBlock({ p, onSetCost }: { p: PocketVM; onSetCost: () => void })
       </button>
     );
   }
+  const aheadMode = horizon === "ahead" && pr.targetType === "MONTHLY_FUNDING";
+  const total = Math.max(p.aheadNeedCents, Math.max(0, pr.targetCents - Math.max(0, -p.activityCents)) + pr.targetCents);
+  const barFill = aheadMode ? Math.min(1, Math.max(0, 1 - p.aheadNeedCents / total)) : pr.progress;
   let line: string;
   if (horizon === "ahead" && pr.targetType === "MONTHLY_FUNDING") {
     line = p.aheadNeedCents === 0 ? `Covered through next month (${formatCents(pr.targetCents)}/mo)` : `Need ${formatCents(p.aheadNeedCents)} more to cover next month too`;
@@ -75,13 +78,22 @@ function ProgressBlock({ p, onSetCost }: { p: PocketVM; onSetCost: () => void })
     <div className="mt-1.5">
       <div
         className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
-        role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pr.progress * 100)} aria-label={`${p.name} progress`}
+        role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(barFill * 100)} aria-label={`${p.name} progress`}
       >
-        <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(pr.state)}`} style={{ width: `${Math.round(pr.progress * 100)}%` }} />
+        <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(pr.state)}`} style={{ width: `${Math.round(barFill * 100)}%` }} />
       </div>
       <div className={`mt-1 text-[11px] leading-tight ${pr.state === "partial" || pr.state === "empty" ? "text-warn" : pr.state === "overspent" ? "text-neg" : "text-slate-500 dark:text-slate-400"}`}>{line}</div>
     </div>
   );
+}
+
+/** What this pocket still needs for the chosen horizon, or a quiet "covered". Shown above the available amount. */
+function NeedChip({ p, horizon }: { p: PocketVM; horizon: Horizon }) {
+  const need = horizon === "ahead" ? p.aheadNeedCents : p.progress.stillThisMonthCents;
+  const when = horizon === "ahead" ? "by next month" : "this month";
+  return need > 0
+    ? <div className="nums mb-0.5 text-[11px] font-semibold text-warn">needs {formatCents(need)} {when}</div>
+    : <div className="mb-0.5 text-[11px] font-medium text-pos">covered {when}</div>;
 }
 
 function PocketRowView({
@@ -127,6 +139,7 @@ function PocketRowView({
       </div>
 
       <div className="text-right md:order-5">
+        {!overlay && p.progress.hasTarget && <NeedChip p={p} horizon={horizon} />}
         {overlay ? (
           <span className={`nums inline-block min-w-[5.5rem] rounded-full px-3 py-1.5 text-right text-[15px] font-semibold md:min-w-20 md:py-1 md:text-sm ${pill(p, horizon)}`}>{formatCents(p.availableCents)}</span>
         ) : (
