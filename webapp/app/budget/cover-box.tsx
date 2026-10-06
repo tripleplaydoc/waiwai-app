@@ -11,8 +11,8 @@ export function CoverBox({ ahead, anyTargets, text, canCover, stillCents, rtaCen
   ahead: boolean; anyTargets: boolean; text: string; canCover: boolean; stillCents: number; rtaCents: number; shortfallCents: number; items: CoverItem[]; children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const tone = canCover ? "text-pos" : ahead ? "text-indigo-700 dark:text-indigo-300" : "text-warn";
-  const bar = canCover ? "bg-pos" : ahead ? "bg-indigo-400" : "bg-warn";
+  const tone = canCover ? "text-pos" : "text-warn";
+  const bar = canCover ? "bg-pos" : "bg-warn";
   const value = stillCents === 0 ? 1 : Math.min(1, Math.max(0, rtaCents) / stillCents);
   const canOpen = anyTargets && items.length > 0 && stillCents > 0;
   const head = (

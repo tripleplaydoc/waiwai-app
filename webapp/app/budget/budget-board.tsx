@@ -36,15 +36,15 @@ function pill(p: PocketVM, horizon: Horizon = "now"): string {
   const pr = p.progress;
   if (p.availableCents < 0) return "bg-neg-soft text-neg";
   if (p.availableCents === 0) return "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
-  if (horizon === "ahead") return p.aheadNeedCents > 0 ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-200" : "bg-pos-soft text-pos";
-  if (pr.hasTarget && pr.stillNeededCents > 0) return "bg-warn-soft text-warn";
+  const need = horizon === "ahead" ? p.aheadNeedCents : pr.stillThisMonthCents;
+  if (pr.hasTarget && need > 0) return "bg-warn-soft text-warn";
   return "bg-pos-soft text-pos";
 }
 
 function barColor(state: PocketVM["progress"]["state"], soft = false): string {
   if (state === "overspent") return "bg-neg";
   if (state === "funded") return "bg-pos";
-  if (state === "partial") return soft ? "bg-indigo-400" : "bg-warn";
+  if (state === "partial") return "bg-warn";
   return "bg-slate-300 dark:bg-slate-600";
 }
 
@@ -100,7 +100,7 @@ function NeedChip({ p, horizon }: { p: PocketVM; horizon: Horizon }) {
   const when = horizon === "ahead" ? "by next month" : "this month";
   if (p.availableCents < 0 && need === 0) return null;
   return need > 0
-    ? <div className={`nums mb-0.5 text-[11px] font-semibold ${horizon === "ahead" ? "text-indigo-700 dark:text-indigo-300" : "text-warn"}`}>needs {formatCents(need)} {when}</div>
+    ? <div className={`nums mb-0.5 text-[11px] font-semibold text-warn`}>needs {formatCents(need)} {when}</div>
     : <div className="mb-0.5 text-[11px] font-medium text-pos">covered {when}</div>;
 }
 
@@ -193,7 +193,7 @@ function GroupSection({
   const COLS = simple ? COLS_SIMPLE : COLS_FULL;
   const shown = tagFilter ? g.pockets.filter((p) => p.tagIds.includes(tagFilter)) : g.pockets;
   const sum = (f: (p: PocketVM) => number) => g.pockets.reduce((s, p) => s + f(p), 0);
-  const needed = sum((p) => (horizon === "ahead" ? p.aheadNeedCents : p.progress.stillNeededCents));
+  const needed = sum((p) => (horizon === "ahead" ? p.aheadNeedCents : p.progress.stillThisMonthCents));
   const iconBtn = "flex size-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/15 hover:text-white";
   return (
     <section
@@ -236,7 +236,8 @@ function GroupSection({
           <Plus className="size-4" aria-hidden />
         </button>
       </div>
-      {!collapsed && needed > 0 && <div className={`border-t border-[#E2E8F0] px-4 py-1 text-[11px] font-medium dark:border-slate-800 ${horizon === "ahead" ? "bg-indigo-50/70 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-200" : "bg-warn-soft/60 text-warn"}`}>{formatCents(needed)} still needed to fund this category{horizon === "ahead" ? " through next month" : ""}</div>}
+      {!collapsed && needed > 0 && <div className="border-t border-[#E2E8F0] bg-warn-soft/60 px-4 py-1 text-[11px] font-medium text-warn dark:border-slate-800">{formatCents(needed)} still needed to fund this category{horizon === "ahead" ? " through next month" : " this month"}</div>}
+      {!collapsed && needed === 0 && g.pockets.some((p) => p.progress.hasTarget) && <div className="border-t border-[#E2E8F0] bg-pos-soft/60 px-4 py-1 text-[11px] font-medium text-pos dark:border-slate-800">Funded {horizon === "ahead" ? "through next month" : "for this month"}</div>}
       <div ref={drop.setNodeRef} hidden={collapsed}>
         <SortableContext items={shown.map((p) => `p:${p.id}`)} strategy={verticalListSortingStrategy}>
           {shown.map((p) => <SortablePocket key={p.id} p={p} workspaceId={workspaceId} month={month} onEdit={() => onEditPocket(p)} />)}
