@@ -1,3 +1,4 @@
+import { parseBankCsv, parseDate } from "./csv";
 import assert from "node:assert/strict";
 import { matchExisting } from "./import-match";
 
@@ -10,7 +11,6 @@ console.log("import-match tests passed");
 
 // bank exports with MM-DD-YYYY dates and "-$3,700.00" amounts
 {
-  const { parseBankCsv, parseDate } = await import("./csv");
   assert.equal(parseDate("10-05-2026"), "2026-10-05");
   assert.equal(parseDate("2/3/26"), "2026-02-03");
   const r = parseBankCsv('Date,Description,Amount,Note,Check Number, Category\n10-05-2026,NETLIFY,"-$5.00",,,Software\n09-03-2019,PAYPAL,"$0.17",,,Other\n');
