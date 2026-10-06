@@ -53,7 +53,7 @@ export async function autoAssignAction(formData: FormData): Promise<ActionResult
     const result = await runWaterfallAutoAssign(prisma, workspaceId.data, new Date(`${month.data}-01T00:00:00.000Z`));
     revalidatePath("/budget");
     const funded = result.buckets.filter((b) => b.fundedCents > 0).length;
-    return { ok: true, message: `Funded ${funded} envelope${funded === 1 ? "" : "s"}.` };
+    return { ok: true, message: `Funded ${funded} pocket${funded === 1 ? "" : "s"}.` };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Auto-assign failed." };
   }

@@ -2,7 +2,7 @@ import { BrandMark, WaveLayer } from "@/components/brand";
 import { Layers, ShieldCheck, Keyboard } from "lucide-react";
 
 const points = [
-  { icon: Layers, title: "Every dollar has a job", body: "Zero-based envelopes keep Personal and Business money organized." },
+  { icon: Layers, title: "Every dollar has a job", body: "Zero-based pockets keep Personal and Business money organized." },
   { icon: Keyboard, title: "Built for speed", body: "Keyboard-first entry and CSV import from your bank." },
   { icon: ShieldCheck, title: "Private by default", body: "Your data sits behind your own login." },
 ];

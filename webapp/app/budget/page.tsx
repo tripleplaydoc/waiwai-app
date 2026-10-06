@@ -31,6 +31,9 @@ import { toVM } from "@/lib/budget/to-vm";
 import { isCustomKey } from "@/lib/budget/expense-types";
 import { DailyVerse } from "@/components/daily-verse";
 import { Popover } from "@/components/popover";
+import { cookies } from "next/headers";
+import { coverTotals, parseHorizon, parseMode } from "@/lib/budget/horizon";
+import { ViewToggle } from "./view-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +56,10 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const sp = await searchParams;
   const wsKey = wsKeyFromParam(sp.ws);
   const workspace = await getWorkspace(wsKey);
+  const jar = await cookies();
+  const mode = parseMode(jar.get("ww_budget_mode")?.value);
+  const horizon = parseHorizon(jar.get("ww_budget_horizon")?.value);
+  const simple = mode === "simple";
   const month = monthFromParam(sp.month);
   const mp = monthParam(month);
   const wsQ = wsKey === "business" ? "&ws=business" : "";
@@ -163,7 +170,10 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
     </ul>
   );
 
-  const coverText = health.stillNeededCents === 0 ? "Everything funded" : health.canCover ? "You can cover it" : `Short ${formatCents(health.shortfallCents)}`;
+  const ahead = horizon === "ahead";
+  const cover = ahead ? coverTotals(allPockets.map((p) => p.aheadNeedCents), rta) : { stillCents: health.stillNeededCents, canCover: health.canCover, shortfallCents: health.shortfallCents };
+  const noteCount = cardsShort.length + (recurringDue.length > 0 ? 1 : 0) + (cashShort ? 1 : 0) + (needsReview > 0 ? 1 : 0);
+  const coverText = cover.stillCents === 0 ? "Everything funded" : cover.canCover ? "You can cover it" : `Short ${formatCents(cover.shortfallCents)}`;
 
   return (
     <FundingProvider cash={cash} meId={me?.id ?? null}>
@@ -171,17 +181,17 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
       <DailyVerse />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="text-lg font-bold tracking-tight sm:text-xl">{workspace.name} budget</h1>
-        {(allPockets.length > 0 || goals.length > 0 || loans.length > 0) && (
+        {!simple && (allPockets.length > 0 || goals.length > 0 || loans.length > 0) && (
           <div className="flex items-center gap-2">
             <Popover icon={<Droplets className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={!isPersonal && flow.enabled && flow.owedCents > 0 ? <>Flow <span className="rounded-full bg-warn-soft px-1.5 text-warn">owes</span></> : "Flow"}>
               {pflow ? <PersonalFlowPanel workspaceId={workspace.id} flow={pflow} /> : <FlowPanel workspaceId={workspace.id} month={mp} flow={flow} />}
             </Popover>
             <Popover
               icon={<CalendarClock className="size-3.5 text-[#2E6BE6]" aria-hidden />}
-              label={bills.length > 0 ? <>Bills {billsPaid}/{bills.length}{billsOverdue > 0 && <span className="rounded-full bg-indigo-50 px-1.5 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200">{billsOverdue} waiting</span>}</> : "Bills"}
+              label={bills.length > 0 ? <>Recurring flows {billsPaid}/{bills.length}{billsOverdue > 0 && <span className="rounded-full bg-indigo-50 px-1.5 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200">{billsOverdue} waiting</span>}</> : "Recurring flows"}
             >
               <div className="mb-1 flex items-baseline justify-between text-xs text-slate-500">
-                <span className="font-bold text-slate-800 dark:text-slate-100">Bills</span>
+                <span className="font-bold text-slate-800 dark:text-slate-100">Recurring flows</span>
                 {billsStillDue > 0 && <span className="nums">≈ {formatCents(billsStillDue)} to pay</span>}
               </div>
               {billsList}
@@ -203,6 +213,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
             )}
           </div>
         )}
+        <ViewToggle mode={mode} horizon={horizon} />
         <div className="flex w-full items-center justify-between sm:ml-auto sm:w-auto">
           <Link href={`/budget?month=${monthParam(shiftMonth(month, -1))}${wsQ}`} className="btn size-10 !px-0" aria-label="Previous month"><ChevronLeft className="size-4" aria-hidden /></Link>
           <span className="min-w-28 text-center text-sm font-semibold">{monthLabel(month)}</span>
@@ -228,14 +239,14 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
 
         {/* Can I cover it */}
         <div className="flex flex-col justify-center gap-1 border-t border-[#E2E8F0] px-3 py-2 md:border-l md:border-t-0 dark:border-slate-800" aria-label="Can I cover this month">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Cover this month?</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{ahead ? "Cover this month and next?" : "Cover this month?"}</span>
           {!anyTargets ? (
             <p className="text-xs text-slate-600 dark:text-slate-300">Add a monthly cost or goal.</p>
           ) : (
             <>
-              <div className={`text-sm font-bold leading-tight ${health.canCover ? "text-pos" : "text-warn"}`} title={`Still to assign ${formatCents(health.stillNeededCents)} of ${formatCents(health.monthlyCostCents + health.goalPaceCents)} needed`}>{coverText}</div>
-              <Meter value={health.stillNeededCents === 0 ? 1 : Math.max(0, rta) / health.stillNeededCents} tone={health.canCover ? "pos" : "warn"} />
-              {health.cushionNeededCents > 0 && <p className="nums text-[11px] text-slate-500">Months-ahead cushion: {formatCents(health.cushionNeededCents)} still to build</p>}
+              <div className={`text-sm font-bold leading-tight ${cover.canCover ? "text-pos" : "text-warn"}`} title={`Still to assign ${formatCents(cover.stillCents)} of ${formatCents(health.monthlyCostCents + health.goalPaceCents)} needed`}>{coverText}</div>
+              <Meter value={cover.stillCents === 0 ? 1 : Math.max(0, rta) / cover.stillCents} tone={cover.canCover ? "pos" : "warn"} />
+              {!simple && !ahead && health.cushionNeededCents > 0 && <p className="nums text-[11px] text-slate-500">Months-ahead cushion: {formatCents(health.cushionNeededCents)} still to build</p>}
             </>
           )}
         </div>
@@ -250,6 +261,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
           {needsReview > 0 && null}
         </div>
       )}
+      {simple && noteCount > 0 && <p className="text-xs text-slate-500">{noteCount} note{noteCount === 1 ? "" : "s"} tucked away in Simple view. Switch to Advanced to see {noteCount === 1 ? "it" : "them"}, or find them on Home.</p>}
+      {!simple && (
+      <>
       {cardsShort.map((c) => (
         <Link key={c.id} href={`/accounts/${c.id}${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-amber-200 bg-warn-soft px-3 py-2 text-xs font-medium text-warn dark:border-amber-800">
           {c.name}: {formatCents(c.shortCents)} of spending is ready to be set aside. Tap to cover it.
@@ -272,14 +286,17 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </Link>
       )}
 
+      </>
+      )}
+
       <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} readyToAssignCents={rta} pockets={allPockets.map((p) => ({ system: p.isSystemManaged, id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents, assignedCents: p.assignedCents, paidFromId: p.paidFromId, needCents: p.progress.hasTarget || p.availableCents < 0 ? Math.max(p.progress.stillNeededCents, p.availableCents < 0 ? -p.availableCents : 0) : undefined }))} />
 
 
-      <BudgetBoard customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />
+      <BudgetBoard simple={simple} horizon={horizon} customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />
 
-      <section className="card px-5 py-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Totals">
+      {!simple && <section className="card px-5 py-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Totals">
         <span className="nums">Totals this month — assigned {formatCents(summary.totalAssignedCents)} · activity {formatCents(summary.totalActivityCents)} · available {formatCents(summary.totalAvailableCents)}</span>
-      </section>
+      </section>}
     </div>
     </FundingProvider>
   );

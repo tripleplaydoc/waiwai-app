@@ -34,10 +34,10 @@ export function buildWins(i: WinInput): Win[] {
   const out: Win[] = [];
   if (i.weekChangeCents !== null && i.weekChangeCents > 0) out.push({ key: "week", text: `${money(i.weekChangeCents)} more across your accounts than a week ago` });
   if (i.comingInCents > 0) out.push({ key: "in", text: `${money(i.comingInCents)} is on its way in over the next 7 days` });
-  if (i.readyToAssignCents > 0) out.push({ key: "rta", text: `${money(i.readyToAssignCents)} is ready to give a purpose` });
+  if (i.readyToAssignCents > 0) out.push({ key: "rta", text: `${money(i.readyToAssignCents)} is ready to flow` });
   for (const c of i.cardUse.filter((c) => c.pct < 30).slice(0, 2)) out.push({ key: `card-${c.name}`, text: `${c.name} is at ${c.pct}% of its limit, under the healthy 30% line` });
-  if (i.billsTotal > 0 && i.billsPaid > 0) out.push({ key: "bills", text: i.billsPaid === i.billsTotal ? `All ${i.billsTotal} bills are handled this month` : `${i.billsPaid} of ${i.billsTotal} bills handled this month` });
-  if (i.noOverspent) out.push({ key: "envelopes", text: "Every envelope is within its budget" });
+  if (i.billsTotal > 0 && i.billsPaid > 0) out.push({ key: "bills", text: i.billsPaid === i.billsTotal ? `All ${i.billsTotal} recurring flows are handled this month` : `${i.billsPaid} of ${i.billsTotal} recurring flows handled this month` });
+  if (i.noOverspent) out.push({ key: "envelopes", text: "Every pocket is within its budget" });
   if (i.allSorted) out.push({ key: "sorted", text: "Everything you've entered is sorted into a category" });
   if (i.activeDays >= 3) out.push({ key: "streak", text: `You've recorded activity on ${i.activeDays} of the last 7 days` });
   const top = out.slice(0, 4);

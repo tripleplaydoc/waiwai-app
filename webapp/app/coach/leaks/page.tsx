@@ -26,7 +26,7 @@ export default async function LeaksPage({ searchParams }: { searchParams: Promis
       <Link href={`/coach${q}`} className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-[#2E6BE6] hover:underline dark:text-indigo-300"><ArrowLeft className="size-4" aria-hidden /> Coach</Link>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Leak finder</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-300">Money that quietly leaves: charges that repeat, bills that crept up, double charges and overlapping subscriptions. {vm.historyUsed ? "Includes your imported history, so price changes over years show up." : "Import past years in History to catch price changes over a longer stretch."}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">Money that quietly leaves: charges that repeat, recurring flows that crept up, double charges and overlapping subscriptions. {vm.historyUsed ? "Includes your imported history, so price changes over years show up." : "Import past years in History to catch price changes over a longer stretch."}</p>
       </div>
 
       <section className="grid grid-cols-2 gap-3" aria-label="Summary">
@@ -38,7 +38,7 @@ export default async function LeaksPage({ searchParams }: { searchParams: Promis
 
       {r.creeping.length > 0 && (
         <section className="card p-5" aria-labelledby="cr-h">
-          <h2 id="cr-h" className="text-base font-bold tracking-tight">Bills that went up</h2>
+          <h2 id="cr-h" className="text-base font-bold tracking-tight">Recurring flows that went up</h2>
           <ul className="mt-2 divide-y divide-[#E2E8F0] dark:divide-slate-800">
             {r.creeping.map((c) => (
               <li key={c.key} className="py-3">

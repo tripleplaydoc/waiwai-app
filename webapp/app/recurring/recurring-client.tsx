@@ -106,7 +106,7 @@ export function RecurringClient({ workspaceId, today, items, suggestions, accoun
       <section className="card overflow-hidden" aria-labelledby="rc-all">
         <h2 id="rc-all" className="border-b border-[#E2E8F0] bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">Everything that repeats</h2>
         {items.length === 0 ? (
-          <p className="p-4 text-sm text-slate-600 dark:text-slate-300">Nothing yet. Add a subscription, a bill or a paycheck, or pick from the suggestions below.</p>
+          <p className="p-4 text-sm text-slate-600 dark:text-slate-300">Nothing yet. Add a subscription, a recurring flow or a paycheck, or pick from the suggestions below.</p>
         ) : (
           <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-800">
             {items.map((i) => <Row key={i.id} i={i} pending={pending} onEdit={() => setDraft(fromItem(i))} run={run} />)}

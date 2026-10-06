@@ -97,7 +97,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
           </ul>
         </section>
       )}
-      {cashAccts.length > 0 && <AccountTable title="Cash in hand (wallet, cash envelope)" rows={cashAccts} wsQ={wsQ} proofs={proofs} members={members} footer={sub(cashAccts)} />}
+      {cashAccts.length > 0 && <AccountTable title="Cash in hand (wallet, cash pocket)" rows={cashAccts} wsQ={wsQ} proofs={proofs} members={members} footer={sub(cashAccts)} />}
       {bankAccts.length > 0 && <AccountTable title="Bank accounts (debit card, checking, savings)" rows={bankAccts} wsQ={wsQ} proofs={proofs} members={members} footer={sub(bankAccts)} />}
       {cardAccts.length > 0 && <AccountTable title="Credit cards (balances show what you owe)" rows={cardAccts} wsQ={wsQ} cards={cards} proofs={proofs} members={members} footer={sub(cardAccts)} />}
       {onBudget.length > 0 && <p className="nums text-right text-sm font-semibold text-slate-700 dark:text-slate-200">Total on budget: {formatCents(total)}</p>}

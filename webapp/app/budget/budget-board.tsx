@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useTransition } from "react";
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, closestCorners,
   useDroppable, useSensor, useSensors,
@@ -20,16 +20,21 @@ import { BillBadge, MarkPaidButton } from "./bill-controls";
 import { shortDate } from "@/lib/budget/bills";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
 import type { GroupVM, PocketVM } from "@/lib/budget/board-types";
+import type { Horizon } from "@/lib/budget/horizon";
 
 // Desktop columns: handle | name | assigned | activity | available | edit.
-const COLS = "md:grid-cols-[28px_minmax(0,1fr)_128px_104px_116px_40px]";
+const COLS_FULL = "md:grid-cols-[28px_minmax(0,1fr)_128px_104px_116px_40px]";
+const COLS_SIMPLE = "md:grid-cols-[28px_minmax(0,1fr)_116px_40px]";
+/** Simple hides the Assigned and Activity columns and the extra tags; horizon decides whether needs count next month too. */
+const ViewCtx = createContext<{ simple: boolean; horizon: Horizon }>({ simple: false, horizon: "now" });
+const useView = () => useContext(ViewCtx);
 const STORE = "waiwai:collapsed-groups";
 
-function pill(p: PocketVM): string {
+function pill(p: PocketVM, horizon: Horizon = "now"): string {
   const pr = p.progress;
   if (p.availableCents < 0) return "bg-neg-soft text-neg";
   if (p.availableCents === 0) return "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
-  if (pr.hasTarget && pr.stillNeededCents > 0) return "bg-warn-soft text-warn";
+  if (horizon === "ahead" ? p.aheadNeedCents > 0 : pr.hasTarget && pr.stillNeededCents > 0) return "bg-warn-soft text-warn";
   return "bg-pos-soft text-pos";
 }
 
@@ -46,6 +51,7 @@ function monthYear(iso: string): string {
 
 function ProgressBlock({ p, onSetCost }: { p: PocketVM; onSetCost: () => void }) {
   const pr = p.progress;
+  const { horizon } = useView();
   if (!pr.hasTarget) {
     return (
       <button type="button" onClick={onSetCost} className="mt-0.5 text-xs text-slate-400 hover:text-[#2E6BE6] dark:hover:text-blue-300">
@@ -54,7 +60,9 @@ function ProgressBlock({ p, onSetCost }: { p: PocketVM; onSetCost: () => void })
     );
   }
   let line: string;
-  if (pr.targetType === "MONTHLY_FUNDING") {
+  if (horizon === "ahead" && pr.targetType === "MONTHLY_FUNDING") {
+    line = p.aheadNeedCents === 0 ? `Covered through next month (${formatCents(pr.targetCents)}/mo)` : `Need ${formatCents(p.aheadNeedCents)} more to cover next month too`;
+  } else if (pr.targetType === "MONTHLY_FUNDING") {
     line = pr.stillNeededCents === 0 ? `Funded ${formatCents(pr.targetCents)} this month` : `${formatCents(p.assignedCents)} of ${formatCents(pr.targetCents)} · need ${formatCents(pr.stillNeededCents)} more`;
   } else if (pr.targetType === "TARGET_BALANCE_BY_DATE") {
     const by = p.targetDate ? ` by ${monthYear(p.targetDate)}` : "";
@@ -83,6 +91,8 @@ function PocketRowView({
   handleProps?: React.HTMLAttributes<HTMLButtonElement>;
 }) {
   const pr = p.progress;
+  const { simple, horizon } = useView();
+  const COLS = simple ? COLS_SIMPLE : COLS_FULL;
   const { cash } = useFunding();
   const paidFrom = cash.accounts.length > 1 && p.paidFromId ? cash.accounts.find((a) => a.id === p.paidFromId)?.name ?? null : null;
   const sub = [typeLabel(p.expenseType), p.bill && !overlay ? (p.bill.state === "paid" ? "Paid" : p.bill.state === "overdue" ? "Waiting for you" : `Due ${shortDate(p.bill.dueIso)}`) : null, p.targetType === "MONTHLY_FUNDING" && p.monthsAhead > 0 ? `${p.monthsAhead} mo ahead` : null, paidFrom ? `from ${paidFrom}` : null].filter(Boolean).join(" · ");
@@ -101,37 +111,37 @@ function PocketRowView({
               className="break-words text-[15px] font-semibold leading-snug md:text-sm md:font-medium"
             />
           )}
-          {typeLabel(p.expenseType) && <span className="hidden rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] font-medium text-water md:inline dark:bg-cyan-950/60">{typeLabel(p.expenseType)}</span>}
-          {p.priorityRank !== null && <span className="hidden rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-[#1E4FBF] md:inline dark:bg-blue-950 dark:text-blue-300">P{p.priorityRank}</span>}
+          {!simple && typeLabel(p.expenseType) && <span className="hidden rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] font-medium text-water md:inline dark:bg-cyan-950/60">{typeLabel(p.expenseType)}</span>}
+          {!simple && p.priorityRank !== null && <span className="hidden rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-[#1E4FBF] md:inline dark:bg-blue-950 dark:text-blue-300">P{p.priorityRank}</span>}
           {p.isSystemManaged && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800">system</span>}
-          {p.allocationBps !== null && <span className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 md:inline dark:bg-slate-800">{p.allocationBps / 100}%</span>}
+          {!simple && p.allocationBps !== null && <span className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 md:inline dark:bg-slate-800">{p.allocationBps / 100}%</span>}
         </div>
-        {sub && <div className={`mt-0.5 truncate text-xs md:hidden ${p.bill?.state === "overdue" ? "font-medium text-indigo-700 dark:text-indigo-300" : "text-slate-500 dark:text-slate-400"}`}>{sub}</div>}
-        {p.bill && !overlay && (
+        {sub && <div className={`mt-0.5 truncate text-xs ${simple ? "" : "md:hidden"} ${p.bill?.state === "overdue" ? "font-medium text-indigo-700 dark:text-indigo-300" : "text-slate-500 dark:text-slate-400"}`}>{sub}</div>}
+        {!simple && p.bill && !overlay && (
           <div className="mt-1.5 hidden flex-wrap items-center gap-2 md:flex">
             <BillBadge status={p.bill} />
             <MarkPaidButton workspaceId={workspaceId} categoryId={p.id} month={month} status={p.bill} manualPaid={p.manualPaid} />
           </div>
         )}
-        <div className="hidden md:block"><ProgressBlock p={p} onSetCost={onEdit} /></div>
+        <div className={simple ? "hidden md:block" : "hidden md:block"}><ProgressBlock p={p} onSetCost={onEdit} /></div>
       </div>
 
       <div className="text-right md:order-5">
         {overlay ? (
-          <span className={`nums inline-block min-w-[5.5rem] rounded-full px-3 py-1.5 text-right text-[15px] font-semibold md:min-w-20 md:py-1 md:text-sm ${pill(p)}`}>{formatCents(p.availableCents)}</span>
+          <span className={`nums inline-block min-w-[5.5rem] rounded-full px-3 py-1.5 text-right text-[15px] font-semibold md:min-w-20 md:py-1 md:text-sm ${pill(p, horizon)}`}>{formatCents(p.availableCents)}</span>
         ) : (
           <button type="button" onClick={() => openMoveMoney(p.id, "add")} title={p.isSystemManaged ? "Add money to this pocket" : "Add money to this pocket, or move it"} aria-label={`${p.name}: ${formatCents(p.availableCents)} available. Add or move money`}
-            className={`nums inline-block min-w-[5.5rem] cursor-pointer rounded-full px-3 py-1.5 text-right text-[15px] font-semibold hover:ring-2 hover:ring-water/40 md:min-w-20 md:py-1 md:text-sm ${pill(p)}`}>{formatCents(p.availableCents)}</button>
+            className={`nums inline-block min-w-[5.5rem] cursor-pointer rounded-full px-3 py-1.5 text-right text-[15px] font-semibold hover:ring-2 hover:ring-water/40 md:min-w-20 md:py-1 md:text-sm ${pill(p, horizon)}`}>{formatCents(p.availableCents)}</button>
         )}
       </div>
 
-      <label className="hidden items-center gap-2 md:order-3 md:block md:text-right">
+      <label className={`hidden items-center gap-2 md:order-3 ${simple ? "" : "md:block"} md:text-right`}>
         <span className="sr-only">Assigned</span>
         {overlay ? <span className="nums text-sm">{centsToInput(p.assignedCents)}</span> : (
           <AssignedInput categoryId={p.id} month={month} initial={centsToInput(p.assignedCents)} label={`Assigned to ${p.name}`} />
         )}
       </label>
-      <div className="nums hidden text-right text-sm text-slate-600 md:order-4 md:block dark:text-slate-300">{formatCents(p.activityCents)}</div>
+      <div className={`nums hidden text-right text-sm text-slate-600 md:order-4 ${simple ? "" : "md:block"} dark:text-slate-300`}>{formatCents(p.activityCents)}</div>
       <button type="button" onClick={onEdit} aria-label={`Edit ${p.name}`} className="flex size-10 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 md:order-6 md:size-9 dark:hover:bg-slate-800">
         <Pencil className="size-4" aria-hidden />
       </button>
@@ -156,8 +166,10 @@ function GroupSection({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `g:${g.id}`, data: { type: "group" }, disabled: fixed });
   const drop = useDroppable({ id: `gdrop:${g.id}`, disabled: g.pockets.length > 0 });
+  const { simple, horizon } = useView();
+  const COLS = simple ? COLS_SIMPLE : COLS_FULL;
   const sum = (f: (p: PocketVM) => number) => g.pockets.reduce((s, p) => s + f(p), 0);
-  const needed = sum((p) => p.progress.stillNeededCents);
+  const needed = sum((p) => (horizon === "ahead" ? p.aheadNeedCents : p.progress.stillNeededCents));
   const iconBtn = "flex size-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/15 hover:text-white";
   return (
     <section
@@ -193,14 +205,14 @@ function GroupSection({
             </button>
           )}
         </div>
-        <div className="nums hidden text-right text-xs font-semibold text-white/85 md:order-3 md:block">{formatCents(sum((p) => p.assignedCents))}</div>
-        <div className="nums hidden text-right text-xs font-semibold text-white/85 md:order-4 md:block">{formatCents(sum((p) => p.activityCents))}</div>
+        <div className={`nums hidden text-right text-xs font-semibold text-white/85 md:order-3 ${simple ? "" : "md:block"}`}>{formatCents(sum((p) => p.assignedCents))}</div>
+        <div className={`nums hidden text-right text-xs font-semibold text-white/85 md:order-4 ${simple ? "" : "md:block"}`}>{formatCents(sum((p) => p.activityCents))}</div>
         <div className="nums shrink-0 text-right text-[13px] font-semibold text-white/90 md:order-5 md:text-xs">{formatCents(sum((p) => p.availableCents))}</div>
         <button type="button" onClick={() => onAddPocket(g.id)} aria-label={`Add pocket to ${g.name}`} className={`${iconBtn} shrink-0 md:order-6`}>
           <Plus className="size-4" aria-hidden />
         </button>
       </div>
-      {!collapsed && needed > 0 && <div className="border-t border-[#E2E8F0] bg-warn-soft/60 px-4 py-1 text-[11px] font-medium text-warn dark:border-slate-800">{formatCents(needed)} still needed to fund this category</div>}
+      {!collapsed && needed > 0 && <div className="border-t border-[#E2E8F0] bg-warn-soft/60 px-4 py-1 text-[11px] font-medium text-warn dark:border-slate-800">{formatCents(needed)} still needed to fund this category{horizon === "ahead" ? " through next month" : ""}</div>}
       <div ref={drop.setNodeRef} hidden={collapsed}>
         <SortableContext items={g.pockets.map((p) => `p:${p.id}`)} strategy={verticalListSortingStrategy}>
           {g.pockets.map((p) => <SortablePocket key={p.id} p={p} workspaceId={workspaceId} month={month} onEdit={() => onEditPocket(p)} />)}
@@ -224,8 +236,8 @@ const collision: CollisionDetection = (args) => {
 };
 
 export function BudgetBoard({
-  workspaceId, isBusiness, month, groups: serverGroups, allGroups, customTypes,
-}: { customTypes: string[]; workspaceId: string; isBusiness: boolean; month: string; groups: GroupVM[]; allGroups: { id: string; name: string }[] }) {
+  workspaceId, isBusiness, month, groups: serverGroups, allGroups, customTypes, simple, horizon,
+}: { simple: boolean; horizon: Horizon; customTypes: string[]; workspaceId: string; isBusiness: boolean; month: string; groups: GroupVM[]; allGroups: { id: string; name: string }[] }) {
   const [groups, setGroups] = useState(serverGroups);
   const ref = useRef(serverGroups);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -342,7 +354,9 @@ export function BudgetBoard({
   const sortableGroupIds = groups.filter((g) => g.id !== "__none").map((g) => `g:${g.id}`);
   const hasAny = groups.some((g) => g.id !== "__none") || groups.length > 0;
 
+  const COLS = simple ? COLS_SIMPLE : COLS_FULL;
   return (
+    <ViewCtx.Provider value={{ simple, horizon }}>
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-base font-bold tracking-tight">Your pockets</h2>
@@ -361,7 +375,7 @@ export function BudgetBoard({
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-neg-soft px-4 py-2 text-sm text-neg">{error}</p>}
 
       <div className={`hidden px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 md:grid md:gap-x-3 ${COLS} dark:text-slate-400`}>
-        <span /> <span>Category / pocket</span><span className="text-right">Assigned</span><span className="text-right">Activity</span><span className="text-right">Available</span><span />
+        <span /> <span>Category / pocket</span>{!simple && <><span className="text-right">Assigned</span><span className="text-right">Activity</span></>}<span className="text-right">Available</span><span />
       </div>
 
       <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setActiveId(null); update(() => serverGroups); }}>
@@ -402,5 +416,6 @@ export function BudgetBoard({
         />
       )}
     </div>
+    </ViewCtx.Provider>
   );
 }

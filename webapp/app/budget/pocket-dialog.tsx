@@ -15,7 +15,7 @@ type TT = "NONE" | "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DAT
 
 const KINDS: { value: TT; label: string; hint: string }[] = [
   { value: "NONE", label: "No target", hint: "Just a place to hold money." },
-  { value: "MONTHLY_FUNDING", label: "Monthly cost", hint: "A bill or spending amount you need every month." },
+  { value: "MONTHLY_FUNDING", label: "Monthly cost", hint: "A recurring flow or spending amount you need every month." },
   { value: "TARGET_BALANCE_BY_DATE", label: "Goal by a date", hint: "Save a total amount by a deadline." },
   { value: "TARGET_BALANCE", label: "Goal to reach", hint: "Build up to a balance and keep it there." },
 ];
@@ -220,7 +220,7 @@ export function PocketDialog({
           <div>
             <label htmlFor="pk-due" className="label">Due day of the month <span className="font-normal text-slate-400">(optional)</span></label>
             <input id="pk-due" name="dueDay" type="number" min={1} max={31} inputMode="numeric" placeholder="e.g. 15" defaultValue={pocket?.dueDay ?? ""} className="input nums sm:max-w-40" />
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">For bills and expenses with a due date. You&apos;ll see Due soon / Waiting for you / Paid, and can tap Mark paid.</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">For recurring flows and expenses with a due date. You&apos;ll see Due soon / Waiting for you / Paid, and can tap Mark paid.</p>
           </div>
         )}
 

@@ -26,6 +26,8 @@ export interface PocketVM {
   incomeKind: "EARNED" | "PORTFOLIO" | "PASSIVE" | null;
   bill: BillStatus | null;
   progress: PocketProgress;
+  /** What still needs assigning to cover this month and next month too. */
+  aheadNeedCents: number;
 }
 
 export interface GroupVM {

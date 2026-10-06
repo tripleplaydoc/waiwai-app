@@ -16,7 +16,7 @@ const w = buildWins({ ...base, weekChangeCents: 15000, comingInCents: 500000, re
 assert.equal(w.length, 4);
 assert.equal(w[0].text, "$150.00 more across your accounts than a week ago");
 assert.ok(!w.some((x) => x.text.includes("Amex")), "a card over 30% is not celebrated");
-assert.equal(buildWins({ ...base, billsPaid: 6, billsTotal: 6 })[0].text, "All 6 bills are handled this month");
+assert.equal(buildWins({ ...base, billsPaid: 6, billsTotal: 6 })[0].text, "All 6 recurring flows are handled this month");
 assert.equal(buildWins({ ...base, activeDays: 2 })[0].key, "one-place");
 
 const s = cardCloseStep({ id: "c1", name: "Chase Sapphire", payDownCents: 130000, payByDays: 1, payByIso: "2026-10-06", reportedPct: 9, href: "/accounts/c1" });

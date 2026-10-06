@@ -18,7 +18,7 @@ const KIND: Record<EventKind, { label: string; icon: typeof Repeat }> = {
   recurring: { label: "Repeating", icon: Repeat },
   card: { label: "Credit card", icon: CreditCard },
   loan: { label: "Loan", icon: Landmark },
-  bill: { label: "Bill", icon: Receipt },
+  bill: { label: "Recurring flow", icon: Receipt },
   scheduled: { label: "Dated", icon: CalendarClock },
 };
 
@@ -37,7 +37,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
       <Link href={`/accounts${q}`} className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-[#2E6BE6] hover:underline dark:text-indigo-300"><ArrowLeft className="size-4" aria-hidden /> Accounts</Link>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{ws.name} cash forecast</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-300">The next {FORECAST_DAYS} days of money in and out, from what is already known: repeating items, bills, loan payments and card payments.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">The next {FORECAST_DAYS} days of money in and out, from what is already known: repeating items, recurring flows, loan payments and card payments.</p>
       </div>
 
       {short ? (
@@ -79,7 +79,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
       <section aria-label="Coming up">
         <h2 className="mb-2 text-base font-semibold">Coming up</h2>
         {withEvents.length === 0 ? (
-          <p className="card p-4 text-sm text-slate-600 dark:text-slate-300">Nothing is scheduled in the next {FORECAST_DAYS} days. Set up repeating bills and deposits under <Link className="font-medium text-[#2E6BE6] underline dark:text-indigo-300" href={`/recurring${q}`}>Recurring</Link>, and give each credit card its statement and due days.</p>
+          <p className="card p-4 text-sm text-slate-600 dark:text-slate-300">Nothing is scheduled in the next {FORECAST_DAYS} days. Set up repeating flows and deposits under <Link className="font-medium text-[#2E6BE6] underline dark:text-indigo-300" href={`/recurring${q}`}>Recurring</Link>, and give each credit card its statement and due days.</p>
         ) : (
           <ul className="card divide-y divide-[#E2E8F0] dark:divide-slate-800">
             {withEvents.map((d) => (

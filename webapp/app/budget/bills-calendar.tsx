@@ -59,7 +59,7 @@ export function BillsCalendar({ workspaceId, monthIso, todayIso, items }: { work
   return (
     <div>
       <p className="mb-1.5 text-center text-sm font-bold text-slate-800 dark:text-slate-100">{title}</p>
-      <div className="grid grid-cols-7 gap-1 text-center" role="grid" aria-label={`Bills due in ${title}`}>
+      <div className="grid grid-cols-7 gap-1 text-center" role="grid" aria-label={`Recurring flows due in ${title}`}>
         {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
           <div key={i} className="pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500" role="columnheader">{d}</div>
         ))}
@@ -76,7 +76,7 @@ export function BillsCalendar({ workspaceId, monthIso, todayIso, items }: { work
           return (
             <button
               key={d} type="button" role="gridcell" onClick={() => setSel(d)} aria-pressed={isSel}
-              aria-label={`${shortDate(`${monthIso}-${String(d).padStart(2, "0")}`)}: ${list.length} ${list.length === 1 ? "bill" : "bills"}, ${LABEL[worst!].toLowerCase()}`}
+              aria-label={`${shortDate(`${monthIso}-${String(d).padStart(2, "0")}`)}: ${list.length} ${list.length === 1 ? "recurring flow" : "recurring flows"}, ${LABEL[worst!].toLowerCase()}`}
               className={`${base} ${TINT[worst!]} font-bold text-slate-800 dark:text-slate-100 ${isSel ? "ring-2 ring-[#2E6BE6]" : isToday ? "ring-1 ring-[#2E6BE6]" : ""}`}
             >
               {d}
@@ -96,9 +96,9 @@ export function BillsCalendar({ workspaceId, monthIso, todayIso, items }: { work
 
       <div className="mt-2 border-t border-[#E2E8F0] pt-2 dark:border-slate-800" aria-live="polite">
         {items.length === 0 ? (
-          <p className="text-sm text-slate-500">No bills this month. Add a <strong>due day</strong> to a pocket (tap its pencil) and it shows up here.</p>
+          <p className="text-sm text-slate-500">No recurring flows this month. Add a <strong>due day</strong> to a pocket (tap its pencil) and it shows up here.</p>
         ) : picked.length === 0 ? (
-          <p className="text-sm text-slate-500">Tap a coloured day to see its bills.</p>
+          <p className="text-sm text-slate-500">Tap a coloured day to see its recurring flows.</p>
         ) : (
           <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-800">
             {picked.map((it) => (

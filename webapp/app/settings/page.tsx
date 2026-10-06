@@ -31,7 +31,7 @@ export default async function SettingsPage() {
       <section className="card p-6" aria-labelledby="push-h">
         <h2 id="push-h" className="mb-1 text-base font-semibold">Reminders</h2>
         <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-          One calm note each morning, starting with something good. It mentions card payments, bills and loan payments coming up, repeating items ready to post, or a gap worth planning for. Each reminder is sent once. Turn it on for each phone or computer you use.
+          One calm note each morning, starting with something good. It mentions card payments, recurring flows and loan payments coming up, repeating items ready to post, or a gap worth planning for. Each reminder is sent once. Turn it on for each phone or computer you use.
         </p>
         <PushToggle publicKey={process.env.VAPID_PUBLIC_KEY ?? null} />
         <QuietMode until={pausedUntil} />
