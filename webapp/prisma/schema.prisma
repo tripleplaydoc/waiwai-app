@@ -319,6 +319,7 @@ model User {
   pushSubscriptions PushSubscription[]
   pushSent          PushSent[]
   pushPref          PushPref?
+  homeLayout        HomeLayout?
 
   @@map("users")
 }
@@ -1445,6 +1446,16 @@ model PushSent {
   @@unique([userId, key])
   @@index([sentAt])
   @@map("push_sent")
+}
+
+/// Which Home sections a person shows, and in what order (JSON text: {order, hidden}).
+model HomeLayout {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  layout    String
+  updatedAt DateTime @updatedAt
+
+  @@map("home_layouts")
 }
 
 model PushPref {

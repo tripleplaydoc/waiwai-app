@@ -8,6 +8,15 @@ import { daysBetween } from "@/lib/forecast-math";
 import { shortDay } from "@/lib/home-math";
 import { postDue } from "@/lib/recurring";
 import { DailyVerse } from "@/components/daily-verse";
+import { parseLayout } from "@/lib/home-layout";
+import { prisma } from "@/lib/prisma";
+import { HomeSections } from "./home-sections";
+
+/** The saved Home layout JSON for this person (null when none or the table is not there yet). */
+async function loadLayout(userId: string | undefined): Promise<string | null> {
+  if (!userId) return null;
+  try { return (await prisma.homeLayout.findUnique({ where: { userId } }))?.layout ?? null; } catch { return null; }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -27,15 +36,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const total = h.accounts.reduce((s, a) => s + Math.max(0, a.cents), 0) || 1;
   const today = h.forecast.today;
 
-  return (
-    <div className="mx-auto max-w-2xl space-y-4">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{h.greeting}</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-300">Here&apos;s how your {ws.name.toLowerCase()} money is flowing today.</p>
-      </div>
-      <DailyVerse />
-
-      {/* what is good, first */}
+  const layout = parseLayout(await loadLayout(me?.id));
+  const nodes: Record<string, React.ReactNode> = {
+    verse: <DailyVerse />,
+    cash: (
       <section className="card p-4 sm:p-5" aria-label="Cash on hand">
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cash on hand</span>
@@ -64,6 +68,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         )}
       </section>
 
+    ),
+    wins: (
       <section className="card p-4 sm:p-5" aria-label="What's going well">
         <h2 className="mb-2 flex items-center gap-2 text-base font-bold"><Sparkles className="size-4 text-water" aria-hidden />What&apos;s going well</h2>
         <ul className="space-y-2">
@@ -76,6 +82,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </ul>
       </section>
 
+    ),
+    ahead: (
       <section className="card p-4 sm:p-5" aria-label="Looking ahead">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-base font-bold">Looking ahead: 7 days</h2>
@@ -100,6 +108,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <Link href={`/forecast${q}`} className="mt-1 flex min-h-11 items-center justify-between border-t border-[#EEF2F7] pt-1 text-sm font-semibold text-[#2E6BE6] dark:border-slate-800 dark:text-indigo-300">See the 60-day forecast <ArrowRight className="size-4" aria-hidden /></Link>
       </section>
 
+    ),
+    steps: (
       <section className="card overflow-hidden" aria-label="Your next steps">
         <h2 className="px-4 pb-1 pt-4 text-base font-bold sm:px-5">Your next steps</h2>
         {h.steps.length === 0 ? (
@@ -120,7 +130,21 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         )}
       </section>
 
-      <Link href={`/budget${q}`} className="card flex min-h-14 items-center justify-between px-5 text-sm font-semibold">Open the budget board <ArrowRight className="size-4 text-slate-500" aria-hidden /></Link>
+    ),
+    prepare: (
+      <Link href={`/prepare${q}`} className="card flex min-h-14 items-center justify-between px-5 text-sm font-semibold"><span>Prepare for more <span className="font-normal text-slate-500">· see what extra income could do</span></span> <ArrowRight className="size-4 text-slate-500" aria-hidden /></Link>
+    ),
+    budget: (
+      <Link href={`/budget${q}`} className="card flex min-h-14 items-center justify-between px-5 text-sm font-semibold">Open the budget board <ArrowRight className="size-4 text-slate-500" aria-hidden /></Link>    ),
+  };
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-4">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{h.greeting}</h1>
+        <p className="text-sm text-slate-600 dark:text-slate-300">Here&apos;s how your {ws.name.toLowerCase()} money is flowing today.</p>
+      </div>
+      <HomeSections nodes={nodes} layout={layout} />
     </div>
   );
 }
