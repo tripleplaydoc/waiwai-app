@@ -215,3 +215,6 @@ Each card with a statement day gets a plan (lib/budget/card-plan.ts): pay down 2
 
 ## Recurring transactions
 `/recurring` (Accounts > Recurring). Set up anything that repeats (weekly, every 2 weeks, monthly, every 3 months, yearly). Each item either posts itself when due ("Post it automatically") or waits on the Budget page and Recurring page for a tap (Post / Change amount / Skip). Missed dates catch up. Also: "Repeat" under More when adding a transaction, and "Looks like these repeat" suggests ones found in the last 14 months. Auto items post when the Budget or Recurring page opens (no background job needed). Table `recurring_items` (migration 20261005330000); the app works before the SQL is run.
+
+## Bank file import (OFX / QFX / QBO)
+Import page accepts the file your bank (or QuickBooks) lets you download, not just CSV. Rows load the same way as CSV, with the bank's own statement balance shown and a link to Balance check. Rows with the same amount within 3 days of something you already typed in are marked "Already entered" and skipped (untick to import them anyway). Re-importing the same file is still safe.

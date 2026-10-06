@@ -20,7 +20,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
   const initial = accounts.find((a) => a.id === sp.account)?.id ?? accounts[0]?.id ?? "";
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-semibold tracking-tight">Import bank statement (CSV)</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Import bank statement</h1>
       <p className="text-sm text-slate-600 dark:text-slate-300">For recent activity in your live budget. Importing past years? Use <Link className="font-semibold underline" href={`/history/import${wsKey === "business" ? "?ws=business" : ""}`}>History import</Link>, which keeps old data from changing your balances.</p>
       {accounts.length === 0 ? (
         <div className="card p-5 text-sm">Add an account first (Accounts page), then come back to import into it.</div>

@@ -1,5 +1,6 @@
 "use server";
 
+import { matchExisting } from "@/lib/import-match";
 import { accountKind } from "@/lib/account-kind";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed, getCurrentUser } from "@/lib/auth";
@@ -123,4 +124,15 @@ export async function suggestPocketsAction(wsParam: string, text: string): Promi
     pockets: cats.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroup?.name ?? "Other", expenseType: c.expenseType, isTaxDeductible: c.isTaxDeductible, isSystemManaged: c.isSystemManaged })),
   });
   return { ...r, taxBps };
+}
+
+/** For a statement preview: which rows look like transactions that are already in this account (typed in by hand earlier). */
+export async function matchExistingAction(accountId: string, rows: { date: string; amountCents: number }[]): Promise<boolean[]> {
+  await assertAuthed();
+  if (rows.length === 0 || rows.length > 5000) return rows.map(() => false);
+  const dates = rows.map((r) => r.date).sort();
+  const from = new Date(`${dates[0]}T00:00:00.000Z`), to = new Date(`${dates[dates.length - 1]}T00:00:00.000Z`);
+  from.setUTCDate(from.getUTCDate() - 3); to.setUTCDate(to.getUTCDate() + 3);
+  const have = await prisma.transaction.findMany({ where: { accountId, date: { gte: from, lte: to }, amountCents: { in: [...new Set(rows.map((r) => r.amountCents))] } }, select: { id: true, date: true, amountCents: true }, take: 20000 });
+  return matchExisting(rows, have.map((t) => ({ id: t.id, date: t.date.toISOString().slice(0, 10), amountCents: t.amountCents })));
 }

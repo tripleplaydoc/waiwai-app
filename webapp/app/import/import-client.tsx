@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { CSV_TEMPLATES, parseBankCsv, type CsvTemplateId } from "@/lib/csv";
 import { formatCents } from "@/lib/utils/currency";
 import { importTransactionsAction, type ImportResult } from "@/app/actions/transactions";
-import { suggestForImportAction, type ImportSuggestData } from "@/app/actions/quick";
+import { matchExistingAction, suggestForImportAction, type ImportSuggestData } from "@/app/actions/quick";
+import { looksLikeOfx, parseOfx, type OfxResult } from "@/lib/ofx";
 
 export function ImportClient({ accounts, initialAccountId, pockets, workspaceLabel, wsQuery }: {
   accounts: { id: string; name: string }[]; initialAccountId: string; pockets: { id: string; name: string; group: string }[]; workspaceLabel: string; wsQuery: string;
@@ -20,7 +21,21 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
   const [auto, setAuto] = useState(true);
   const [picked, setPicked] = useState<Record<number, string>>({}); // line -> pocket id ("" = leave for review)
 
-  const parsed = useMemo(() => (text.trim() ? parseBankCsv(text, template) : null), [text, template]);
+  const isOfx = useMemo(() => looksLikeOfx(text), [text]);
+  const parsed = useMemo<(OfxResult | ReturnType<typeof parseBankCsv>) | null>(() => (text.trim() ? (isOfx ? parseOfx(text) : parseBankCsv(text, template)) : null), [text, template, isOfx]);
+  const ledger = isOfx && parsed && "ledger" in parsed ? parsed.ledger : null;
+  // Rows that look like transactions you already typed in: skipped unless you say otherwise.
+  const [dupes, setDupes] = useState<boolean[]>([]);
+  const [skipDupes, setSkipDupes] = useState(true);
+  useEffect(() => {
+    setDupes([]);
+    if (!parsed || parsed.rows.length === 0) return;
+    let live = true;
+    matchExistingAction(accountId, parsed.rows.map((r) => ({ date: r.date, amountCents: r.amountCents }))).then((d) => { if (live) setDupes(d); }).catch(() => { if (live) setDupes([]); });
+    return () => { live = false; };
+  }, [parsed, accountId]);
+  const dupeCount = dupes.filter(Boolean).length;
+  const importIdx = useMemo(() => (parsed?.rows ?? []).map((_, i) => i).filter((i) => !(skipDupes && dupes[i])), [parsed, dupes, skipDupes]);
   const hint = CSV_TEMPLATES.find((t) => t.id === template)?.hint;
 
   // Look up suggested pockets whenever the rows or the account change.
@@ -59,12 +74,12 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
   }
 
   function commit() {
-    if (!parsed || parsed.rows.length === 0) return;
+    if (!parsed || importIdx.length === 0) return;
     start(async () => {
       setResult(await importTransactionsAction({
         accountId,
         fileName,
-        rows: parsed.rows.map((r, i) => ({ date: r.date, payee: r.payee, memo: r.memo, amountCents: r.amountCents, categoryId: chosen[i] })),
+        rows: importIdx.map((i) => { const r = parsed.rows[i]; return { date: r.date, payee: r.payee, memo: r.memo, amountCents: r.amountCents, categoryId: chosen[i] }; }),
       }));
     });
   }
@@ -80,16 +95,16 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
             </select>
           </div>
           <div>
-            <label htmlFor="imp-tpl" className="label">Column layout</label>
-            <select id="imp-tpl" className="input" value={template} onChange={(e) => setTemplate(e.target.value as CsvTemplateId)}>
+            <label htmlFor="imp-tpl" className="label">Column layout{isOfx ? " (not needed for bank files)" : ""}</label>
+            <select id="imp-tpl" className="input" disabled={isOfx} value={template} onChange={(e) => setTemplate(e.target.value as CsvTemplateId)}>
               {CSV_TEMPLATES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </div>
         </div>
         {hint && <p className="text-xs text-slate-500 dark:text-slate-400">{hint} A header row is detected automatically; without one, the layout you pick is used.</p>}
         <div>
-          <label htmlFor="imp-file" className="label">CSV file</label>
-          <input id="imp-file" type="file" accept=".csv,text/csv,text/plain" onChange={(e) => onFile(e.target.files?.[0])} className="input !py-2" />
+          <label htmlFor="imp-file" className="label">Bank file: CSV, or OFX / QFX / QBO (QuickBooks)</label>
+          <input id="imp-file" type="file" accept=".csv,.ofx,.qfx,.qbo,text/csv,text/plain" onChange={(e) => onFile(e.target.files?.[0])} className="input !py-2" />
         </div>
         <div>
           <label htmlFor="imp-text" className="label">…or paste CSV text</label>
@@ -101,10 +116,10 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
       {parsed && (
         <section className="card overflow-hidden" aria-live="polite">
           <div className="flex flex-wrap items-center gap-3 border-b border-[#E2E8F0] px-4 py-3 dark:border-slate-800">
-            <strong className="text-sm">{parsed.rows.length} row{parsed.rows.length === 1 ? "" : "s"} ready</strong>
+            <strong className="text-sm">{importIdx.length} row{importIdx.length === 1 ? "" : "s"} ready</strong>
             {parsed.errors.length > 0 && <span className="text-sm text-[#8A5A00]">{parsed.errors.length} skipped</span>}
-            <button type="button" className="btn btn-primary ml-auto" disabled={pending || parsed.rows.length === 0 || result?.ok === true} onClick={commit}>
-              {pending ? "Importing…" : `Import ${parsed.rows.length} transactions`}
+            <button type="button" className="btn btn-primary ml-auto" disabled={pending || importIdx.length === 0 || result?.ok === true} onClick={commit}>
+              {pending ? "Importing…" : `Import ${importIdx.length} transactions`}
             </button>
           </div>
 
@@ -117,6 +132,20 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
             <div role="alert" className="border-b border-[#E2E8F0] bg-red-50 px-4 py-3 text-sm text-[#C9372C] dark:border-slate-800 dark:bg-red-950">{result.error}</div>
           ))}
 
+          {ledger && (
+            <div className="border-b border-[#E2E8F0] px-4 py-3 text-sm dark:border-slate-800">
+              Your bank says the balance {ledger.date ? `on ${ledger.date} ` : ""}is <strong className="nums">{formatCents(ledger.cents)}</strong>.{" "}
+              <Link className="font-semibold text-[#2E6BE6] underline dark:text-indigo-300" href={`/accounts/check${wsQuery}${wsQuery ? "&" : "?"}account=${accountId}`}>After importing, check it against the app →</Link>
+            </div>
+          )}
+          {dupeCount > 0 && (
+            <div className="flex flex-wrap items-center gap-x-4 border-b border-[#E2E8F0] bg-amber-50 px-4 py-3 text-sm dark:border-slate-800 dark:bg-amber-950/30">
+              <label className="flex min-h-[44px] items-center gap-2 font-medium">
+                <input type="checkbox" className="h-5 w-5" checked={skipDupes} onChange={(e) => setSkipDupes(e.target.checked)} />
+                Skip {dupeCount} row{dupeCount === 1 ? "" : "s"} that {dupeCount === 1 ? "looks" : "look"} already entered (same amount within 3 days)
+              </label>
+            </div>
+          )}
           {suggestedCount > 0 && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#E2E8F0] bg-indigo-50 px-4 py-3 text-sm dark:border-slate-800 dark:bg-indigo-950/40">
               <label className="flex min-h-[44px] items-center gap-2 font-medium">
@@ -144,9 +173,9 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
                 </thead>
                 <tbody>
                   {parsed.rows.slice(0, 25).map((r, i) => (
-                    <tr key={r.line} className="border-b border-[#E2E8F0] last:border-0 dark:border-slate-800">
+                    <tr key={r.line} className={`border-b border-[#E2E8F0] last:border-0 dark:border-slate-800 ${skipDupes && dupes[i] ? "opacity-50" : ""}`}>
                       <td className="td nums whitespace-nowrap">{r.date}</td>
-                      <td className="td">{r.payee}</td>
+                      <td className="td">{r.payee}{dupes[i] && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">{skipDupes ? "Already entered" : "May be a duplicate"}</span>}</td>
                       <td className="td max-w-xs truncate text-slate-500">{r.memo}</td>
                       <td className={`td nums text-right ${r.amountCents < 0 ? "" : "text-[#2E7D32]"}`}>{formatCents(r.amountCents)}</td>
                       <td className="td">
