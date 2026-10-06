@@ -172,7 +172,7 @@ function Classify({ payees, workspaceId, isBusiness, wsQuery }: { payees: Histor
                 onChange={(e) => { const v = e.target.value; if (!v) return; start(async () => { const r = await classifyPayeeAction(workspaceId, p.payee, v); if (r.ok) setDone((s) => new Set(s).add(p.payee)); else setErr(r.error); }); }}>
                 <option value="">Choose a type…</option>
                 {opts.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-                <option value="TRANSFER">Transfer (ignore)</option>
+                <option value="TRANSFER">Exclude (transfer or not business)</option>
               </select>
             </div>
             {open === p.payee && (

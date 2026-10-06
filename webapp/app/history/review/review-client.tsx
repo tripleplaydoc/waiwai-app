@@ -9,7 +9,7 @@ import { currentOf, filterGroups, type ReviewFilter, type ReviewGroup, type Revi
 import { formatCents } from "@/lib/utils/currency";
 
 interface Props { workspaceId: string; isBusiness: boolean; year: number; years: number[]; wsQuery: string; sealed: boolean; reviewedAt: string | null; groups: ReviewGroup[]; totals: ReviewTotals }
-const TABS: { key: ReviewFilter; label: string }[] = [{ key: "all", label: "Everything" }, { key: "in", label: "Money in" }, { key: "out", label: "Money out" }, { key: "transfer", label: "Transfers" }, { key: "todo", label: "Needs a type" }];
+const TABS: { key: ReviewFilter; label: string }[] = [{ key: "all", label: "Everything" }, { key: "in", label: "Money in" }, { key: "out", label: "Money out" }, { key: "transfer", label: "Excluded" }, { key: "todo", label: "Needs a type" }];
 
 export function ReviewClient({ workspaceId, isBusiness, year, years, wsQuery, sealed, reviewedAt, groups, totals }: Props) {
   const router = useRouter();
@@ -36,7 +36,7 @@ export function ReviewClient({ workspaceId, isBusiness, year, years, wsQuery, se
         <dl className="nums grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
           <div><dt className="text-slate-500">{isBusiness ? "Revenue" : "Income"}</dt><dd className="font-semibold">{formatCents(totals.incomeCents)}</dd></div>
           <div><dt className="text-slate-500">Expenses</dt><dd className="font-semibold">{formatCents(totals.expenseCents)}</dd></div>
-          <div><dt className="text-slate-500">Transfers (not counted)</dt><dd className="font-semibold">{formatCents(totals.transferCents)} <span className="text-xs font-normal text-slate-500">· {totals.transferCount}</span></dd></div>
+          <div><dt className="text-slate-500">Excluded (not counted)</dt><dd className="font-semibold">{formatCents(totals.transferCents)} <span className="text-xs font-normal text-slate-500">· {totals.transferCount}</span></dd></div>
           <div><dt className="text-slate-500">Rows</dt><dd className="font-semibold">{totals.rows.toLocaleString()}{totals.needsType > 0 && <span className="text-xs font-normal text-[#8A5A00]"> · {totals.needsType} need a type</span>}</dd></div>
         </dl>
         <p className="text-xs text-slate-500">Each line below is one payee. Change its type and every row from that payee in {year} follows. Open a line to fix single rows. Income and expense totals update as you go.</p>
@@ -72,7 +72,7 @@ function TypeSelect({ id, label, value, dir, isBusiness, disabled, onPick }: { i
       {value === null && <option value="__mixed" disabled>Mixed: pick one for all</option>}
       {value === "" && <option value="">No type yet</option>}
       {opts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-      <option value="TRANSFER">Transfer (not counted)</option>
+      <option value="TRANSFER">Exclude (transfer or not business)</option>
       <option value="__none">Guess again from the wording</option>
     </select>
   );

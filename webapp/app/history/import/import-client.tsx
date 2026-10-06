@@ -107,7 +107,7 @@ export function HistoryImportClient({ accounts, initialAccountId, isBusiness, ws
                         <td className="td nums whitespace-nowrap">{r.date}</td>
                         <td className="td">{r.payee}</td>
                         <td className={`td nums text-right ${r.amountCents < 0 ? "" : "text-[#2E7D32]"}`}>{formatCents(r.amountCents)}</td>
-                        <td className="td text-xs text-slate-600 dark:text-slate-300">{c.kind === "TRANSFER" ? "Transfer (ignored)" : typeLabel(c.typeKey) ?? <span className="text-slate-400">Name later</span>}</td>
+                        <td className="td text-xs text-slate-600 dark:text-slate-300">{c.kind === "TRANSFER" ? "Excluded" : typeLabel(c.typeKey) ?? <span className="text-slate-400">Name later</span>}</td>
                       </tr>
                     );
                   })}

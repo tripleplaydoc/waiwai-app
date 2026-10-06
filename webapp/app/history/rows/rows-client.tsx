@@ -68,7 +68,7 @@ function Row({ r, workspaceId, opts, onDone }: { r: RowVM; workspaceId: string; 
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{r.payee || "(no payee)"}</p>
-          <p className="nums text-xs text-slate-500">{r.date} · {r.account} · {r.kind === "TRANSFER" ? "Transfer (ignored)" : typeLabel(r.typeKey) ?? "No type yet"}</p>
+          <p className="nums text-xs text-slate-500">{r.date} · {r.account} · {r.kind === "TRANSFER" ? "Excluded" : typeLabel(r.typeKey) ?? "No type yet"}</p>
           {r.memo && <p className="truncate text-xs text-slate-400">{r.memo}</p>}
         </div>
         <div className="text-right">
@@ -85,7 +85,7 @@ function Row({ r, workspaceId, opts, onDone }: { r: RowVM; workspaceId: string; 
               <input id={`e-a-${r.id}`} inputMode="decimal" className="input nums" value={d.amount} onChange={(e) => setD({ ...d, amount: e.target.value })} /></div></div>
           <div><label className="label" htmlFor={`e-p-${r.id}`}>Payee</label><input id={`e-p-${r.id}`} className="input" value={d.payee} onChange={(e) => setD({ ...d, payee: e.target.value })} /></div>
           <div><label className="label" htmlFor={`e-t-${r.id}`}>Type</label>
-            <select id={`e-t-${r.id}`} className="input" value={d.typeKey} onChange={(e) => setD({ ...d, typeKey: e.target.value })}><option value="">Guess from the payee</option>{opts.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}<option value="TRANSFER">Transfer (ignore)</option></select></div>
+            <select id={`e-t-${r.id}`} className="input" value={d.typeKey} onChange={(e) => setD({ ...d, typeKey: e.target.value })}><option value="">Guess from the payee</option>{opts.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}<option value="TRANSFER">Exclude (transfer or not business)</option></select></div>
           <div className="sm:col-span-2"><label className="label" htmlFor={`e-m-${r.id}`}>Memo</label><input id={`e-m-${r.id}`} className="input" value={d.memo} onChange={(e) => setD({ ...d, memo: e.target.value })} /></div>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             <button type="button" className="btn btn-primary min-h-11" disabled={pending} onClick={save}>{pending ? "Saving…" : "Save"}</button>
@@ -111,7 +111,7 @@ function AddRow({ workspaceId, accounts, opts, onDone }: { workspaceId: string; 
       <div><label className="label" htmlFor="ar-date">Date</label><input id="ar-date" type="date" className="input" value={d.date} onChange={(e) => setD({ ...d, date: e.target.value })} /></div>
       <div><label className="label" htmlFor="ar-pay">Payee</label><input id="ar-pay" className="input" value={d.payee} onChange={(e) => setD({ ...d, payee: e.target.value })} /></div>
       <div><label className="label" htmlFor="ar-amt">Amount</label><div className="flex gap-2"><select aria-label="Direction" className="input w-24" value={d.direction} onChange={(e) => setD({ ...d, direction: e.target.value as "out" | "in" })}><option value="out">Out</option><option value="in">In</option></select><input id="ar-amt" inputMode="decimal" className="input nums" value={d.amount} onChange={(e) => setD({ ...d, amount: e.target.value })} /></div></div>
-      <div><label className="label" htmlFor="ar-type">Type</label><select id="ar-type" className="input" value={d.typeKey} onChange={(e) => setD({ ...d, typeKey: e.target.value })}><option value="">Guess from the payee</option>{opts.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}<option value="TRANSFER">Transfer (ignore)</option></select></div>
+      <div><label className="label" htmlFor="ar-type">Type</label><select id="ar-type" className="input" value={d.typeKey} onChange={(e) => setD({ ...d, typeKey: e.target.value })}><option value="">Guess from the payee</option>{opts.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}<option value="TRANSFER">Exclude (transfer or not business)</option></select></div>
       <div><label className="label" htmlFor="ar-memo">Memo</label><input id="ar-memo" className="input" value={d.memo} onChange={(e) => setD({ ...d, memo: e.target.value })} /></div>
       <div className="flex flex-wrap gap-2 sm:col-span-2">
         <button type="button" className="btn btn-primary min-h-11" disabled={pending} onClick={() => start(async () => { const x = await addHistoryRowAction(workspaceId, d); if (x.ok) { setD(blank); setErr(undefined); onDone(); } else setErr(x.error); })}>{pending ? "Adding…" : "Add row"}</button>
