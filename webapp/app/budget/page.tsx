@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock, ChevronLeft, ChevronRight, Droplets, Landmark, Target } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Droplets, Landmark, LineChart, Target } from "lucide-react";
 import { requireAuth, getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
@@ -8,6 +8,7 @@ import { budgetHealth, pocketProgress } from "@/lib/budget/targets";
 import { billStatus, DUE_SOON_DAYS } from "@/lib/budget/bills";
 import type { GroupVM, PocketVM } from "@/lib/budget/board-types";
 import { formatCents } from "@/lib/utils/currency";
+import { inDays, shortDate as shortDay } from "@/lib/cycle";
 import { monthFromParam, monthLabel, monthParam, shiftMonth, todayIso } from "@/lib/utils/dates";
 import { AutoAssignButton } from "./budget-controls";
 import { AssignButton, FlowPanel } from "./flow-controls";
@@ -19,6 +20,8 @@ import { LoansPanel } from "./loans-panel";
 import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
 import { loadRecurring, postDue } from "@/lib/recurring";
+import { loadForecast } from "@/lib/forecast";
+import { daysBetween } from "@/lib/forecast-math";
 import { CardReminders } from "@/components/card-reminders";
 import { BillsCalendar, type CalItem } from "./bills-calendar";
 import { MoveMoneyHost } from "./move-money-host";
@@ -63,7 +66,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
     prisma.categoryGroup.findMany({ where: { workspaceId: workspace.id, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
 
-  const recurringDue = (await loadRecurring(workspace.id)).filter((r) => r.isActive && !r.autoPost && r.dueDates.length > 0);
+  const recurringAll = await loadRecurring(workspace.id);
+  const recurringDue = recurringAll.filter((r) => r.isActive && !r.autoPost && r.dueDates.length > 0);
   const cardStatuses = await loadCardStatuses(workspace.id, month);
   const cardsShort = cardStatuses.filter((c) => c.shortCents > 0);
   const isPersonal = workspace.type === "PERSONAL";
@@ -75,6 +79,11 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const pocketChoices = await loadPocketChoices(workspace.id);
   const loans = await loadLoans(workspace.id, mp, summary.rows, mp === today.slice(0, 7));
   const rta = summary.readyToAssignCents;
+  // Warn when known bills will run the cash short in the next 30 days (only on the current month, which is what the forecast is about).
+  let cashShort: { date: string; cents: number } | null = null;
+  if (mp === today.slice(0, 7)) {
+    try { cashShort = (await loadForecast(workspace.id, { days: 30, today, summary, loans, recurring: recurringAll, wsQ })).firstShort; } catch { /* the forecast is a bonus here: never block the budget */ }
+  }
   const expenseRows = summary.rows.filter((r) => r.type !== "INCOME");
 
   // Board groups: every category that isn't income-only (empty ones stay visible).
@@ -183,6 +192,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
             >
               <LoansPanel workspaceId={workspace.id} loans={loans} groups={allGroups} defaultGroupId={flow.opexGroupId && allGroups.some((g) => g.id === flow.opexGroupId) ? flow.opexGroupId : "__new"} banks={cash.accounts.map((a) => ({ id: a.id, name: a.name }))} assets={assetChoices} pockets={pocketChoices} />
             </Popover>
+            <Link href={`/forecast${wsKey === "business" ? "?ws=business" : ""}`} className="flex min-h-9 items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+              <LineChart className="size-3.5 text-[#2E6BE6]" aria-hidden />Forecast{cashShort && <span className="rounded-full bg-neg-soft px-1.5 text-neg">short</span>}
+            </Link>
             {goals.length > 0 && (
               <Popover icon={<Target className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={<>Goals {goals.length}</>}>
                 <p className="mb-2 text-xs font-bold text-slate-800 dark:text-slate-100">Goals</p>
@@ -246,6 +258,11 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
       {recurringDue.length > 0 && (
         <Link href={`/recurring${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs font-medium text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200">
           {recurringDue.length} recurring item{recurringDue.length === 1 ? " is" : "s are"} due: {recurringDue.slice(0, 3).map((r) => r.payee).join(", ")}{recurringDue.length > 3 ? ` and ${recurringDue.length - 3} more` : ""}. Tap to review.
+        </Link>
+      )}
+      {cashShort && (
+        <Link href={`/forecast${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-red-300 bg-neg-soft px-3 py-2.5 text-xs font-medium text-neg dark:border-red-800">
+          Cash is projected to run short on {shortDay(cashShort.date)} ({inDays(daysBetween(today, cashShort.date))}) by {formatCents(-cashShort.cents)}. Tap to see what&apos;s coming.
         </Link>
       )}
       <CardReminders cards={cardStatuses} wsQ={wsKey === "business" ? "?ws=business" : ""} />

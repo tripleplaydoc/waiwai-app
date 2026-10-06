@@ -218,3 +218,13 @@ Each card with a statement day gets a plan (lib/budget/card-plan.ts): pay down 2
 
 ## Bank file import (OFX / QFX / QBO)
 Import page accepts the file your bank (or QuickBooks) lets you download, not just CSV. Rows load the same way as CSV, with the bank's own statement balance shown and a link to Balance check. Rows with the same amount within 3 days of something you already typed in are marked "Already entered" and skipped (untick to import them anyway). Re-importing the same file is still safe.
+
+## 60-day cash forecast
+
+Accounts > **Forecast** (also a chip on the Budget page). Starts from the cash in your on-budget bank and cash accounts and walks 60 days forward using what is already known: repeating items (Recurring), bills with a due day, loan payments, anything already dated in the future, and credit card payments following the card plan (pay down before the statement closes, the rest by the due date). A name that appears in two places (a bill and a repeating item) is counted once. Everyday spending that isn't repeating is not predicted. The Budget page shows a red strip when cash is projected to run short in the next 30 days. Code: `lib/forecast-math.ts` (+test), `lib/forecast.ts`.
+
+## Push reminders
+
+Settings > Reminders > **Turn on reminders** on each phone or computer (on iPhone, add WaiWai to the Home Screen first). Once a day (8:00 Hawaii) `netlify/functions/daily-reminders.mts` calls `POST /api/cron/notify`, which posts repeating items that post themselves and sends one notification per person with anything new: card pay-down (5 days ahead and on the day), card payment due, bills and loan payments (3 days ahead and on the day), repeating items waiting for a tap, and cash forecast to run short within 14 days. Each reminder is sent once (`push_sent`). `?dry=1` lists what would be sent.
+
+Setup: run `prisma/migrations/20261005340000_push_reminders/migration.sql` in Supabase, then add these Netlify environment variables and redeploy: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (make a pair with `npx web-push generate-vapid-keys`), `CRON_SECRET` (any random string of 16+ characters), optionally `VAPID_SUBJECT` (`mailto:you@example.com`).

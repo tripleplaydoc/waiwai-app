@@ -102,9 +102,11 @@ export default async function HoldingsPage({ searchParams }: { searchParams: Pro
         <h1 className="text-2xl font-semibold tracking-tight">{ws.name} assets &amp; liabilities</h1>
         <div className="ml-auto flex items-center gap-2">{hasPositions && <PriceRefresher workspaceId={ws.id} compact />}<HoldingButton workspaceId={ws.id} today={today} /></div>
       </div>
-      <div className="flex gap-2 text-sm font-semibold" role="tablist" aria-label="Accounts view">
+      <div className="flex flex-wrap gap-2 text-sm font-semibold" role="tablist" aria-label="Accounts view">
         <Link role="tab" aria-selected={false} href={`/accounts${wsQ}`} className="rounded-full border border-[#E2E8F0] bg-white px-4 py-2 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Accounts</Link>
         <span role="tab" aria-selected className="rounded-full bg-navy px-4 py-2 text-white">Assets &amp; liabilities</span>
+        <Link role="tab" aria-selected={false} href={`/recurring${wsQ}`} className="rounded-full border border-[#E2E8F0] bg-white px-4 py-2 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Recurring</Link>
+        <Link role="tab" aria-selected={false} href={`/forecast${wsQ}`} className="rounded-full border border-[#E2E8F0] bg-white px-4 py-2 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Forecast</Link>
       </div>
 
       <section className="card grid grid-cols-3 divide-x divide-[#E2E8F0] text-center dark:divide-slate-800" aria-label="Net worth">

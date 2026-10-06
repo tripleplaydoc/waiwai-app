@@ -316,6 +316,8 @@ model User {
   transactions Transaction[] @relation("TransactionPerson")
   expenseReviews ExpenseReview[]
   stewardedAccounts Account[] @relation("AccountSteward")
+  pushSubscriptions PushSubscription[]
+  pushSent          PushSent[]
 
   @@map("users")
 }
@@ -1397,4 +1399,37 @@ model RecurringItem {
 
   @@index([workspaceId, isActive])
   @@map("recurring_items")
+}
+
+
+// ----------------------------------------------------------------------------
+// PUSH REMINDERS — phones / computers that allowed notifications (Web Push)
+// ----------------------------------------------------------------------------
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+/// Reminders already sent to a person, so each one goes out once.
+model PushSent {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key    String
+  sentAt DateTime @default(now())
+
+  @@unique([userId, key])
+  @@index([sentAt])
+  @@map("push_sent")
 }

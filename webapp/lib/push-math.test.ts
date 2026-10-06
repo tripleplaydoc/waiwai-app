@@ -1,0 +1,23 @@
+import assert from "node:assert/strict";
+import { remindersFor, shortReminder } from "./push-math";
+import type { ForecastEvent } from "./forecast-math";
+
+const e = (o: Partial<ForecastEvent>): ForecastEvent => ({ id: "x", date: "2026-10-06", dueDate: "2026-10-06", label: "Chase Sapphire", cents: -130000, kind: "card", remindDays: 5, ...o });
+const t = "2026-10-05";
+let r = remindersFor([e({})], t, "wp");
+assert.equal(r.length, 1);
+assert.equal(r[0].key, "wp:x:2026-10-06:early");
+assert.equal(r[0].text, "Chase Sapphire: $1,300.00 due tomorrow");
+r = remindersFor([e({ dueDate: "2026-10-05", date: "2026-10-05" })], t, "wp", "Business: ");
+assert.equal(r[0].key, "wp:x:2026-10-05:day");
+assert.equal(r[0].text, "Business: Chase Sapphire: $1,300.00 due today");
+assert.equal(remindersFor([e({ dueDate: "2026-10-20", date: "2026-10-20" })], t, "wp").length, 0, "outside the window");
+assert.equal(remindersFor([e({ remindDays: undefined })], t, "wp").length, 0, "no reminder wanted");
+r = remindersFor([e({ dueDate: "2026-10-01", date: t, label: "Rent" })], t, "wp");
+assert.equal(r[0].text, "Rent: $1,300.00 (overdue)");
+r = remindersFor([e({ kind: "recurring", label: "Payroll tax", remindDays: 0, dueDate: t, date: t })], t, "wp");
+assert.equal(r[0].text, "Payroll tax is waiting to be posted");
+assert.equal(remindersFor([e({ kind: "recurring", remindDays: 0 })], t, "wp").length, 0, "tomorrow is outside a same-day window");
+assert.equal(shortReminder("wp", "", { date: "2026-11-14", cents: -34810 }, t), null);
+assert.equal(shortReminder("wp", "", { date: "2026-10-14", cents: -34810 }, t)!.text, "Cash is projected to run short on Oct 14 by $348.10.");
+console.log("push-math ok");

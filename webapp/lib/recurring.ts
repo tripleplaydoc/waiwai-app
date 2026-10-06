@@ -8,7 +8,7 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 export interface RecurringVM {
   id: string; accountId: string; accountName: string; categoryId: string | null; categoryName: string | null;
   payee: string; memo: string | null; amountCents: number; frequency: Frequency; nextDate: string; endDate: string | null;
-  autoPost: boolean; isDeductible: boolean; isActive: boolean; dueDates: string[];
+  autoPost: boolean; isDeductible: boolean; isActive: boolean; dueDates: string[]; anchorDay: number;
 }
 
 /** Every repeating item in a workspace, with the dates that are due now. Empty when the table isn't created yet. */
@@ -23,7 +23,7 @@ export async function loadRecurring(workspaceId: string, today = todayIso()): Pr
       return {
         id: i.id, accountId: i.accountId, accountName: i.account.name, categoryId: i.categoryId && catName.has(i.categoryId) ? i.categoryId : null,
         categoryName: i.categoryId ? catName.get(i.categoryId) ?? null : null, payee: i.payee, memo: i.memo, amountCents: i.amountCents, frequency: freq,
-        nextDate: next, endDate: i.endDate ? iso(i.endDate) : null, autoPost: i.autoPost, isDeductible: i.isDeductible, isActive: i.isActive && !i.account.isArchived,
+        nextDate: next, endDate: i.endDate ? iso(i.endDate) : null, anchorDay: i.anchorDay, autoPost: i.autoPost, isDeductible: i.isDeductible, isActive: i.isActive && !i.account.isArchived,
         dueDates: i.isActive && !i.account.isArchived ? dueDates(next, freq, i.anchorDay, today, i.endDate ? iso(i.endDate) : null) : [],
       };
     });

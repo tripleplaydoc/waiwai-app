@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ProfileForm, PasswordForm } from "./settings-forms";
 import { AddMemberForm, MemberRow } from "./household";
 import { AvatarForm } from "./avatar-form";
+import { PushToggle } from "./push-toggle";
 import { avatarUrl } from "@/components/avatar";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,13 @@ export default async function SettingsPage() {
         <h2 id="profile-h" className="mb-4 text-base font-semibold">Profile</h2>
         <div className="mb-5"><AvatarForm name={user.name || user.email} src={avatarUrl(user)} /></div>
         <ProfileForm name={user.name ?? ""} email={user.email} />
+      </section>
+      <section className="card p-6" aria-labelledby="push-h">
+        <h2 id="push-h" className="mb-1 text-base font-semibold">Reminders</h2>
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          A push notification each morning when a card needs paying down before its statement closes, a card payment, bill or loan payment is coming up, a repeating item is waiting for you, or cash is forecast to run short. Each reminder is sent once. Turn it on for each phone or computer you use.
+        </p>
+        <PushToggle publicKey={process.env.VAPID_PUBLIC_KEY ?? null} />
       </section>
       <section className="card p-6" aria-labelledby="pw-h">
         <h2 id="pw-h" className="mb-1 text-base font-semibold">Password</h2>
