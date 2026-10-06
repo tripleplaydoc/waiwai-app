@@ -11,10 +11,10 @@ export function CardReminders({ cards, wsQ }: { cards: CardStatus[]; wsQ: string
     const p = c.plan;
     if (p.closeAlert && c.nextStatement) {
       const when = p.payByDays! <= 0 ? "today" : inDays(p.payByDays!);
-      out.push({ key: `close-${c.id}`, tone: p.payByDays! <= 0 ? "warn" : "info", href,
-        text: `${c.name}: pay ${formatCents(p.payDownCents)} by ${shortDate(p.payByIso!)} (${when}). It closes ${shortDate(c.nextStatement.iso)}${p.reportedPct !== null ? `, so you'd report ${p.reportedPct}% of your limit` : ""}.` });
+      out.push({ key: `close-${c.id}`, tone: "info", href,
+        text: `${c.name}: a ${formatCents(p.payDownCents)} payment ${p.payByDays! <= 0 ? "today" : "by " + shortDate(p.payByIso!) + " (" + when + ")"} keeps your credit use${p.reportedPct !== null ? ` near ${p.reportedPct}%` : " low"} when the statement closes ${shortDate(c.nextStatement.iso)}.` });
     }
-    if (p.dueAlert && c.nextDue) out.push({ key: `due-${c.id}`, tone: "warn", href, text: `${c.name}: payment due ${inDays(c.nextDue.days)} (${shortDate(c.nextDue.iso)}). You owe ${formatCents(c.owedCents)}.` });
+    if (p.dueAlert && c.nextDue) out.push({ key: `due-${c.id}`, tone: "info", href, text: `${c.name}: your ${formatCents(c.owedCents)} payment is coming up ${inDays(c.nextDue.days)} (${shortDate(c.nextDue.iso)}). Paying on time keeps your streak going.` });
     return out;
   });
   if (items.length === 0) return null;

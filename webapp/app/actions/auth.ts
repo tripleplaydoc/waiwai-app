@@ -21,7 +21,7 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
     return { error: "That email and password don't match.", email };
   }
   await setSessionCookie(user);
-  redirect("/budget");
+  redirect("/home");
 }
 
 const setupSchema = z.object({
@@ -63,7 +63,7 @@ export async function setupAction(_prev: FormState, formData: FormData): Promise
     ? await prisma.user.update({ where: { id: existing.id }, data: { email, passwordHash, ...(name ? { name } : {}) } })
     : await prisma.user.create({ data: { email, passwordHash, name: name || null } });
   await setSessionCookie(user);
-  redirect("/budget");
+  redirect("/home");
 }
 
 export async function logoutAction(): Promise<void> {

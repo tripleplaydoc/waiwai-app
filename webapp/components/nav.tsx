@@ -3,17 +3,17 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun, Monitor, LogOut, Wallet, Landmark, Upload, Settings, BarChart3, Compass } from "lucide-react";
+import { Moon, Sun, Monitor, LogOut, Wallet, Landmark, Upload, Settings, BarChart3, Compass, Home } from "lucide-react";
 import { BrandName } from "@/components/brand";
 import { Avatar } from "@/components/avatar";
 import { logoutAction } from "@/app/actions/auth";
 
 const LINKS = [
+  { href: "/home", label: "Home", icon: Home },
   { href: "/budget", label: "Budget", icon: Wallet },
   { href: "/accounts", label: "Accounts", icon: Landmark },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/coach", label: "Coach", icon: Compass },
-  { href: "/import", label: "Import", icon: Upload },
 ];
 
 function useWs() {
@@ -67,6 +67,7 @@ function UserMenu({ initial, name, email, avatar }: { initial: string; name: str
             <div className="truncate text-xs text-slate-500 dark:text-slate-400">{email}</div>
           </div>
           <div className="pt-1">
+            <Link role="menuitem" href="/import" onClick={() => setOpen(false)} className={item}><Upload className="size-4" aria-hidden /> Import</Link>
             <Link role="menuitem" href="/settings" onClick={() => setOpen(false)} className={item}><Settings className="size-4" aria-hidden /> Settings</Link>
             <div role="group" aria-label="Appearance" className="px-3 pb-2 pt-2">
               <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Appearance</div>
@@ -95,7 +96,7 @@ export function Nav({ initial, name, email, avatar }: { initial: string; name: s
   return (
     <header className="sticky top-0 z-30 bg-navy pt-[env(safe-area-inset-top)] text-white shadow-[0_8px_24px_-14px_rgba(15,26,56,0.6)]">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 pl-3 pr-4 sm:gap-3 sm:px-6">
-        <Link href={`/budget${q(ws)}`} aria-label="WaiWai home" className="mr-1 shrink-0">
+        <Link href={`/home${q(ws)}`} aria-label="WaiWai home" className="mr-1 shrink-0">
           <BrandName light />
         </Link>
         <nav className="ml-3 hidden items-center gap-1 md:flex" aria-label="Main">

@@ -220,7 +220,7 @@ export function PocketDialog({
           <div>
             <label htmlFor="pk-due" className="label">Due day of the month <span className="font-normal text-slate-400">(optional)</span></label>
             <input id="pk-due" name="dueDay" type="number" min={1} max={31} inputMode="numeric" placeholder="e.g. 15" defaultValue={pocket?.dueDay ?? ""} className="input nums sm:max-w-40" />
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">For bills and expenses with a due date. You&apos;ll see Due soon / Overdue / Paid, and can tap Mark paid.</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">For bills and expenses with a due date. You&apos;ll see Due soon / Waiting for you / Paid, and can tap Mark paid.</p>
           </div>
         )}
 

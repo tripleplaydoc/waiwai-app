@@ -6,7 +6,7 @@ import { LoginForm } from "./login-form";
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  if (await isAuthed()) redirect("/budget");
+  if (await isAuthed()) redirect("/home");
   if (!(await accountReady())) redirect("/setup");
   return (
     <AuthShell title="Welcome back" subtitle="Sign in to your budget.">

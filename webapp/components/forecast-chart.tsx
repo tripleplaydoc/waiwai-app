@@ -1,4 +1,4 @@
-/** End-of-day cash balance as a step line; the part below zero is red. Server-renderable. */
+/** End-of-day cash balance as a step line; the part below zero is a soft amber dip. Server-renderable. */
 export function ForecastChart({ points, lowIndex, label }: { points: number[]; lowIndex: number; label: string }) {
   if (points.length < 2) return null;
   const W = 600, H = 150, padX = 4, padT = 10, padB = 10;
@@ -25,12 +25,12 @@ export function ForecastChart({ points, lowIndex, label }: { points: number[]; l
       </g>
       {crosses && (
         <g clipPath="url(#fc-below)">
-          <path d={area} fill="#DC2626" opacity="0.14" />
-          <path d={line} fill="none" stroke="#DC2626" strokeWidth="2.25" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          <path d={area} fill="#D97706" opacity="0.14" />
+          <path d={line} fill="none" stroke="#D97706" strokeWidth="2.25" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         </g>
       )}
-      {crosses && <line x1="0" x2={W} y1={zeroY} y2={zeroY} stroke="#DC2626" strokeWidth="1" strokeDasharray="4 4" opacity="0.6" vectorEffect="non-scaling-stroke" />}
-      <circle cx={x(lowIndex)} cy={y(points[lowIndex])} r="4.5" fill={points[lowIndex] < 0 ? "#DC2626" : "#2E6BE6"} stroke="white" strokeWidth="1.5" />
+      {crosses && <line x1="0" x2={W} y1={zeroY} y2={zeroY} stroke="#D97706" strokeWidth="1" strokeDasharray="4 4" opacity="0.6" vectorEffect="non-scaling-stroke" />}
+      <circle cx={x(lowIndex)} cy={y(points[lowIndex])} r="4.5" fill={points[lowIndex] < 0 ? "#D97706" : "#2E6BE6"} stroke="white" strokeWidth="1.5" />
     </svg>
   );
 }

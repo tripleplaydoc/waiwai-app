@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureWorkspaces } from "@/lib/workspace";
 import { loadForecast } from "@/lib/forecast";
 import { postDue } from "@/lib/recurring";
-import { remindersFor, shortReminder, type Reminder } from "@/lib/push-math";
+import { remindersFor, shortReminder, winLine, greetingTitle, type Reminder } from "@/lib/push-math";
 import { todayIso } from "@/lib/utils/dates";
 
 export function pushConfigured(): boolean {
@@ -39,38 +39,45 @@ export async function sendToUser(userId: string, payload: Payload): Promise<numb
 }
 
 /** Everything worth a reminder right now, across Personal and Business. Also posts repeating items that post themselves. */
-export async function collectReminders(today = todayIso()): Promise<Reminder[]> {
+export async function collectReminders(today = todayIso()): Promise<{ reminders: Reminder[]; inCents: number; hasGap: boolean }> {
   const { personal, business } = await ensureWorkspaces();
   const out: Reminder[] = [];
+  let inCents = 0, hasGap = false;
   for (const [ws, prefix, q] of [[personal, "", ""], [business, "Business: ", "?ws=business"]] as const) {
     try {
       await postDue(ws.id, { onlyAuto: true, today });
       const f = await loadForecast(ws.id, { today, days: 30, wsQ: q });
       const withWs = (r: Reminder): Reminder => ({ ...r, url: q && !r.url.includes("ws=") ? `${r.url}${r.url.includes("?") ? "&" : "?"}ws=business` : r.url });
       out.push(...remindersFor(f.events, today, ws.id, prefix).map(withWs));
+      inCents += f.inCents; if (f.firstShort) hasGap = true;
       const s = shortReminder(ws.id, prefix, f.firstShort, today);
       if (s) out.push(withWs(s));
     } catch { /* one workspace failing must not stop the other */ }
   }
-  return out;
+  return { reminders: out, inCents, hasGap };
 }
 
 /** Daily run: sends each person only the reminders they haven't had yet, as one notification. */
 export async function runReminders(opts: { dry?: boolean; today?: string } = {}): Promise<{ users: number; sent: number; reminders: string[] }> {
   const today = opts.today ?? todayIso();
-  const all = await collectReminders(today);
+  const { reminders: all, inCents, hasGap } = await collectReminders(today);
+  const win = winLine(inCents, hasGap);
   const users = await prisma.pushSubscription.findMany({ distinct: ["userId"], select: { userId: true } });
   let sent = 0;
   const shown: string[] = [];
   for (const { userId } of users) {
+    // Quiet mode: skip without marking anything sent, so nothing is lost when reminders resume.
+    const pref = await prisma.pushPref.findUnique({ where: { userId } }).catch(() => null);
+    if (pref?.pausedUntil && pref.pausedUntil > new Date()) continue;
+    const person = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } }).catch(() => null);
     const seen = new Set((await prisma.pushSent.findMany({ where: { userId, key: { in: all.map((r) => r.key) } }, select: { key: true } })).map((r) => r.key));
     const fresh = all.filter((r) => !seen.has(r.key));
     if (fresh.length === 0) continue;
     shown.push(...fresh.map((r) => r.text));
     if (opts.dry) continue;
     const lines = fresh.slice(0, 4).map((r) => r.text);
-    if (fresh.length > 4) lines.push(`and ${fresh.length - 4} more`);
-    const n = await sendToUser(userId, { title: fresh.length === 1 ? "WaiWai reminder" : `WaiWai: ${fresh.length} reminders`, body: lines.join("\n"), url: fresh.length === 1 ? fresh[0].url : "/budget", tag: "waiwai-reminders" });
+    if (fresh.length > 4) lines.push(`and ${fresh.length - 4} more when you have a minute`);
+    const n = await sendToUser(userId, { title: greetingTitle((person?.name ?? "").trim().split(/\s+/)[0] ?? ""), body: [win, ...lines].filter(Boolean).join("\n"), url: fresh.length === 1 ? fresh[0].url : "/home", tag: "waiwai-reminders" });
     if (n > 0) { sent += n; await prisma.pushSent.createMany({ data: fresh.map((r) => ({ userId, key: r.key })), skipDuplicates: true }); }
   }
   if (!opts.dry) await prisma.pushSent.deleteMany({ where: { sentAt: { lt: new Date(Date.now() - 120 * 86_400_000) } } });

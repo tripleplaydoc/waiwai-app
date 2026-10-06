@@ -41,26 +41,32 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
       </div>
 
       {short ? (
-        <div className="rounded-xl border border-red-300 bg-neg-soft px-4 py-3 text-sm font-medium text-neg dark:border-red-800" role="status">
-          Cash runs short on {shortDate(short.date)} ({inDays(daysBetween(f.today, short.date))}) and bottoms out at {formatCents(f.low.cents)} on {shortDate(f.low.date)}. Move money in or move a payment before then.
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-100" role="status">
+          <p className="font-semibold">A {formatCents(-f.low.cents)} gap to plan for around {shortDate(f.low.date)}. You have {daysBetween(f.today, short.date)} day{daysBetween(f.today, short.date) === 1 ? "" : "s"} to arrange it.</p>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide opacity-80">Ways to close it</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-[13px]">
+            <li>Move some from savings before then.</li>
+            <li>Shift a payment to a later date, or pay a card in two parts.</li>
+            <li>Assign a little less elsewhere this month.</li>
+          </ul>
         </div>
       ) : (
         <div className="rounded-xl border border-emerald-300 bg-pos-soft px-4 py-3 text-sm font-medium text-pos dark:border-emerald-800" role="status">
-          Everything known is covered. The lowest point is {formatCents(f.low.cents)} on {shortDate(f.low.date)}.
+          Good news: everything known is covered. The lowest point is {formatCents(f.low.cents)} on {shortDate(f.low.date)}.
         </div>
       )}
 
       <section className="grid grid-cols-3 gap-3" aria-label="Forecast totals">
         <div className="card p-3 sm:p-4"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cash today</p><p className="nums mt-1 text-base font-bold sm:text-xl">{formatCents(f.startCents)}</p></div>
-        <div className="card p-3 sm:p-4"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Lowest</p><p className={`nums mt-1 text-base font-bold sm:text-xl ${f.low.cents < 0 ? "text-neg" : ""}`}>{formatCents(f.low.cents)}</p><p className="text-[11px] text-slate-500">{shortDate(f.low.date)}</p></div>
-        <div className="card p-3 sm:p-4"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">In {FORECAST_DAYS} days</p><p className={`nums mt-1 text-base font-bold sm:text-xl ${f.endCents < 0 ? "text-neg" : ""}`}>{formatCents(f.endCents)}</p><p className="text-[11px] text-slate-500">{shortDate(f.end)}</p></div>
+        <div className="card p-3 sm:p-4"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Lowest</p><p className={`nums mt-1 text-base font-bold sm:text-xl ${f.low.cents < 0 ? "text-warn" : ""}`}>{formatCents(f.low.cents)}</p><p className="text-[11px] text-slate-500">{shortDate(f.low.date)}</p></div>
+        <div className="card p-3 sm:p-4"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">In {FORECAST_DAYS} days</p><p className={`nums mt-1 text-base font-bold sm:text-xl ${f.endCents < 0 ? "text-warn" : ""}`}>{formatCents(f.endCents)}</p><p className="text-[11px] text-slate-500">{shortDate(f.end)}</p></div>
       </section>
 
       <section className="card p-4" aria-label="Balance over time">
         <ForecastChart points={f.days.map((d) => d.balanceCents)} lowIndex={lowIdx < 0 ? 0 : lowIdx} label={`Cash balance from ${shortDate(f.today)} to ${shortDate(f.end)}`} />
         <div className="mt-1 flex justify-between text-[11px] text-slate-500"><span>{shortDate(f.today)}</span><span>{shortDate(f.end)}</span></div>
         <p className="nums mt-2 text-xs text-slate-600 dark:text-slate-300">
-          <ArrowUpRight className="mr-0.5 inline size-3.5 text-pos" aria-hidden />In {formatCents(f.inCents)} · <ArrowDownRight className="mr-0.5 inline size-3.5 text-neg" aria-hidden />Out {formatCents(f.outCents)}
+          <ArrowUpRight className="mr-0.5 inline size-3.5 text-pos" aria-hidden />In {formatCents(f.inCents)} · <ArrowDownRight className="mr-0.5 inline size-3.5 text-slate-400" aria-hidden />Out {formatCents(f.outCents)}
         </p>
       </section>
 
@@ -80,7 +86,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
               <li key={d.date} className="px-4 py-3">
                 <div className="mb-1 flex items-baseline justify-between gap-3">
                   <span className="text-sm font-semibold">{weekday(d.date)}, {shortDate(d.date)}<span className="ml-2 text-xs font-normal text-slate-500">{d.date === f.today ? "today" : inDays(daysBetween(f.today, d.date))}</span></span>
-                  <span className={`nums text-xs font-semibold ${d.balanceCents < 0 ? "text-neg" : "text-slate-500"}`} title="Balance at the end of the day">{formatCents(d.balanceCents)}</span>
+                  <span className={`nums text-xs font-semibold ${d.balanceCents < 0 ? "text-warn" : "text-slate-500"}`} title="Balance at the end of the day">{formatCents(d.balanceCents)}</span>
                 </div>
                 <ul className="space-y-1.5">
                   {d.events.map((e, i) => {

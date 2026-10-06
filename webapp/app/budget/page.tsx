@@ -178,7 +178,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
             </Popover>
             <Popover
               icon={<CalendarClock className="size-3.5 text-[#2E6BE6]" aria-hidden />}
-              label={bills.length > 0 ? <>Bills {billsPaid}/{bills.length}{billsOverdue > 0 && <span className="rounded-full bg-neg-soft px-1.5 text-neg">{billsOverdue} overdue</span>}</> : "Bills"}
+              label={bills.length > 0 ? <>Bills {billsPaid}/{bills.length}{billsOverdue > 0 && <span className="rounded-full bg-indigo-50 px-1.5 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200">{billsOverdue} waiting</span>}</> : "Bills"}
             >
               <div className="mb-1 flex items-baseline justify-between text-xs text-slate-500">
                 <span className="font-bold text-slate-800 dark:text-slate-100">Bills</span>
@@ -188,12 +188,12 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
             </Popover>
             <Popover
               icon={<Landmark className="size-3.5 text-[#2E6BE6]" aria-hidden />}
-              label={loans.filter((l) => l.onBudget && l.phase !== "finished").length > 0 ? <>Loans {loans.filter((l) => l.onBudget && l.phase !== "finished").length}{loans.some((l) => l.overdue) && <span className="rounded-full bg-neg-soft px-1.5 text-neg">overdue</span>}</> : loans.some((l) => !l.onBudget && l.phase === "unset") ? <>Loans <span className="rounded-full bg-warn-soft px-1.5 text-warn">set up</span></> : "Loans"}
+              label={loans.filter((l) => l.onBudget && l.phase !== "finished").length > 0 ? <>Loans {loans.filter((l) => l.onBudget && l.phase !== "finished").length}{loans.some((l) => l.overdue) && <span className="rounded-full bg-indigo-50 px-1.5 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200">ready</span>}</> : loans.some((l) => !l.onBudget && l.phase === "unset") ? <>Loans <span className="rounded-full bg-warn-soft px-1.5 text-warn">set up</span></> : "Loans"}
             >
               <LoansPanel workspaceId={workspace.id} loans={loans} groups={allGroups} defaultGroupId={flow.opexGroupId && allGroups.some((g) => g.id === flow.opexGroupId) ? flow.opexGroupId : "__new"} banks={cash.accounts.map((a) => ({ id: a.id, name: a.name }))} assets={assetChoices} pockets={pocketChoices} />
             </Popover>
             <Link href={`/forecast${wsKey === "business" ? "?ws=business" : ""}`} className="flex min-h-9 items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
-              <LineChart className="size-3.5 text-[#2E6BE6]" aria-hidden />Forecast{cashShort && <span className="rounded-full bg-neg-soft px-1.5 text-neg">short</span>}
+              <LineChart className="size-3.5 text-[#2E6BE6]" aria-hidden />Forecast{cashShort && <span className="rounded-full bg-indigo-50 px-1.5 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200">plan ahead</span>}
             </Link>
             {goals.length > 0 && (
               <Popover icon={<Target className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={<>Goals {goals.length}</>}>
@@ -251,24 +251,24 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </div>
       )}
       {cardsShort.map((c) => (
-        <Link key={c.id} href={`/accounts/${c.id}${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-red-300 bg-neg-soft px-3 py-2 text-xs font-medium text-neg dark:border-red-800">
-          {c.name} is {formatCents(c.shortCents)} short: money spent on it isn&apos;t set aside yet. Tap to fix.
+        <Link key={c.id} href={`/accounts/${c.id}${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-amber-200 bg-warn-soft px-3 py-2 text-xs font-medium text-warn dark:border-amber-800">
+          {c.name}: {formatCents(c.shortCents)} of spending is ready to be set aside. Tap to cover it.
         </Link>
       ))}
       {recurringDue.length > 0 && (
         <Link href={`/recurring${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs font-medium text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200">
-          {recurringDue.length} recurring item{recurringDue.length === 1 ? " is" : "s are"} due: {recurringDue.slice(0, 3).map((r) => r.payee).join(", ")}{recurringDue.length > 3 ? ` and ${recurringDue.length - 3} more` : ""}. Tap to review.
+          {recurringDue.length} recurring item{recurringDue.length === 1 ? " is" : "s are"} ready to post: {recurringDue.slice(0, 3).map((r) => r.payee).join(", ")}{recurringDue.length > 3 ? ` and ${recurringDue.length - 3} more` : ""}. Tap to post.
         </Link>
       )}
       {cashShort && (
-        <Link href={`/forecast${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-red-300 bg-neg-soft px-3 py-2.5 text-xs font-medium text-neg dark:border-red-800">
-          Cash is projected to run short on {shortDay(cashShort.date)} ({inDays(daysBetween(today, cashShort.date))}) by {formatCents(-cashShort.cents)}. Tap to see what&apos;s coming.
+        <Link href={`/forecast${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs font-medium text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200">
+          A {formatCents(-cashShort.cents)} gap to plan for around {shortDay(cashShort.date)} ({inDays(daysBetween(today, cashShort.date))}). You have time. Tap to see your options.
         </Link>
       )}
       <CardReminders cards={cardStatuses} wsQ={wsKey === "business" ? "?ws=business" : ""} />
       {needsReview > 0 && (
         <Link href={`/accounts${wsKey === "business" ? "?ws=business" : ""}`} className="inline-block rounded-xl border border-amber-300 bg-warn-soft px-3 py-2 text-xs font-medium text-warn dark:border-amber-700">
-          {needsReview} transaction{needsReview === 1 ? "" : "s"} need a category
+          {needsReview} quick sort{needsReview === 1 ? "" : "s"} to keep your reports sharp
         </Link>
       )}
 

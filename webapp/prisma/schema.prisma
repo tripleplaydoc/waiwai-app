@@ -318,6 +318,7 @@ model User {
   stewardedAccounts Account[] @relation("AccountSteward")
   pushSubscriptions PushSubscription[]
   pushSent          PushSent[]
+  pushPref          PushPref?
 
   @@map("users")
 }
@@ -1432,4 +1433,13 @@ model PushSent {
   @@unique([userId, key])
   @@index([sentAt])
   @@map("push_sent")
+}
+
+model PushPref {
+  userId      String    @id
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pausedUntil DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@map("push_prefs")
 }

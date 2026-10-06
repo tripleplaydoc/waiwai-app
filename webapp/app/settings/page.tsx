@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ProfileForm, PasswordForm } from "./settings-forms";
 import { AddMemberForm, MemberRow } from "./household";
 import { AvatarForm } from "./avatar-form";
+import { QuietMode } from "./quiet-mode";
 import { PushToggle } from "./push-toggle";
 import { avatarUrl } from "@/components/avatar";
 
@@ -15,6 +16,7 @@ export default async function SettingsPage() {
   const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true, avatarMime: true, updatedAt: true } });
   const ownerId = members[0]?.id;
   const isOwner = ownerId === user.id;
+  const pausedUntil = (await prisma.pushPref.findUnique({ where: { userId: user.id } }).catch(() => null))?.pausedUntil?.toISOString() ?? null;
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -29,9 +31,10 @@ export default async function SettingsPage() {
       <section className="card p-6" aria-labelledby="push-h">
         <h2 id="push-h" className="mb-1 text-base font-semibold">Reminders</h2>
         <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-          A push notification each morning when a card needs paying down before its statement closes, a card payment, bill or loan payment is coming up, a repeating item is waiting for you, or cash is forecast to run short. Each reminder is sent once. Turn it on for each phone or computer you use.
+          One calm note each morning, starting with something good. It mentions card payments, bills and loan payments coming up, repeating items ready to post, or a gap worth planning for. Each reminder is sent once. Turn it on for each phone or computer you use.
         </p>
         <PushToggle publicKey={process.env.VAPID_PUBLIC_KEY ?? null} />
+        <QuietMode until={pausedUntil} />
       </section>
       <section className="card p-6" aria-labelledby="pw-h">
         <h2 id="pw-h" className="mb-1 text-base font-semibold">Password</h2>

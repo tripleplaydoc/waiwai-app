@@ -7,13 +7,13 @@ import { describeBill, type BillStatus } from "@/lib/budget/bills";
 
 const TONE: Record<BillStatus["state"], string> = {
   paid: "bg-pos-soft text-pos",
-  overdue: "bg-neg-soft text-neg",
+  overdue: "bg-indigo-50 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200",
   due_soon: "bg-warn-soft text-warn",
   upcoming: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
 };
 
 export function BillBadge({ status }: { status: BillStatus }) {
-  const Icon = status.state === "paid" ? Check : status.state === "overdue" ? CircleAlert : Clock;
+  const Icon = status.state === "paid" ? Check : status.state === "overdue" ? Clock : Clock;
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE[status.state]}`}>
       <Icon className="size-3" aria-hidden /> {describeBill(status)}

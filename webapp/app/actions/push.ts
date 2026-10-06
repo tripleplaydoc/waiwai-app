@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { pushConfigured, sendToUser } from "@/lib/push";
@@ -43,6 +44,22 @@ export async function sendTestPushAction(): Promise<ActionResult> {
   const me = await getCurrentUser();
   if (!me) return { ok: false, error: "Not signed in." };
   if (!pushConfigured()) return { ok: false, error: "The server has no push keys yet (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY)." };
-  const n = await sendToUser(me.id, { title: "WaiWai reminders are on", body: "You'll get a nudge before card payments, bills and loan payments are due.", url: "/budget", tag: "waiwai-test" }).catch(() => 0);
+  const n = await sendToUser(me.id, { title: "WaiWai reminders are on", body: "One calm note each morning, with something good first.", url: "/budget", tag: "waiwai-test" }).catch(() => 0);
   return n > 0 ? { ok: true, message: `Sent to ${n} device${n === 1 ? "" : "s"}.` } : { ok: false, error: "Nothing could be delivered. Turn reminders off and on again on this device." };
+}
+
+/** Quiet mode: days = 0 resumes reminders. */
+export async function setQuietModeAction(days: number): Promise<ActionResult> {
+  await assertAuthed();
+  const me = await getCurrentUser();
+  if (!me) return { ok: false, error: "Not signed in." };
+  if (![0, 1, 3, 7].includes(days)) return { ok: false, error: "Pick 1 day, 3 days, 1 week or resume." };
+  const pausedUntil = days === 0 ? null : new Date(Date.now() + days * 86_400_000);
+  try {
+    await prisma.pushPref.upsert({ where: { userId: me.id }, update: { pausedUntil }, create: { userId: me.id, pausedUntil } });
+  } catch {
+    return { ok: false, error: "Quiet mode needs the new database table first (push_quiet_mode SQL)." };
+  }
+  revalidatePath("/settings");
+  return { ok: true, message: days === 0 ? "Reminders are back on." : `Quiet until ${pausedUntil!.toLocaleDateString("en-US", { month: "short", day: "numeric" })}.` };
 }

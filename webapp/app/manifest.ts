@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "WaiWai",
     short_name: "WaiWai",
     description: "Wealth, like water: let it flow with purpose.",
-    start_url: "/budget",
+    start_url: "/home",
     scope: "/",
     display: "standalone",
     background_color: "#F8FAFC",

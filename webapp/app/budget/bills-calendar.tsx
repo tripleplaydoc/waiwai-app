@@ -19,12 +19,12 @@ export interface CalItem {
   href?: string;
 }
 
-const DOT: Record<BillState, string> = { paid: "bg-pos", overdue: "bg-neg", due_soon: "bg-warn", upcoming: "bg-slate-400 dark:bg-slate-500" };
+const DOT: Record<BillState, string> = { paid: "bg-pos", overdue: "bg-indigo-400", due_soon: "bg-warn", upcoming: "bg-slate-400 dark:bg-slate-500" };
 const TINT: Record<BillState, string> = {
-  paid: "bg-pos-soft", overdue: "bg-neg-soft", due_soon: "bg-warn-soft", upcoming: "bg-slate-100 dark:bg-slate-800",
+  paid: "bg-pos-soft", overdue: "bg-indigo-50 dark:bg-indigo-950/40", due_soon: "bg-warn-soft", upcoming: "bg-slate-100 dark:bg-slate-800",
 };
 const RANK: Record<BillState, number> = { overdue: 3, due_soon: 2, upcoming: 1, paid: 0 };
-const LABEL: Record<BillState, string> = { paid: "Paid", due_soon: "Due soon", overdue: "Overdue", upcoming: "Upcoming" };
+const LABEL: Record<BillState, string> = { paid: "Paid", due_soon: "Due soon", overdue: "Waiting for you", upcoming: "Upcoming" };
 
 /** A month grid of when bills are due. Colour = status; tap a day to see (and mark paid) its bills. */
 export function BillsCalendar({ workspaceId, monthIso, todayIso, items }: { workspaceId: string; monthIso: string; todayIso: string; items: CalItem[] }) {

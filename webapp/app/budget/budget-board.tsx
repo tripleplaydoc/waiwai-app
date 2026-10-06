@@ -85,7 +85,7 @@ function PocketRowView({
   const pr = p.progress;
   const { cash } = useFunding();
   const paidFrom = cash.accounts.length > 1 && p.paidFromId ? cash.accounts.find((a) => a.id === p.paidFromId)?.name ?? null : null;
-  const sub = [typeLabel(p.expenseType), p.bill && !overlay ? (p.bill.state === "paid" ? "Paid" : p.bill.state === "overdue" ? "Overdue" : `Due ${shortDate(p.bill.dueIso)}`) : null, p.targetType === "MONTHLY_FUNDING" && p.monthsAhead > 0 ? `${p.monthsAhead} mo ahead` : null, paidFrom ? `from ${paidFrom}` : null].filter(Boolean).join(" · ");
+  const sub = [typeLabel(p.expenseType), p.bill && !overlay ? (p.bill.state === "paid" ? "Paid" : p.bill.state === "overdue" ? "Waiting for you" : `Due ${shortDate(p.bill.dueIso)}`) : null, p.targetType === "MONTHLY_FUNDING" && p.monthsAhead > 0 ? `${p.monthsAhead} mo ahead` : null, paidFrom ? `from ${paidFrom}` : null].filter(Boolean).join(" · ");
   return (
     <div className={`grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 border-t border-[#E2E8F0] bg-white px-3 py-2.5 md:items-center md:gap-x-3 md:py-3 ${COLS} dark:border-slate-800 dark:bg-slate-900 ${overlay ? "rounded-xl border shadow-xl" : ""}`}>
       <button type="button" aria-label={`Drag ${p.name}`} className="hidden size-7 cursor-grab touch-none items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-500 active:cursor-grabbing md:flex dark:hover:bg-slate-800" {...handleProps}>
@@ -106,7 +106,7 @@ function PocketRowView({
           {p.isSystemManaged && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800">system</span>}
           {p.allocationBps !== null && <span className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 md:inline dark:bg-slate-800">{p.allocationBps / 100}%</span>}
         </div>
-        {sub && <div className={`mt-0.5 truncate text-xs md:hidden ${p.bill?.state === "overdue" ? "font-medium text-neg" : "text-slate-500 dark:text-slate-400"}`}>{sub}</div>}
+        {sub && <div className={`mt-0.5 truncate text-xs md:hidden ${p.bill?.state === "overdue" ? "font-medium text-indigo-700 dark:text-indigo-300" : "text-slate-500 dark:text-slate-400"}`}>{sub}</div>}
         {p.bill && !overlay && (
           <div className="mt-1.5 hidden flex-wrap items-center gap-2 md:flex">
             <BillBadge status={p.bill} />

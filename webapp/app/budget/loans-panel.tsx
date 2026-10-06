@@ -184,7 +184,7 @@ function LoanDialog({ open, onClose, workspaceId, loan, groups, defaultGroupId, 
 function dueText(l: LoanVM): string {
   if (l.phase === "finished") return "Paid off";
   if (l.paidThisMonth && l.nextDueIso) return `Paid this month · next ${shortDate(l.nextDueIso)}`;
-  if (l.overdue && l.nextDueIso) return `Overdue · was due ${shortDate(l.nextDueIso)}`;
+  if (l.overdue && l.nextDueIso) return `Ready for you · was due ${shortDate(l.nextDueIso)}`;
   if (l.nextDueIso) return `Due ${shortDate(l.nextDueIso)}`;
   return "";
 }
@@ -211,7 +211,7 @@ export function LoansPanel({ workspaceId, loans, groups, defaultGroupId, banks, 
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{l.name}</p>
-                <p className={`nums text-xs ${l.overdue ? "font-semibold text-neg" : "text-slate-500"}`}>{formatCents(l.paymentCents)} · {dueText(l)}</p>
+                <p className={`nums text-xs ${l.overdue ? "font-semibold text-indigo-700 dark:text-indigo-300" : "text-slate-500"}`}>{formatCents(l.paymentCents)} · {dueText(l)}</p>
               </div>
               <button type="button" className="btn btn-sm !px-2" aria-label={`Edit ${l.name}`} onClick={() => setDialog({ loan: l })}><Pencil className="size-3.5" aria-hidden /></button>
             </div>

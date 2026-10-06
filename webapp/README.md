@@ -228,3 +228,9 @@ Accounts > **Forecast** (also a chip on the Budget page). Starts from the cash i
 Settings > Reminders > **Turn on reminders** on each phone or computer (on iPhone, add WaiWai to the Home Screen first). Once a day (8:00 Hawaii) `netlify/functions/daily-reminders.mts` calls `POST /api/cron/notify`, which posts repeating items that post themselves and sends one notification per person with anything new: card pay-down (5 days ahead and on the day), card payment due, bills and loan payments (3 days ahead and on the day), repeating items waiting for a tap, and cash forecast to run short within 14 days. Each reminder is sent once (`push_sent`). `?dry=1` lists what would be sent.
 
 Setup: run `prisma/migrations/20261005340000_push_reminders/migration.sql` in Supabase, then add these Netlify environment variables and redeploy: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (make a pair with `npx web-push generate-vapid-keys`), `CRON_SECRET` (any random string of 16+ characters), optionally `VAPID_SUBJECT` (`mailto:you@example.com`).
+
+## Home screen and calm tone
+- `/home` is the first tab: greeting, cash on hand, "What's going well" (only true facts), "Looking ahead" (money in first), and "Your next steps" with a button each. Import lives in the account menu.
+- Wording rule everywhere: benefit first, how much time there is, a way to do it. No "overdue", "warning", "short" or "urgent". Overdue bills read "Waiting for you"; a cash gap reads "a $X gap to plan for around DATE" with options. Red is kept for real recorded overspending only.
+- Morning push: one message a day, titled "Good morning, <name>", leading with a good line when there is one.
+- Quiet mode (Settings > Reminders): pause 1 day, 3 days or 1 week, or resume. Needs `prisma/migrations/20261005350000_push_quiet_mode/migration.sql` (new table `push_prefs`). Paused days send nothing and lose nothing.

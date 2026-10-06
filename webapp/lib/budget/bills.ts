@@ -63,7 +63,7 @@ export function shortDate(iso: string): string {
 export function describeBill(b: BillStatus): string {
   switch (b.state) {
     case "paid": return b.autoPaid ? "Paid" : "Marked paid";
-    case "overdue": return b.daysUntil === -1 ? "Overdue by 1 day" : `Overdue by ${-b.daysUntil} days`;
+    case "overdue": return "Waiting for you";
     case "due_soon":
       if (b.daysUntil === 0) return "Due today";
       if (b.daysUntil === 1) return "Due tomorrow";
