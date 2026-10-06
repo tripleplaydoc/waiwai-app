@@ -13,6 +13,7 @@ import { payLoanAction } from "@/app/actions/loans";
 import { assignMoreAction, moveMoneyAction } from "@/app/actions/pockets";
 import { getQuickAddDataAction, suggestPocketsAction, type QuickAddData, type SuggestData } from "@/app/actions/quick";
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
+import { FREQUENCIES } from "@/lib/recurring-math";
 import { planPurchase, type AffordResult } from "@/lib/budget/afford";
 import { taxSavingCents } from "@/lib/budget/suggest";
 import { MIXED_USE_TYPES, deductibleShareBps } from "@/lib/budget/expense-types";
@@ -241,8 +242,16 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
         </div>
       )}
       <details className="rounded-xl border border-[#E2E8F0] dark:border-slate-700">
-        <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold">More: memo, who, tags, receipt</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold">More: repeat, memo, who, tags, receipt</summary>
         <div className="space-y-3 px-3 pb-3">
+          <div>
+            <label htmlFor="qa-repeat" className="label">Repeat</label>
+            <select id="qa-repeat" name="repeat" className="input" defaultValue="">
+              <option value="">Just this once</option>
+              {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">It will show up under Recurring when it comes due again.</p>
+          </div>
           <div>
         <label htmlFor="qa-memo" className="label">Memo</label>
         <input id="qa-memo" name="memo" maxLength={500} className="input" value={memoText} onChange={(e) => setMemoText(e.target.value)} />

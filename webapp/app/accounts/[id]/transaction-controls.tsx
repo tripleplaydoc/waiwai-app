@@ -1,5 +1,6 @@
 "use client";
 
+import { FREQUENCIES } from "@/lib/recurring-math";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/modal";
@@ -115,8 +116,15 @@ export function AddTransactionButton({ accountId, accounts, isBusiness, categori
             </div>
           </div>
           <details className="rounded-xl border border-[#E2E8F0] dark:border-slate-700">
-            <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold">More: memo, who, tags, receipt, cleared</summary>
+            <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold">More: repeat, memo, who, tags, receipt, cleared</summary>
             <div className="space-y-3 px-3 pb-3">
+              <div>
+                <label htmlFor="tx-repeat" className="label">Repeat</label>
+                <select id="tx-repeat" name="repeat" className="input" defaultValue="">
+                  <option value="">Just this once</option>
+                  {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
+              </div>
               <div>
                 <label htmlFor="tx-memo" className="label">Memo</label>
                 <input id="tx-memo" name="memo" maxLength={500} className="input" />

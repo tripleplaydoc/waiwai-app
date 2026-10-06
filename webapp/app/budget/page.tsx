@@ -18,6 +18,7 @@ import { loadAssetChoices, loadLoans, loadPocketChoices } from "@/lib/budget/loa
 import { LoansPanel } from "./loans-panel";
 import { AllocationButton } from "./allocation-dialog";
 import { BudgetBoard } from "./budget-board";
+import { loadRecurring, postDue } from "@/lib/recurring";
 import { CardReminders } from "@/components/card-reminders";
 import { BillsCalendar, type CalItem } from "./bills-calendar";
 import { MoveMoneyHost } from "./move-money-host";
@@ -53,6 +54,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const mp = monthParam(month);
   const wsQ = wsKey === "business" ? "&ws=business" : "";
 
+  // Recurring items that post themselves are posted first, so the numbers below include them; the ones that ask first are listed further down.
+  await postDue(workspace.id, { onlyAuto: true });
   const [summary, needsReview, accountCount, groupsDb] = await Promise.all([
     getBudgetSummary(workspace.id, month),
     prisma.transaction.count({ where: { workspaceId: workspace.id, needsReview: true } }),
@@ -60,6 +63,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
     prisma.categoryGroup.findMany({ where: { workspaceId: workspace.id, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
 
+  const recurringDue = (await loadRecurring(workspace.id)).filter((r) => r.isActive && !r.autoPost && r.dueDates.length > 0);
   const cardStatuses = await loadCardStatuses(workspace.id, month);
   const cardsShort = cardStatuses.filter((c) => c.shortCents > 0);
   const isPersonal = workspace.type === "PERSONAL";
@@ -239,6 +243,11 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
           {c.name} is {formatCents(c.shortCents)} short: money spent on it isn&apos;t set aside yet. Tap to fix.
         </Link>
       ))}
+      {recurringDue.length > 0 && (
+        <Link href={`/recurring${wsKey === "business" ? "?ws=business" : ""}`} className="block rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs font-medium text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200">
+          {recurringDue.length} recurring item{recurringDue.length === 1 ? " is" : "s are"} due: {recurringDue.slice(0, 3).map((r) => r.payee).join(", ")}{recurringDue.length > 3 ? ` and ${recurringDue.length - 3} more` : ""}. Tap to review.
+        </Link>
+      )}
       <CardReminders cards={cardStatuses} wsQ={wsKey === "business" ? "?ws=business" : ""} />
       {needsReview > 0 && (
         <Link href={`/accounts${wsKey === "business" ? "?ws=business" : ""}`} className="inline-block rounded-xl border border-amber-300 bg-warn-soft px-3 py-2 text-xs font-medium text-warn dark:border-amber-700">

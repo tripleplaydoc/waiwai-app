@@ -10,6 +10,7 @@ import { isoToDate } from "@/lib/utils/dates";
 import { readReceipt, saveReceipt } from "@/lib/receipts";
 import { parseTags } from "@/lib/budget/expense-tags";
 import { MIXED_USE_TYPES, OWNER_DRAW, effectiveType } from "@/lib/budget/expense-types";
+import { isFrequency, nextOccurrence } from "@/lib/recurring-math";
 import type { ActionResult } from "./types";
 
 const txSchema = z.object({
@@ -27,6 +28,8 @@ const txSchema = z.object({
   bizPct: z.string().optional(),
   /** Meals: who/what the meal was for, kept with the transaction. */
   purpose: z.string().trim().max(200).optional(),
+  /** Repeat this transaction on a schedule (WEEKLY | BIWEEKLY | MONTHLY | QUARTERLY | YEARLY); empty = just once. */
+  repeat: z.string().optional(),
 });
 
 export async function createTransactionAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
@@ -109,6 +112,16 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
     ] });
   }
   if (rec.input) await saveReceipt(prisma, account.workspaceId, created.id, rec.input);
+  // "Repeat": set up the schedule from the next date on (this one is already posted).
+  if (d.repeat && isFrequency(d.repeat)) {
+    try {
+      await prisma.recurringItem.create({ data: {
+        workspaceId: account.workspaceId, accountId: account.id, categoryId, payee: d.payee || memo || "Recurring", memo: d.memo || null, amountCents: signed,
+        frequency: d.repeat, nextDate: isoToDate(nextOccurrence(d.date, d.repeat, +d.date.slice(8, 10))), anchorDay: +d.date.slice(8, 10), isDeductible: deductible,
+      } });
+      revalidatePath("/recurring");
+    } catch { /* recurring table not created yet: the transaction itself is saved */ }
+  }
   revalidatePath("/budget");
   revalidatePath("/accounts", "layout");
   return { ok: true };

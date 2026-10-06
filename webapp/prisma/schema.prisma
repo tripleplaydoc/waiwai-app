@@ -325,6 +325,7 @@ model User {
 // ----------------------------------------------------------------------------
 
 model Workspace {
+  recurringItems RecurringItem[]
   id         String        @id @default(cuid())
   ownerId    String
   owner      User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -424,6 +425,7 @@ model Account {
   manualBalanceEntries  ManualBalanceEntry[]
   holdingDetail         HoldingDetail?       @relation("HoldingDetailOwner")
   creditLimit           CreditLimit?
+  recurringItems        RecurringItem[]
   holdingPositions      HoldingPosition[]
   balanceCheckpoints    BalanceCheckpoint[]
   securedByThis         HoldingDetail[]      @relation("HoldingDetailLoan")
@@ -1364,4 +1366,35 @@ model CreditLimit {
   updatedAt  DateTime @updatedAt
 
   @@map("credit_limits")
+}
+
+/// A charge or deposit that repeats (subscription, paycheck, loan payment). Posts when due, either on its own or after one tap.
+model RecurringItem {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// Pocket (no foreign key: a deleted pocket just posts uncategorized).
+  categoryId  String?
+  payee       String
+  memo        String?
+  /// Signed cents: negative = money out.
+  amountCents Int
+  /// WEEKLY | BIWEEKLY | MONTHLY | QUARTERLY | YEARLY
+  frequency   String
+  /// Next date it is due (may be in the past when not yet posted).
+  nextDate    DateTime  @db.Date
+  /// Day of the month for monthly-style schedules (keeps 31st-style dates from drifting).
+  anchorDay   Int
+  endDate     DateTime? @db.Date
+  autoPost    Boolean   @default(false)
+  isDeductible Boolean  @default(false)
+  isActive    Boolean   @default(true)
+  lastPostedDate DateTime? @db.Date
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([workspaceId, isActive])
+  @@map("recurring_items")
 }

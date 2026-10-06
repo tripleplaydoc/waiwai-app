@@ -212,3 +212,6 @@ Each card with a statement day gets a plan (lib/budget/card-plan.ts): pay down 2
 - Dialogs scroll inside themselves (header and Save stay visible). Add transaction shows only the essentials (direction, amount, date, payee, account, pocket); memo, who, tags, receipt and cleared are under "More".
 - Phone header: the WaiWai wordmark hides below 380px wide so the account icon is never cut off.
 - Appearance (account menu): Light, Dark, or Device (follows the phone/computer setting, including when it switches automatically).
+
+## Recurring transactions
+`/recurring` (Accounts > Recurring). Set up anything that repeats (weekly, every 2 weeks, monthly, every 3 months, yearly). Each item either posts itself when due ("Post it automatically") or waits on the Budget page and Recurring page for a tap (Post / Change amount / Skip). Missed dates catch up. Also: "Repeat" under More when adding a transaction, and "Looks like these repeat" suggests ones found in the last 14 months. Auto items post when the Budget or Recurring page opens (no background job needed). Table `recurring_items` (migration 20261005330000); the app works before the SQL is run.
