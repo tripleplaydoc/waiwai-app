@@ -243,3 +243,19 @@ Setup: run `prisma/migrations/20261005340000_push_reminders/migration.sql` in Su
 ## Going through a year (History → "Go through 20XX transactions")
 
 Each year card on the History page links to `/history/review?year=…`. Every transaction in that year is grouped by payee and direction (money in / money out), biggest first. Change a group's type and all of its rows for that year follow; open a group to fix single rows. Choices: any income or expense type, "Exclude (transfer or not business)", or "Guess again from the wording". Tabs filter to money in, money out, transfers or rows that still need a type. "Mark year as reviewed" is remembered (table `history_reviews`, migration `20261005360000_history_reviews`). Sealed years are read-only. Logic lives in `lib/history-review.ts` (tested).
+
+## Pockets: Simple and Advanced, this month and next
+
+The budget page remembers two choices in cookies: **Simple / Advanced** and **This month / Next month too**. Simple shows only each pocket's name, progress and available amount, and tucks away the chips, notes and totals. "Next month too" re-measures every monthly cost as "what would it take to cover this month and next with no new income" (`lib/budget/horizon.ts`, tested) and updates the "Cover this month and next?" box.
+
+## Home: customize
+
+"Customize Home" at the bottom of Home lets each person drag (or use arrows) to reorder sections and hide the ones they do not want. Stored per person in `home_layouts` (migration `20261006100000_home_layout`). Section ids live in `lib/home-layout.ts`.
+
+## Prepare for more (`/prepare`)
+
+A what-if for extra income (monthly and/or one-time). It checks whether the plan can hold it (tax reserve pocket, unfunded needs, cushion months, high-interest balances), then places the money in order: tax set-aside, unfunded plan gaps, cushion, high-interest debt (safety gets 70%), tax-advantaged savings, then investing and goals, and runs twelve months so caps are respected. Pure math in `lib/prepare-math.ts` (tested), loader in `lib/prepare.ts`. Nothing is saved or changed.
+
+## Wording
+
+"Bills" is now "recurring flows" and "envelopes" are "pockets" in screen text. The seeded category group is still named "Bills" in the data.
