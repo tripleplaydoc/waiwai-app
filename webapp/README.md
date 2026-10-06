@@ -239,3 +239,7 @@ Setup: run `prisma/migrations/20261005340000_push_reminders/migration.sql` in Su
 - A `Category` column in a bank CSV is read. On the Import screen each distinct bank category (money out only) is mapped to a pocket: clear name matches are filled in, you can change any of them, and "Use suggestion" falls back to auto-categorize (your history, then built-in vendor rules).
 - Order per row: your manual pick, then the file's category, then the suggestion. Transfers, "Uncategorized", revenue and refunds are never auto-mapped; those rows are left in review.
 - Import only adds new rows. It never edits existing transactions, payees or pockets, and rows that look already entered (same amount within 3 days) are skipped by default.
+
+## Going through a year (History → "Go through 20XX transactions")
+
+Each year card on the History page links to `/history/review?year=…`. Every transaction in that year is grouped by payee and direction (money in / money out), biggest first. Change a group's type and all of its rows for that year follow; open a group to fix single rows. Choices: any income or expense type, "Transfer (not counted)", or "Guess again from the wording". Tabs filter to money in, money out, transfers or rows that still need a type. "Mark year as reviewed" is remembered (table `history_reviews`, migration `20261005360000_history_reviews`). Sealed years are read-only. Logic lives in `lib/history-review.ts` (tested).

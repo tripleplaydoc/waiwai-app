@@ -240,6 +240,7 @@ function Years({ years, isBusiness, taxBps, empty, wsQuery }: { years: YearSumma
               {isBusiness && (<><dt className="text-slate-500">Deductible expenses</dt><dd className="text-right">{formatCents(y.deductibleCents)}</dd><dd /></>)}
               {isBusiness && (<><dt className="text-slate-500">Tax at {taxBps / 100}% on profit</dt><dd className="text-right">{formatCents(estTax)}</dd><dd /></>)}
             </dl>
+            <Link href={`/history/review?${new URLSearchParams({ ...(wsQuery ? { ws: "business" } : {}), year: String(y.year) })}`} className="btn mt-3 min-h-11 w-full justify-center">Go through {y.year} transactions</Link>
             <details className="mt-3">
               <summary className="min-h-11 cursor-pointer select-none py-2 text-sm font-semibold text-blue-700 dark:text-blue-300">Where it went</summary>
               <ul className="space-y-1 text-sm">

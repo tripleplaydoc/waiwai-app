@@ -286,3 +286,62 @@ export async function payeeRowsAction(workspaceId: string, payee: string): Promi
     return { ok: false, error: "Could not load those rows." };
   }
 }
+
+// ---- Year review -------------------------------------------------------------------------------
+
+const yearBounds = (y: number) => ({ gte: isoToDate(`${y}-01-01`), lte: isoToDate(`${y}-12-31`) });
+
+/** Data for one row (or group) given a choice: a type key, "TRANSFER", or "" = guess again from the wording. */
+function reviewData(choice: string, r: { payee: string; memo: string; amountCents: number }, biz: boolean): { kind: string; typeKey: string | null; isTaxDeductible: boolean } | null {
+  if (choice === "TRANSFER") return { kind: "TRANSFER", typeKey: null, isTaxDeductible: false };
+  if (choice === "") { const c = classifyHistoryRow({ payee: r.payee, memo: r.memo, amountCents: r.amountCents, isBusiness: biz }); return { kind: c.kind, typeKey: c.typeKey, isTaxDeductible: c.isTaxDeductible }; }
+  if (!isTypeKey(choice)) return null;
+  const k = kindFor(choice, r.amountCents);
+  return { kind: k, typeKey: choice, isTaxDeductible: k === "EXPENSE" && isDeductibleType(choice, biz) };
+}
+
+/** Year review: set the type for every row of one payee and direction in one year. Transfers and typed rows included, because you chose it. */
+export async function setReviewGroupAction(workspaceId: string, year: number, payee: string, dir: "in" | "out", choice: string): Promise<ActionResult> {
+  await assertAuthed();
+  const sealed = await sealedError(workspaceId, year);
+  if (sealed) return { ok: false, error: sealed };
+  const ws = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { type: true } });
+  if (!ws) return { ok: false, error: "Workspace not found." };
+  const biz = ws.type === "BUSINESS";
+  const where = { workspaceId, payee, date: yearBounds(year), amountCents: dir === "out" ? { lt: 0 } : { gte: 0 } };
+  if (choice === "TRANSFER" || (choice !== "" && isTypeKey(choice))) {
+    const d = reviewData(choice, { payee, memo: "", amountCents: dir === "out" ? -1 : 1 }, biz)!;
+    await prisma.historicalTransaction.updateMany({ where, data: d });
+  } else if (choice === "") {
+    const rows = await prisma.historicalTransaction.findMany({ where, select: { id: true, payee: true, memo: true, amountCents: true } });
+    await prisma.$transaction(rows.map((r) => prisma.historicalTransaction.update({ where: { id: r.id }, data: reviewData("", r, biz)! })));
+  } else return { ok: false, error: "Pick a type." };
+  done();
+  return { ok: true };
+}
+
+/** Year review: set the type of a single row. */
+export async function setReviewRowAction(workspaceId: string, id: string, choice: string): Promise<ActionResult> {
+  await assertAuthed();
+  const row = await prisma.historicalTransaction.findFirst({ where: { id, workspaceId } });
+  if (!row) return { ok: false, error: "Row not found." };
+  const sealed = await sealedError(workspaceId, row.date.getUTCFullYear());
+  if (sealed) return { ok: false, error: sealed };
+  const biz = (await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { type: true } }))?.type === "BUSINESS";
+  const d = reviewData(choice, row, biz);
+  if (!d) return { ok: false, error: "Pick a type." };
+  await prisma.historicalTransaction.update({ where: { id }, data: d });
+  done();
+  return { ok: true };
+}
+
+/** Mark a year as gone through (or not). Stored in its own small table. */
+export async function markYearReviewedAction(workspaceId: string, year: number, reviewed: boolean): Promise<ActionResult> {
+  await assertAuthed();
+  try {
+    if (reviewed) await prisma.historyReview.upsert({ where: { workspaceId_year: { workspaceId, year } }, create: { workspaceId, year }, update: { reviewedAt: new Date() } });
+    else await prisma.historyReview.deleteMany({ where: { workspaceId, year } });
+  } catch { return { ok: false, error: "Could not save that just now." }; }
+  done();
+  return { ok: true };
+}

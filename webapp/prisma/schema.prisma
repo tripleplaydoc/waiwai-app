@@ -357,6 +357,7 @@ model Workspace {
   reserveDraws          ReserveDraw[]
   expenseReviews        ExpenseReview[]
   historySettings       HistorySettings?
+  historyReviews        HistoryReview[]
   historyTotals         HistoryTotal[]
   balanceCheckpoints    BalanceCheckpoint[]
   historyAccounts       HistoryAccount[]
@@ -1262,6 +1263,17 @@ model NetWorthSnapshot {
 /// account balances, Ready to Assign, pockets or net worth. Only the History
 /// pages and year-over-year reports read them.
 /// ---------------------------------------------------------------------------
+
+/// A past year you have gone through line by line.
+model HistoryReview {
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  year        Int
+  reviewedAt  DateTime  @default(now())
+
+  @@id([workspaceId, year])
+  @@map("history_reviews")
+}
 
 model HistorySettings {
   workspaceId String    @id
