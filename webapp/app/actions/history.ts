@@ -269,3 +269,20 @@ export async function deleteHistoryRowAction(workspaceId: string, id: string): P
   done();
   return { ok: true };
 }
+
+export type PayeeRowsResult = { ok: true; total: number; rows: { id: string; date: string; amountCents: number; memo: string; account: string }[] } | { ok: false; error: string };
+
+/** The newest rows behind one "biggest unknown" payee, so you can see what it is before naming it. Read only. */
+export async function payeeRowsAction(workspaceId: string, payee: string): Promise<PayeeRowsResult> {
+  await assertAuthed();
+  const where = { workspaceId, payee, typeKey: null, kind: { not: "TRANSFER" } } as const;
+  try {
+    const [total, rows] = await Promise.all([
+      prisma.historicalTransaction.count({ where }),
+      prisma.historicalTransaction.findMany({ where, orderBy: [{ date: "desc" }, { id: "asc" }], take: 12, include: { account: { select: { name: true } } } }),
+    ]);
+    return { ok: true, total, rows: rows.map((r) => ({ id: r.id, date: r.date.toISOString().slice(0, 10), amountCents: r.amountCents, memo: r.memo, account: r.account.name })) };
+  } catch {
+    return { ok: false, error: "Could not load those rows." };
+  }
+}

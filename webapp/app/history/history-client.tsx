@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { CheckCircle2, AlertTriangle, Lock } from "lucide-react";
-import { addClosedAccountAction, classifyPayeeAction, clearHistoryAction, saveYearTotalsAction, setGoLiveAction, setHistoryStartAction, setSealAction } from "@/app/actions/history";
+import { addClosedAccountAction, classifyPayeeAction, payeeRowsAction, type PayeeRowsResult, clearHistoryAction, saveYearTotalsAction, setGoLiveAction, setHistoryStartAction, setSealAction } from "@/app/actions/history";
 import { typesFor } from "@/lib/budget/expense-types";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
 import type { HistoryAccountVM, HistoryVM } from "@/lib/history";
@@ -23,7 +23,7 @@ export function HistoryClient({ vm, workspaceId, isBusiness, taxBps, wsQuery }: 
     <div className="space-y-5">
       <GoLive workspaceId={workspaceId} goLive={vm.goLive} />
       <Proof accounts={vm.accounts} wsQuery={wsQuery} workspaceId={workspaceId} />
-      {vm.payees.length > 0 && <Classify payees={vm.payees} workspaceId={workspaceId} isBusiness={isBusiness} />}
+      {vm.payees.length > 0 && <Classify payees={vm.payees} workspaceId={workspaceId} isBusiness={isBusiness} wsQuery={wsQuery} />}
       <Years years={vm.years} isBusiness={isBusiness} taxBps={taxBps} empty={vm.totalRows === 0} wsQuery={wsQuery} />
       <Totals vm={vm} workspaceId={workspaceId} isBusiness={isBusiness} />
       <Seal vm={vm} workspaceId={workspaceId} />
@@ -136,7 +136,19 @@ function typeOptions(isBusiness: boolean) {
   return [...typesFor("EXPENSE").filter((t) => (t.group === "Business") === isBusiness), ...typesFor("INCOME")];
 }
 
-function Classify({ payees, workspaceId, isBusiness }: { payees: HistoryVM["payees"]; workspaceId: string; isBusiness: boolean }) {
+function Classify({ payees, workspaceId, isBusiness, wsQuery }: { payees: HistoryVM["payees"]; workspaceId: string; isBusiness: boolean; wsQuery: string }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const [peek, setPeek] = useState<Record<string, PayeeRowsResult>>({});
+  const [loading, setLoading] = useState<string | null>(null);
+  async function toggle(payee: string) {
+    if (open === payee) { setOpen(null); return; }
+    setOpen(payee);
+    if (peek[payee]) return;
+    setLoading(payee);
+    const r = await payeeRowsAction(workspaceId, payee).catch((): PayeeRowsResult => ({ ok: false, error: "Could not load those rows." }));
+    setPeek((m) => ({ ...m, [payee]: r }));
+    setLoading(null);
+  }
   const [done, setDone] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string>();
   const [pending, start] = useTransition();
@@ -149,17 +161,43 @@ function Classify({ payees, workspaceId, isBusiness }: { payees: HistoryVM["paye
       <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">These payees could not be typed automatically. Pick a type once and every past row from that payee follows. This is how years of history get sorted in minutes.</p>
       <ul className="mt-3 divide-y divide-[#E2E8F0] dark:divide-slate-800">
         {shown.map((p) => (
-          <li key={p.payee} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{p.payee}</p>
-              <p className="nums text-xs text-slate-500">{p.count} row{p.count === 1 ? "" : "s"} · {p.outCents > 0 ? `${formatCents(p.outCents)} out` : ""}{p.outCents > 0 && p.inCents > 0 ? " · " : ""}{p.inCents > 0 ? `${formatCents(p.inCents)} in` : ""}</p>
+          <li key={p.payee} className="py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{p.payee}</p>
+                <p className="nums text-xs text-slate-500">{p.count} row{p.count === 1 ? "" : "s"} · {p.outCents > 0 ? `${formatCents(p.outCents)} out` : ""}{p.outCents > 0 && p.inCents > 0 ? " · " : ""}{p.inCents > 0 ? `${formatCents(p.inCents)} in` : ""}</p>
+                <button type="button" onClick={() => toggle(p.payee)} aria-expanded={open === p.payee} className="mt-1 inline-flex min-h-11 items-center text-xs font-semibold text-[#2E6BE6] underline dark:text-indigo-300">{open === p.payee ? "Hide transactions" : "See transactions"}</button>
+              </div>
+              <select aria-label={`Type for ${p.payee}`} className="input !min-h-11 max-w-[11rem] !py-1 text-xs" defaultValue="" disabled={pending}
+                onChange={(e) => { const v = e.target.value; if (!v) return; start(async () => { const r = await classifyPayeeAction(workspaceId, p.payee, v); if (r.ok) setDone((s) => new Set(s).add(p.payee)); else setErr(r.error); }); }}>
+                <option value="">Choose a type…</option>
+                {opts.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                <option value="TRANSFER">Transfer (ignore)</option>
+              </select>
             </div>
-            <select aria-label={`Type for ${p.payee}`} className="input !min-h-11 max-w-[11rem] !py-1 text-xs" defaultValue="" disabled={pending}
-              onChange={(e) => { const v = e.target.value; if (!v) return; start(async () => { const r = await classifyPayeeAction(workspaceId, p.payee, v); if (r.ok) setDone((s) => new Set(s).add(p.payee)); else setErr(r.error); }); }}>
-              <option value="">Choose a type…</option>
-              {opts.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-              <option value="TRANSFER">Transfer (ignore)</option>
-            </select>
+            {open === p.payee && (
+              <div className="mt-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                {loading === p.payee || !peek[p.payee] ? <p className="text-xs text-slate-500">Loading…</p> : !peek[p.payee].ok ? <p className="text-xs text-neg">{(peek[p.payee] as { error: string }).error}</p> : (() => {
+                  const d = peek[p.payee] as Extract<PayeeRowsResult, { ok: true }>;
+                  return (
+                    <>
+                      <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-700">
+                        {d.rows.map((r) => (
+                          <li key={r.id} className="flex items-baseline justify-between gap-3 py-1.5 text-xs">
+                            <span className="nums shrink-0 text-slate-500">{r.date}</span>
+                            <span className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">{r.memo || r.account}</span>
+                            <span className={`nums shrink-0 font-semibold ${r.amountCents > 0 ? "text-pos" : ""}`}>{r.amountCents > 0 ? "+" : "−"}{formatCents(Math.abs(r.amountCents))}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <Link href={`/history/rows?q=${encodeURIComponent(p.payee)}&todo=1${wsQuery ? "&ws=business" : ""}`} className="mt-1 inline-flex min-h-11 items-center text-xs font-semibold text-[#2E6BE6] underline dark:text-indigo-300">
+                        {d.total > d.rows.length ? `See all ${d.total} transactions` : "Open in History rows"}
+                      </Link>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
           </li>
         ))}
       </ul>
