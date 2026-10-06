@@ -61,12 +61,16 @@ function ProgressBlock({ p, onSetCost }: { p: PocketVM; onSetCost: () => void })
   }
   const aheadMode = horizon === "ahead" && pr.targetType === "MONTHLY_FUNDING";
   const total = Math.max(p.aheadNeedCents, Math.max(0, pr.targetCents - Math.max(0, -p.activityCents)) + pr.targetCents);
-  const barFill = aheadMode ? Math.min(1, Math.max(0, 1 - p.aheadNeedCents / total)) : pr.progress;
+  const need = horizon === "ahead" ? p.aheadNeedCents : pr.stillThisMonthCents;
+  const covered = need === 0 && pr.state !== "overspent";
+  // Covered for the chosen horizon = a full green bar, whichever view you are in.
+  const barFill = covered ? 1 : aheadMode ? Math.min(1, Math.max(0, 1 - p.aheadNeedCents / total)) : pr.progress;
+  const barTone = covered ? "funded" : pr.state === "funded" ? "partial" : pr.state;
   let line: string;
   if (horizon === "ahead" && pr.targetType === "MONTHLY_FUNDING") {
     line = p.aheadNeedCents === 0 ? `Covered through next month (${formatCents(pr.targetCents)}/mo)` : `Need ${formatCents(p.aheadNeedCents)} more to cover next month too`;
   } else if (pr.targetType === "MONTHLY_FUNDING") {
-    line = pr.stillNeededCents === 0 ? `Funded ${formatCents(pr.targetCents)} this month` : `${formatCents(p.assignedCents)} of ${formatCents(pr.targetCents)} · need ${formatCents(pr.stillNeededCents)} more`;
+    line = pr.stillThisMonthCents === 0 ? `Funded ${formatCents(pr.targetCents)} this month` : `${formatCents(p.assignedCents)} of ${formatCents(pr.targetCents)} · need ${formatCents(pr.stillThisMonthCents)} more`;
   } else if (pr.targetType === "TARGET_BALANCE_BY_DATE") {
     const by = p.targetDate ? ` by ${monthYear(p.targetDate)}` : "";
     line = `${formatCents(Math.max(0, p.availableCents))} of ${formatCents(pr.targetCents)}${by} · ${formatCents(pr.needThisMonthCents)}/mo`;
@@ -80,7 +84,7 @@ function ProgressBlock({ p, onSetCost }: { p: PocketVM; onSetCost: () => void })
         className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
         role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(barFill * 100)} aria-label={`${p.name} progress`}
       >
-        <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(pr.state)}`} style={{ width: `${Math.round(barFill * 100)}%` }} />
+        <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(barTone)}`} style={{ width: `${Math.round(barFill * 100)}%` }} />
       </div>
       <div className={`mt-1 text-[11px] leading-tight ${pr.state === "partial" || pr.state === "empty" ? "text-warn" : pr.state === "overspent" ? "text-neg" : "text-slate-500 dark:text-slate-400"}`}>{line}</div>
     </div>
