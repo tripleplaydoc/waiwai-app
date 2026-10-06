@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Check, ChevronDown, Lock } from "lucide-react";
-import { markYearReviewedAction, setReviewGroupAction, setReviewRowAction } from "@/app/actions/history";
+import { markYearReviewedAction, setReviewBulkAction, setReviewGroupAction, setReviewRowAction } from "@/app/actions/history";
 import { typeLabel, typesFor } from "@/lib/budget/expense-types";
 import { currentOf, filterGroups, type ReviewFilter, type ReviewGroup, type ReviewRow, type ReviewTotals } from "@/lib/history-review";
 import { formatCents } from "@/lib/utils/currency";
@@ -17,7 +17,20 @@ export function ReviewClient({ workspaceId, isBusiness, year, years, wsQuery, se
   const [q, setQ] = useState("");
   const [err, setErr] = useState<string>();
   const [pending, start] = useTransition();
+  const [selG, setSelG] = useState<Set<string>>(new Set());
+  const [selR, setSelR] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState("TRANSFER");
   const shown = filterGroups(groups, tab, q);
+  const toggle = (set: Set<string>, id: string) => { const n = new Set(set); if (n.has(id)) n.delete(id); else n.add(id); return n; };
+  const chosen = groups.filter((g) => selG.has(g.key));
+  const count = selG.size + selR.size;
+  const allShown = shown.length > 0 && shown.every((g) => selG.has(g.key));
+  const dirs = new Set(chosen.map((g) => g.dir));
+  const bulkOpts = dirs.size === 1 ? optionsFor([...dirs][0], isBusiness, "") : [];
+  const applyBulk = () => start(async () => {
+    const r = await setReviewBulkAction(workspaceId, year, chosen.map((g) => ({ payee: g.payee, dir: g.dir })), [...selR], bulk === "__none" ? "" : bulk);
+    if (r.ok) { setErr(undefined); setSelG(new Set()); setSelR(new Set()); refresh(); } else setErr(r.error);
+  });
   const go = (y: string) => router.push(`/history/review?${new URLSearchParams({ ...(wsQuery ? { ws: "business" } : {}), year: y })}`);
   const refresh = () => router.refresh();
   return (
@@ -50,8 +63,23 @@ export function ReviewClient({ workspaceId, isBusiness, year, years, wsQuery, se
       <div><label htmlFor="rv-q" className="label">Search payee or memo</label><input id="rv-q" className="input" value={q} onChange={(e) => setQ(e.target.value)} /></div>
 
       <p className="text-sm text-slate-600 dark:text-slate-300"><span className="nums">{shown.length.toLocaleString()}</span> payee{shown.length === 1 ? "" : "s"} shown</p>
+      {!sealed && shown.length > 0 && (
+        <label className="flex min-h-11 items-center gap-3 text-sm font-semibold"><input type="checkbox" className="size-5" checked={allShown} onChange={() => setSelG((cur) => { const n = new Set(cur); for (const g of shown) { if (allShown) n.delete(g.key); else n.add(g.key); } return n; })} /> Select all {shown.length} shown</label>
+      )}
+      {count > 0 && (
+        <div className="card sticky bottom-20 z-10 flex flex-wrap items-center gap-3 border-[#4F46E5] p-3" role="region" aria-label="Selected">
+          <p className="nums text-sm font-semibold">{selG.size > 0 && `${selG.size} payee${selG.size === 1 ? "" : "s"}`}{selG.size > 0 && selR.size > 0 && " + "}{selR.size > 0 && `${selR.size} row${selR.size === 1 ? "" : "s"}`} selected</p>
+          <select aria-label="Set selected to" className="input min-h-11 w-full sm:w-64" value={bulk} onChange={(e) => setBulk(e.target.value)}>
+            <option value="TRANSFER">Exclude (transfer or not business)</option>
+            {bulkOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            <option value="__none">Guess again from the wording</option>
+          </select>
+          <button type="button" className="btn btn-primary min-h-11" disabled={pending} onClick={applyBulk}>{pending ? "Saving…" : "Apply"}</button>
+          <button type="button" className="btn min-h-11" disabled={pending} onClick={() => { setSelG(new Set()); setSelR(new Set()); }}>Clear</button>
+        </div>
+      )}
       <ul className="card divide-y divide-[#E2E8F0] dark:divide-slate-800">
-        {shown.map((g) => <Group key={g.key} g={g} workspaceId={workspaceId} year={year} isBusiness={isBusiness} sealed={sealed} onDone={refresh} />)}
+        {shown.map((g) => <Group key={g.key} g={g} workspaceId={workspaceId} year={year} isBusiness={isBusiness} sealed={sealed} onDone={refresh} checked={selG.has(g.key)} onCheck={() => setSelG(toggle(selG, g.key))} selR={selR} onCheckRow={(id) => setSelR(toggle(selR, id))} />)}
         {shown.length === 0 && <li className="p-4 text-sm text-slate-500">{tab === "todo" ? "Nothing left without a type. Nicely done." : "Nothing matches."}</li>}
       </ul>
     </div>
@@ -78,7 +106,7 @@ function TypeSelect({ id, label, value, dir, isBusiness, disabled, onPick }: { i
   );
 }
 
-function Group({ g, workspaceId, year, isBusiness, sealed, onDone }: { g: ReviewGroup; workspaceId: string; year: number; isBusiness: boolean; sealed: boolean; onDone: () => void }) {
+function Group({ g, workspaceId, year, isBusiness, sealed, onDone, checked, onCheck, selR, onCheckRow }: { g: ReviewGroup; workspaceId: string; year: number; isBusiness: boolean; sealed: boolean; onDone: () => void; checked: boolean; onCheck: () => void; selR: Set<string>; onCheckRow: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState<string>();
   const [pending, start] = useTransition();
@@ -86,6 +114,7 @@ function Group({ g, workspaceId, year, isBusiness, sealed, onDone }: { g: Review
   return (
     <li className="p-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {!sealed && <input type="checkbox" className="size-5" aria-label={`Select ${g.payee || "no payee"} (${g.dir === "in" ? "money in" : "money out"})`} checked={checked} onChange={onCheck} />}
         <div className="min-w-0 flex-1 basis-48">
           <p className="truncate text-sm font-semibold">{g.payee || "(no payee)"}</p>
           <p className="nums text-xs text-slate-500">{g.count} row{g.count === 1 ? "" : "s"} · {g.dir === "in" ? "money in" : "money out"}{g.needsType > 0 && <span className="text-[#8A5A00]"> · {g.needsType} need a type</span>}</p>
@@ -95,16 +124,17 @@ function Group({ g, workspaceId, year, isBusiness, sealed, onDone }: { g: Review
         <button type="button" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl" aria-expanded={open} aria-label={open ? "Hide rows" : "Show rows"} onClick={() => setOpen((o) => !o)}><ChevronDown className={`size-5 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden /></button>
       </div>
       {err && <p role="alert" className="mt-1 text-sm text-neg">{err}</p>}
-      {open && <ul className="mt-2 divide-y divide-[#E2E8F0] rounded-xl bg-slate-50 dark:divide-slate-700 dark:bg-slate-800">{g.rows.map((r) => <RowLine key={r.id} r={r} dir={g.dir} workspaceId={workspaceId} isBusiness={isBusiness} sealed={sealed} onDone={onDone} />)}</ul>}
+      {open && <ul className="mt-2 divide-y divide-[#E2E8F0] rounded-xl bg-slate-50 dark:divide-slate-700 dark:bg-slate-800">{g.rows.map((r) => <RowLine key={r.id} r={r} dir={g.dir} workspaceId={workspaceId} isBusiness={isBusiness} sealed={sealed} onDone={onDone} checked={selR.has(r.id)} onCheck={() => onCheckRow(r.id)} />)}</ul>}
     </li>
   );
 }
 
-function RowLine({ r, dir, workspaceId, isBusiness, sealed, onDone }: { r: ReviewRow; dir: "in" | "out"; workspaceId: string; isBusiness: boolean; sealed: boolean; onDone: () => void }) {
+function RowLine({ r, dir, workspaceId, isBusiness, sealed, onDone, checked, onCheck }: { r: ReviewRow; dir: "in" | "out"; workspaceId: string; isBusiness: boolean; sealed: boolean; onDone: () => void; checked: boolean; onCheck: () => void }) {
   const [err, setErr] = useState<string>();
   const [pending, start] = useTransition();
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 p-2">
+      {!sealed && <input type="checkbox" className="size-5" aria-label={`Select ${r.date} ${formatCents(r.amountCents)}`} checked={checked} onChange={onCheck} />}
       <div className="min-w-0 flex-1 basis-40">
         <p className="nums text-xs text-slate-500">{r.date} · {r.account}</p>
         {r.memo && <p className="truncate text-xs text-slate-500">{r.memo}</p>}

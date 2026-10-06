@@ -345,3 +345,29 @@ export async function markYearReviewedAction(workspaceId: string, year: number, 
   done();
   return { ok: true };
 }
+
+/** Year review: set one type on many payee groups and single rows at once (for example, exclude a pile of personal charges). */
+export async function setReviewBulkAction(workspaceId: string, year: number, groups: { payee: string; dir: "in" | "out" }[], rowIds: string[], choice: string): Promise<ActionResult> {
+  await assertAuthed();
+  if (groups.length + rowIds.length === 0) return { ok: false, error: "Select something first." };
+  if (groups.length > 500 || rowIds.length > 2000) return { ok: false, error: "That is a lot at once. Select fewer." };
+  const sealed = await sealedError(workspaceId, year);
+  if (sealed) return { ok: false, error: sealed };
+  const ws = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { type: true } });
+  if (!ws) return { ok: false, error: "Workspace not found." };
+  if (choice !== "TRANSFER" && choice !== "" && !isTypeKey(choice)) return { ok: false, error: "Pick a type." };
+  const biz = ws.type === "BUSINESS";
+  const range = yearBounds(year);
+  const or = [
+    ...groups.map((g) => ({ payee: g.payee, amountCents: g.dir === "out" ? { lt: 0 } : { gte: 0 } })),
+    ...(rowIds.length ? [{ id: { in: rowIds } }] : []),
+  ];
+  const where = { workspaceId, date: range, OR: or };
+  if (choice === "TRANSFER") await prisma.historicalTransaction.updateMany({ where, data: { kind: "TRANSFER", typeKey: null, isTaxDeductible: false } });
+  else {
+    const rows = await prisma.historicalTransaction.findMany({ where, select: { id: true, payee: true, memo: true, amountCents: true } });
+    await prisma.$transaction(rows.map((r) => prisma.historicalTransaction.update({ where: { id: r.id }, data: reviewData(choice, r, biz)! })));
+  }
+  done();
+  return { ok: true };
+}
