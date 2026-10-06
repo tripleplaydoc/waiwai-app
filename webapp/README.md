@@ -259,3 +259,9 @@ A what-if for extra income (monthly and/or one-time). It checks whether the plan
 ## Wording
 
 "Bills" is now "recurring flows" and "envelopes" are "pockets" in screen text. The seeded category group is still named "Bills" in the data.
+
+## Pocket tags
+
+"Tags" on the budget board opens the tag manager: add, rename, recolour (12 colours or any colour) and delete your own tags. First time, one tap adds Fixed, Variable, Loan and Payroll. Tag a pocket from its edit dialog; a pocket can carry several tags. Tags show as small colour chips under the pocket's name, the first tag colours a stripe down its left edge, and the "Tags:" row above the board filters pockets by tag. Deleting a tag only removes the label. Stored in `pocket_tags` and `pocket_tag_links` (migration `20261006200000_pocket_tags`); helpers in `lib/budget/tags.ts` (tested).
+
+The "Cover this month?" box can be tapped when something is still to assign: it lists the pockets that need money, biggest first.

@@ -10,6 +10,8 @@ import { TYPE_DEFS, typesFor, typeLabel } from "@/lib/budget/expense-types";
 import { matchRule } from "@/lib/budget/suggest";
 import { AssignedInput } from "./budget-controls";
 import { useFunding } from "./funding-view";
+import { TagChip } from "./tag-manager";
+import type { TagVM } from "@/lib/budget/tags";
 
 type TT = "NONE" | "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE";
 
@@ -21,8 +23,9 @@ const KINDS: { value: TT; label: string; hint: string }[] = [
 ];
 
 export function PocketDialog({
-  open, onClose, workspaceId, isBusiness, groups, pocket, defaultGroupId, monthIso, kindOfNew, customTypes = [],
+  open, onClose, workspaceId, isBusiness, groups, pocket, defaultGroupId, monthIso, kindOfNew, customTypes = [], tags = [],
 }: {
+  tags?: TagVM[];
   customTypes?: string[];
   open: boolean; onClose: () => void; workspaceId: string; isBusiness: boolean;
   groups: { id: string; name: string }[]; pocket: PocketVM | null; defaultGroupId?: string;
@@ -42,6 +45,7 @@ export function PocketDialog({
   const [name, setName] = useState(pocket?.name ?? "");
   const [deduct, setDeduct] = useState(pocket?.isTaxDeductible ?? false);
   const [ikind, setIkind] = useState<string>(pocket?.incomeKind ?? "EARNED");
+  const [tagIds, setTagIds] = useState<string[]>(pocket?.tagIds ?? []);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, startDelete] = useTransition();
   const [deleteError, setDeleteError] = useState<string>();
@@ -171,6 +175,24 @@ export function PocketDialog({
           <fieldset>
             <legend className="label">What does this pocket need?</legend>
             <input type="hidden" name="targetType" value={kind} />
+            {!isIncome && (
+              <fieldset className="mt-3">
+                <legend className="label">Tags</legend>
+                <input type="hidden" name="tagsSent" value="1" />
+                <input type="hidden" name="tagIds" value={tagIds.join(",")} />
+                {tags.length === 0 ? <p className="text-xs text-slate-500">No tags yet. Use the Tags button above the board to make some.</p> : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {tags.map((t) => {
+                      const on = tagIds.includes(t.id);
+                      return (
+                        <button key={t.id} type="button" aria-pressed={on} onClick={() => setTagIds((cur) => (on ? cur.filter((x) => x !== t.id) : [...cur, t.id]))}
+                          className={`inline-flex min-h-11 items-center rounded-full px-1 ${on ? "ring-2 ring-slate-500" : "opacity-60"}`}><TagChip tag={t} /></button>
+                      );
+                    })}
+                  </div>
+                )}
+              </fieldset>
+            )}
             <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Target type">
               {KINDS.map((k) => (
                 <button

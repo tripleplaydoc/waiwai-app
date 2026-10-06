@@ -1,5 +1,6 @@
 "use server";
 
+import { replacePocketTags } from "@/lib/budget/tags-state";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
@@ -119,6 +120,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
   }
   const incomeKind = isIncome ? d.incomeKind ?? "EARNED" : null;
   const deductible = workspace.type === "BUSINESS" && !isIncome && d.isTaxDeductible === "on";
+  let newId: string | undefined;
   try {
     if (existing) {
       await prisma.category.update({
@@ -140,7 +142,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
       });
     } else {
       const top = await prisma.category.aggregate({ where: { workspaceId: d.workspaceId, categoryGroupId: groupId }, _max: { sortOrder: true } });
-      await prisma.category.create({
+      const made = await prisma.category.create({
         data: {
           workspaceId: d.workspaceId,
           categoryGroupId: groupId,
@@ -159,9 +161,14 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           paidFromAccountId: paidFromAccountId ?? null,
         },
       });
+      newId = made.id;
     }
   } catch {
     return { ok: false, error: "Couldn't save that pocket." };
+  }
+  // Tags ride along with the form; a problem here never blocks saving the pocket.
+  if (formData.get("tagsSent") === "1") {
+    try { await replacePocketTags(d.workspaceId, existing?.id ?? newId ?? "", String(formData.get("tagIds") ?? "").split(",").filter(Boolean)); } catch { /* tags table not there yet */ }
   }
   revalidatePath("/budget");
   revalidatePath("/reports");

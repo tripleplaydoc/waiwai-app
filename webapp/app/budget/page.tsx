@@ -35,6 +35,7 @@ import { cookies } from "next/headers";
 import { coverTotals, parseHorizon, parseMode } from "@/lib/budget/horizon";
 import { ViewToggle } from "./view-toggle";
 import { CoverBox } from "./cover-box";
+import { loadTags } from "@/lib/budget/tags-state";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   if (mp === today.slice(0, 7)) {
     try { cashShort = (await loadForecast(workspace.id, { days: 30, today, summary, loans, recurring: recurringAll, wsQ })).firstShort; } catch { /* the forecast is a bonus here: never block the budget */ }
   }
+  const tagState = await loadTags(workspace.id);
   const expenseRows = summary.rows.filter((r) => r.type !== "INCOME");
 
   // Board groups: every category that isn't income-only (empty ones stay visible).
@@ -100,7 +102,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
       id: g.id ?? "__none",
       name: g.name,
       allocationBps: g.allocationBps,
-      pockets: g.rows.filter((r) => r.type !== "INCOME").map((r) => toVM(r, month, today)),
+      pockets: g.rows.filter((r) => r.type !== "INCOME").map((r) => ({ ...toVM(r, month, today), tagIds: tagState.byPocket[r.id] ?? [] })),
       hasIncome: g.rows.some((r) => r.type === "INCOME"),
     }))
     .filter((g) => !(g.hasIncome && g.pockets.length === 0) && !(g.id === "__none" && g.pockets.length === 0))
@@ -285,7 +287,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
       <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} readyToAssignCents={rta} pockets={allPockets.map((p) => ({ system: p.isSystemManaged, id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents, assignedCents: p.assignedCents, paidFromId: p.paidFromId, needCents: p.progress.hasTarget || p.availableCents < 0 ? Math.max(p.progress.stillNeededCents, p.availableCents < 0 ? -p.availableCents : 0) : undefined }))} />
 
 
-      <BudgetBoard simple={simple} horizon={horizon} customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />
+      <BudgetBoard tags={tagState.tags} simple={simple} horizon={horizon} customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />
 
       {!simple && <section className="card px-5 py-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Totals">
         <span className="nums">Totals this month — assigned {formatCents(summary.totalAssignedCents)} · activity {formatCents(summary.totalActivityCents)} · available {formatCents(summary.totalAvailableCents)}</span>

@@ -20,6 +20,7 @@ export function toVM(r: EnvelopeRow, month: Date, today: string): PocketVM {
     availableCents: r.availableCents, isSystemManaged: r.isSystemManaged, isTaxDeductible: r.isTaxDeductible,
     priorityRank: r.priorityRank, targetType: r.targetType, targetCents: r.targetCents, targetDate: r.targetDate,
     allocationBps: r.allocationBps, dueDay: r.dueDay, paidFromId: r.paidFromId, monthsAhead: r.monthsAhead, manualPaid: r.manualPaid, kind: r.type, expenseType: r.expenseType, incomeKind: r.incomeKind, progress,
+    tagIds: [],
     aheadNeedCents: aheadNeedCents({ targetType: r.targetType, targetCents: r.targetCents ?? 0, availableCents: r.availableCents, activityCents: r.activityCents, stillThisMonthCents: progress.stillThisMonthCents }),
     bill: r.type === "INCOME" ? null : billStatus({
       dueDay: r.dueDay, monthIso: monthParam(month), todayIso: today, manualPaid: r.manualPaid,

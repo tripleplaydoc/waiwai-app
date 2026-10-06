@@ -21,12 +21,14 @@ import { shortDate } from "@/lib/budget/bills";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
 import type { GroupVM, PocketVM } from "@/lib/budget/board-types";
 import type { Horizon } from "@/lib/budget/horizon";
+import type { TagVM } from "@/lib/budget/tags";
+import { TagChip, TagManager } from "./tag-manager";
 
 // Desktop columns: handle | name | assigned | activity | available | edit.
 const COLS_FULL = "md:grid-cols-[28px_minmax(0,1fr)_128px_104px_116px_40px]";
 const COLS_SIMPLE = "md:grid-cols-[28px_minmax(0,1fr)_116px_40px]";
 /** Simple hides the Assigned and Activity columns and the extra tags; horizon decides whether needs count next month too. */
-const ViewCtx = createContext<{ simple: boolean; horizon: Horizon }>({ simple: false, horizon: "now" });
+const ViewCtx = createContext<{ simple: boolean; horizon: Horizon; tags: TagVM[]; tagFilter: string | null }>({ simple: false, horizon: "now", tags: [], tagFilter: null });
 const useView = () => useContext(ViewCtx);
 const STORE = "waiwai:collapsed-groups";
 
@@ -96,6 +98,7 @@ function ProgressBlock({ p, onSetCost }: { p: PocketVM; onSetCost: () => void })
 function NeedChip({ p, horizon }: { p: PocketVM; horizon: Horizon }) {
   const need = horizon === "ahead" ? p.aheadNeedCents : p.progress.stillThisMonthCents;
   const when = horizon === "ahead" ? "by next month" : "this month";
+  if (p.availableCents < 0 && need === 0) return null;
   return need > 0
     ? <div className={`nums mb-0.5 text-[11px] font-semibold ${horizon === "ahead" ? "text-indigo-700 dark:text-indigo-300" : "text-warn"}`}>needs {formatCents(need)} {when}</div>
     : <div className="mb-0.5 text-[11px] font-medium text-pos">covered {when}</div>;
@@ -108,13 +111,14 @@ function PocketRowView({
   handleProps?: React.HTMLAttributes<HTMLButtonElement>;
 }) {
   const pr = p.progress;
-  const { simple, horizon } = useView();
+  const { simple, horizon, tags } = useView();
   const COLS = simple ? COLS_SIMPLE : COLS_FULL;
+  const myTags = p.tagIds.map((id) => tags.find((t) => t.id === id)).filter((t): t is TagVM => !!t);
   const { cash } = useFunding();
   const paidFrom = cash.accounts.length > 1 && p.paidFromId ? cash.accounts.find((a) => a.id === p.paidFromId)?.name ?? null : null;
   const sub = [typeLabel(p.expenseType), p.bill && !overlay ? (p.bill.state === "paid" ? "Paid" : p.bill.state === "overdue" ? "Waiting for you" : `Due ${shortDate(p.bill.dueIso)}`) : null, p.targetType === "MONTHLY_FUNDING" && p.monthsAhead > 0 ? `${p.monthsAhead} mo ahead` : null, paidFrom ? `from ${paidFrom}` : null].filter(Boolean).join(" · ");
   return (
-    <div className={`grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 border-t border-[#E2E8F0] bg-white px-3 py-2.5 md:items-center md:gap-x-3 md:py-3 ${COLS} dark:border-slate-800 dark:bg-slate-900 ${overlay ? "rounded-xl border shadow-xl" : ""}`}>
+    <div style={myTags[0] ? { boxShadow: `inset 4px 0 0 ${myTags[0].color}` } : undefined} className={`grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 border-t border-[#E2E8F0] bg-white px-3 py-2.5 md:items-center md:gap-x-3 md:py-3 ${COLS} dark:border-slate-800 dark:bg-slate-900 ${overlay ? "rounded-xl border shadow-xl" : ""}`}>
       <button type="button" aria-label={`Drag ${p.name}`} className="hidden size-7 cursor-grab touch-none items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-500 active:cursor-grabbing md:flex dark:hover:bg-slate-800" {...handleProps}>
         <GripVertical className="size-4" aria-hidden />
       </button>
@@ -133,6 +137,7 @@ function PocketRowView({
           {p.isSystemManaged && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800">system</span>}
           {!simple && p.allocationBps !== null && <span className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 md:inline dark:bg-slate-800">{p.allocationBps / 100}%</span>}
         </div>
+        {myTags.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{myTags.map((t) => <TagChip key={t.id} tag={t} small />)}</div>}
         {sub && <div className={`mt-0.5 truncate text-xs ${simple ? "" : "md:hidden"} ${p.bill?.state === "overdue" ? "font-medium text-indigo-700 dark:text-indigo-300" : "text-slate-500 dark:text-slate-400"}`}>{sub}</div>}
         {!simple && p.bill && !overlay && (
           <div className="mt-1.5 hidden flex-wrap items-center gap-2 md:flex">
@@ -184,8 +189,9 @@ function GroupSection({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `g:${g.id}`, data: { type: "group" }, disabled: fixed });
   const drop = useDroppable({ id: `gdrop:${g.id}`, disabled: g.pockets.length > 0 });
-  const { simple, horizon } = useView();
+  const { simple, horizon, tagFilter } = useView();
   const COLS = simple ? COLS_SIMPLE : COLS_FULL;
+  const shown = tagFilter ? g.pockets.filter((p) => p.tagIds.includes(tagFilter)) : g.pockets;
   const sum = (f: (p: PocketVM) => number) => g.pockets.reduce((s, p) => s + f(p), 0);
   const needed = sum((p) => (horizon === "ahead" ? p.aheadNeedCents : p.progress.stillNeededCents));
   const iconBtn = "flex size-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/15 hover:text-white";
@@ -232,8 +238,8 @@ function GroupSection({
       </div>
       {!collapsed && needed > 0 && <div className={`border-t border-[#E2E8F0] px-4 py-1 text-[11px] font-medium dark:border-slate-800 ${horizon === "ahead" ? "bg-indigo-50/70 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-200" : "bg-warn-soft/60 text-warn"}`}>{formatCents(needed)} still needed to fund this category{horizon === "ahead" ? " through next month" : ""}</div>}
       <div ref={drop.setNodeRef} hidden={collapsed}>
-        <SortableContext items={g.pockets.map((p) => `p:${p.id}`)} strategy={verticalListSortingStrategy}>
-          {g.pockets.map((p) => <SortablePocket key={p.id} p={p} workspaceId={workspaceId} month={month} onEdit={() => onEditPocket(p)} />)}
+        <SortableContext items={shown.map((p) => `p:${p.id}`)} strategy={verticalListSortingStrategy}>
+          {shown.map((p) => <SortablePocket key={p.id} p={p} workspaceId={workspaceId} month={month} onEdit={() => onEditPocket(p)} />)}
         </SortableContext>
         {g.pockets.length === 0 && (
           <button type="button" onClick={() => onAddPocket(g.id)} className={`flex min-h-14 w-full items-center justify-center gap-2 border-t border-dashed border-[#CBD5E1] text-sm text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50 ${drop.isOver ? "bg-blue-50 dark:bg-blue-950/30" : ""}`}>
@@ -254,14 +260,16 @@ const collision: CollisionDetection = (args) => {
 };
 
 export function BudgetBoard({
-  workspaceId, isBusiness, month, groups: serverGroups, allGroups, customTypes, simple, horizon,
-}: { simple: boolean; horizon: Horizon; customTypes: string[]; workspaceId: string; isBusiness: boolean; month: string; groups: GroupVM[]; allGroups: { id: string; name: string }[] }) {
+  workspaceId, isBusiness, month, groups: serverGroups, allGroups, customTypes, simple, horizon, tags,
+}: { tags: TagVM[]; simple: boolean; horizon: Horizon; customTypes: string[]; workspaceId: string; isBusiness: boolean; month: string; groups: GroupVM[]; allGroups: { id: string; name: string }[] }) {
   const [groups, setGroups] = useState(serverGroups);
   const ref = useRef(serverGroups);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string>();
   const [, start] = useTransition();
   const [pocketDlg, setPocketDlg] = useState<{ pocket: PocketVM | null; groupId?: string } | null>(null);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tagDlg, setTagDlg] = useState(false);
   const [groupDlg, setGroupDlg] = useState<{ group: { id: string; name: string } | null } | null>(null);
 
   useEffect(() => { setGroups(serverGroups); ref.current = serverGroups; }, [serverGroups]);
@@ -374,7 +382,7 @@ export function BudgetBoard({
 
   const COLS = simple ? COLS_SIMPLE : COLS_FULL;
   return (
-    <ViewCtx.Provider value={{ simple, horizon }}>
+    <ViewCtx.Provider value={{ simple, horizon, tags, tagFilter }}>
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-base font-bold tracking-tight">Your pockets</h2>
@@ -386,10 +394,21 @@ export function BudgetBoard({
             </button>
           );
         })()}
+        <button type="button" className="btn btn-sm" onClick={() => setTagDlg(true)}>Tags</button>
         <button type="button" className="btn btn-sm" onClick={() => setGroupDlg({ group: null })}><Plus className="size-4" aria-hidden /> Category</button>
         <button type="button" className="btn btn-sm btn-primary" onClick={() => setPocketDlg({ pocket: null })}><Plus className="size-4" aria-hidden /> Pocket <span className="kbd hidden sm:inline-flex !border-white/30 !bg-white/15 !text-white">N</span></button>
       </div>
 
+      {tags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by tag">
+          <span className="text-xs text-slate-500">Tags:</span>
+          {tags.map((t) => (
+            <button key={t.id} type="button" aria-pressed={tagFilter === t.id} onClick={() => setTagFilter(tagFilter === t.id ? null : t.id)}
+              className={`inline-flex min-h-9 items-center rounded-full ${tagFilter === t.id ? "ring-2 ring-slate-500" : ""}`}><TagChip tag={t} /></button>
+          ))}
+          {tagFilter && <button type="button" className="min-h-9 px-2 text-xs font-semibold text-blue-700 dark:text-blue-300" onClick={() => setTagFilter(null)}>Show all</button>}
+        </div>
+      )}
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-neg-soft px-4 py-2 text-sm text-neg">{error}</p>}
 
       <div className={`hidden px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 md:grid md:gap-x-3 ${COLS} dark:text-slate-400`}>
@@ -420,11 +439,13 @@ export function BudgetBoard({
 
       {pocketDlg && (
         <PocketDialog
+          tags={tags}
           customTypes={customTypes}
           open onClose={() => setPocketDlg(null)} workspaceId={workspaceId} isBusiness={isBusiness}
           groups={allGroups} pocket={pocketDlg.pocket} defaultGroupId={pocketDlg.groupId} monthIso={month}
         />
       )}
+      <TagManager open={tagDlg} onClose={() => setTagDlg(false)} workspaceId={workspaceId} tags={tags} />
       {groupDlg && (
         <GroupDialog
           open onClose={() => setGroupDlg(null)} workspaceId={workspaceId} group={groupDlg.group}

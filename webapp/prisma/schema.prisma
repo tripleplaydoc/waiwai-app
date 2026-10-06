@@ -359,6 +359,7 @@ model Workspace {
   expenseReviews        ExpenseReview[]
   historySettings       HistorySettings?
   historyReviews        HistoryReview[]
+  pocketTags            PocketTag[]
   historyTotals         HistoryTotal[]
   balanceCheckpoints    BalanceCheckpoint[]
   historyAccounts       HistoryAccount[]
@@ -667,6 +668,7 @@ model Category {
   defaultForProducts    Product[]
   budgetRecommendations BudgetRecommendation[]
   billPayments          BillPayment[]
+  tagLinks              PocketTagLink[]
 
   @@index([workspaceId])
   @@index([workspaceId, type])
@@ -1449,6 +1451,33 @@ model PushSent {
 }
 
 /// Which Home sections a person shows, and in what order (JSON text: {order, hidden}).
+/// A coloured label you put on pockets (Fixed, Variable, Loan, Payroll...). Yours to add to, rename and recolour.
+model PocketTag {
+  id          String          @id @default(cuid())
+  workspaceId String
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  /// #RRGGBB
+  color       String
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now())
+  links       PocketTagLink[]
+
+  @@unique([workspaceId, name])
+  @@map("pocket_tags")
+}
+
+model PocketTagLink {
+  categoryId String
+  category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  tagId      String
+  tag        PocketTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([categoryId, tagId])
+  @@index([tagId])
+  @@map("pocket_tag_links")
+}
+
 model HomeLayout {
   userId    String   @id
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)

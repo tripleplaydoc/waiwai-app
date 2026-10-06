@@ -28,6 +28,8 @@ export interface PocketVM {
   progress: PocketProgress;
   /** What still needs assigning to cover this month and next month too. */
   aheadNeedCents: number;
+  /** Ids of the tags on this pocket. */
+  tagIds: string[];
 }
 
 export interface GroupVM {
