@@ -34,6 +34,7 @@ import { Popover } from "@/components/popover";
 import { cookies } from "next/headers";
 import { coverTotals, parseHorizon, parseMode } from "@/lib/budget/horizon";
 import { ViewToggle } from "./view-toggle";
+import { CoverBox } from "./cover-box";
 
 export const dynamic = "force-dynamic";
 
@@ -238,18 +239,10 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </div>
 
         {/* Can I cover it */}
-        <div className="flex flex-col justify-center gap-1 border-t border-[#E2E8F0] px-3 py-2 md:border-l md:border-t-0 dark:border-slate-800" aria-label="Can I cover this month">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{ahead ? "Cover this month and next?" : "Cover this month?"}</span>
-          {!anyTargets ? (
-            <p className="text-xs text-slate-600 dark:text-slate-300">Add a monthly cost or goal.</p>
-          ) : (
-            <>
-              <div className={`text-sm font-bold leading-tight ${cover.canCover ? "text-pos" : "text-warn"}`} title={`Still to assign ${formatCents(cover.stillCents)} of ${formatCents(health.monthlyCostCents + health.goalPaceCents)} needed`}>{coverText}</div>
-              <Meter value={cover.stillCents === 0 ? 1 : Math.max(0, rta) / cover.stillCents} tone={cover.canCover ? "pos" : "warn"} />
-              {!simple && !ahead && health.cushionNeededCents > 0 && <p className="nums text-[11px] text-slate-500">Months-ahead cushion: {formatCents(health.cushionNeededCents)} still to build</p>}
-            </>
-          )}
-        </div>
+        <CoverBox ahead={ahead} anyTargets={anyTargets} text={coverText} canCover={cover.canCover} stillCents={cover.stillCents} rtaCents={rta} shortfallCents={cover.shortfallCents}
+          items={allPockets.map((p) => ({ id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "", needCents: ahead ? p.aheadNeedCents : p.progress.stillThisMonthCents })).filter((i) => i.needCents > 0).sort((x, y) => y.needCents - x.needCents)}>
+          {!simple && !ahead && health.cushionNeededCents > 0 && <p className="nums text-[11px] text-slate-500">Months-ahead cushion: {formatCents(health.cushionNeededCents)} still to build</p>}
+        </CoverBox>
 
       </section>
 

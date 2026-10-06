@@ -34,14 +34,15 @@ function pill(p: PocketVM, horizon: Horizon = "now"): string {
   const pr = p.progress;
   if (p.availableCents < 0) return "bg-neg-soft text-neg";
   if (p.availableCents === 0) return "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
-  if (horizon === "ahead" ? p.aheadNeedCents > 0 : pr.hasTarget && pr.stillNeededCents > 0) return "bg-warn-soft text-warn";
+  if (horizon === "ahead") return p.aheadNeedCents > 0 ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-200" : "bg-pos-soft text-pos";
+  if (pr.hasTarget && pr.stillNeededCents > 0) return "bg-warn-soft text-warn";
   return "bg-pos-soft text-pos";
 }
 
-function barColor(state: PocketVM["progress"]["state"]): string {
+function barColor(state: PocketVM["progress"]["state"], soft = false): string {
   if (state === "overspent") return "bg-neg";
   if (state === "funded") return "bg-pos";
-  if (state === "partial") return "bg-warn";
+  if (state === "partial") return soft ? "bg-indigo-400" : "bg-warn";
   return "bg-slate-300 dark:bg-slate-600";
 }
 
@@ -84,7 +85,7 @@ function ProgressBlock({ p, onSetCost }: { p: PocketVM; onSetCost: () => void })
         className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
         role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(barFill * 100)} aria-label={`${p.name} progress`}
       >
-        <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(barTone)}`} style={{ width: `${Math.round(barFill * 100)}%` }} />
+        <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(barTone, horizon === "ahead")}`} style={{ width: `${Math.round(barFill * 100)}%` }} />
       </div>
       <div className={`mt-1 text-[11px] leading-tight ${pr.state === "partial" || pr.state === "empty" ? "text-warn" : pr.state === "overspent" ? "text-neg" : "text-slate-500 dark:text-slate-400"}`}>{line}</div>
     </div>
@@ -96,7 +97,7 @@ function NeedChip({ p, horizon }: { p: PocketVM; horizon: Horizon }) {
   const need = horizon === "ahead" ? p.aheadNeedCents : p.progress.stillThisMonthCents;
   const when = horizon === "ahead" ? "by next month" : "this month";
   return need > 0
-    ? <div className="nums mb-0.5 text-[11px] font-semibold text-warn">needs {formatCents(need)} {when}</div>
+    ? <div className={`nums mb-0.5 text-[11px] font-semibold ${horizon === "ahead" ? "text-indigo-700 dark:text-indigo-300" : "text-warn"}`}>needs {formatCents(need)} {when}</div>
     : <div className="mb-0.5 text-[11px] font-medium text-pos">covered {when}</div>;
 }
 
@@ -229,7 +230,7 @@ function GroupSection({
           <Plus className="size-4" aria-hidden />
         </button>
       </div>
-      {!collapsed && needed > 0 && <div className="border-t border-[#E2E8F0] bg-warn-soft/60 px-4 py-1 text-[11px] font-medium text-warn dark:border-slate-800">{formatCents(needed)} still needed to fund this category{horizon === "ahead" ? " through next month" : ""}</div>}
+      {!collapsed && needed > 0 && <div className={`border-t border-[#E2E8F0] px-4 py-1 text-[11px] font-medium dark:border-slate-800 ${horizon === "ahead" ? "bg-indigo-50/70 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-200" : "bg-warn-soft/60 text-warn"}`}>{formatCents(needed)} still needed to fund this category{horizon === "ahead" ? " through next month" : ""}</div>}
       <div ref={drop.setNodeRef} hidden={collapsed}>
         <SortableContext items={g.pockets.map((p) => `p:${p.id}`)} strategy={verticalListSortingStrategy}>
           {g.pockets.map((p) => <SortablePocket key={p.id} p={p} workspaceId={workspaceId} month={month} onEdit={() => onEditPocket(p)} />)}
