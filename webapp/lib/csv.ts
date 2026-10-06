@@ -42,6 +42,8 @@ export interface ParsedRow {
   payee: string;
   memo: string;
   amountCents: number; // signed: negative = outflow
+  /** The bank's own category for the row, when the file has a Category column. */
+  category: string;
 }
 export interface RowError { line: number; message: string; raw: string }
 export interface ParseResult { rows: ParsedRow[]; errors: RowError[]; headerFound: boolean }
@@ -52,6 +54,7 @@ const PAYEE_KEYS = ["payee", "description", "name", "merchant", "details"];
 const MEMO_KEYS = ["memo", "note", "notes", "reference"];
 const AMOUNT_KEYS = ["amount", "amt"];
 const OUT_KEYS = ["outflow", "debit", "withdrawal", "withdrawals"];
+const CAT_KEYS = ["category", "categories"];
 const IN_KEYS = ["inflow", "credit", "deposit", "deposits"];
 
 function findCol(header: string[], keys: string[]): number {
@@ -82,16 +85,16 @@ export function parseBankCsv(text: string, template: CsvTemplateId = "auto"): Pa
   const looksLikeHeader = findCol(first, DATE_KEYS) >= 0 && (findCol(first, AMOUNT_KEYS) >= 0 || findCol(first, OUT_KEYS) >= 0 || findCol(first, IN_KEYS) >= 0);
   result.headerFound = looksLikeHeader;
 
-  let cols: { date: number; payee: number; memo: number; amount: number; out: number; inn: number };
+  let cols: { date: number; payee: number; memo: number; amount: number; out: number; inn: number; cat: number };
   if (looksLikeHeader) {
     cols = {
       date: findCol(first, DATE_KEYS), payee: findCol(first, PAYEE_KEYS), memo: findCol(first, MEMO_KEYS),
-      amount: findCol(first, AMOUNT_KEYS), out: findCol(first, OUT_KEYS), inn: findCol(first, IN_KEYS),
+      amount: findCol(first, AMOUNT_KEYS), out: findCol(first, OUT_KEYS), inn: findCol(first, IN_KEYS), cat: findCol(first, CAT_KEYS),
     };
   } else if (template === "outflow-inflow") {
-    cols = { date: 0, payee: 1, memo: 2, amount: -1, out: 3, inn: 4 };
+    cols = { date: 0, payee: 1, memo: 2, amount: -1, out: 3, inn: 4, cat: -1 };
   } else if (template === "single-amount") {
-    cols = { date: 0, payee: 1, memo: 2, amount: 3, out: -1, inn: -1 };
+    cols = { date: 0, payee: 1, memo: 2, amount: 3, out: -1, inn: -1, cat: -1 };
   } else {
     result.errors.push({ line: 1, message: "No header row found. Pick a column layout (Date, Payee, Memo, Amount) or add a header row.", raw: first.join(",") });
     return result;
@@ -125,6 +128,7 @@ export function parseBankCsv(text: string, template: CsvTemplateId = "auto"): Pa
       payee: (r[cols.payee] ?? "").trim().slice(0, 200),
       memo: (r[cols.memo] ?? "").trim().slice(0, 500),
       amountCents,
+      category: cols.cat >= 0 ? (r[cols.cat] ?? "").trim().slice(0, 100) : "",
     });
   }
   return result;

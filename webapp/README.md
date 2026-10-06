@@ -234,3 +234,8 @@ Setup: run `prisma/migrations/20261005340000_push_reminders/migration.sql` in Su
 - Wording rule everywhere: benefit first, how much time there is, a way to do it. No "overdue", "warning", "short" or "urgent". Overdue bills read "Waiting for you"; a cash gap reads "a $X gap to plan for around DATE" with options. Red is kept for real recorded overspending only.
 - Morning push: one message a day, titled "Good morning, <name>", leading with a good line when there is one.
 - Quiet mode (Settings > Reminders): pause 1 day, 3 days or 1 week, or resume. Needs `prisma/migrations/20261005350000_push_quiet_mode/migration.sql` (new table `push_prefs`). Paused days send nothing and lose nothing.
+
+## Importing with your bank's categories
+- A `Category` column in a bank CSV is read. On the Import screen each distinct bank category (money out only) is mapped to a pocket: clear name matches are filled in, you can change any of them, and "Use suggestion" falls back to auto-categorize (your history, then built-in vendor rules).
+- Order per row: your manual pick, then the file's category, then the suggestion. Transfers, "Uncategorized", revenue and refunds are never auto-mapped; those rows are left in review.
+- Import only adds new rows. It never edits existing transactions, payees or pockets, and rows that look already entered (same amount within 3 days) are skipped by default.

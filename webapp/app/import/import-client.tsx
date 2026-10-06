@@ -6,6 +6,7 @@ import { CSV_TEMPLATES, parseBankCsv, type CsvTemplateId } from "@/lib/csv";
 import { formatCents } from "@/lib/utils/currency";
 import { importTransactionsAction, type ImportResult } from "@/app/actions/transactions";
 import { matchExistingAction, suggestForImportAction, type ImportSuggestData } from "@/app/actions/quick";
+import { distinctCategories, isUsableCategory, matchCategoryName } from "@/lib/import-categories";
 import { looksLikeOfx, parseOfx, type OfxResult } from "@/lib/ofx";
 
 export function ImportClient({ accounts, initialAccountId, pockets, workspaceLabel, wsQuery }: {
@@ -19,6 +20,8 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
   const [pending, start] = useTransition();
   const [sug, setSug] = useState<ImportSuggestData>();
   const [auto, setAuto] = useState(true);
+  const [useFileCats, setUseFileCats] = useState(true);
+  const [catMap, setCatMap] = useState<Record<string, string>>({}); // bank category -> pocket id ("" = leave for review)
   const [picked, setPicked] = useState<Record<number, string>>({}); // line -> pocket id ("" = leave for review)
 
   const isOfx = useMemo(() => looksLikeOfx(text), [text]);
@@ -50,21 +53,37 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
     return () => { live = false; clearTimeout(t); };
   }, [parsed, accountId]);
 
-  /** The pocket each row will be filed under: the user's pick, else the suggestion when auto is on. */
-  const chosen = useMemo(() => parsed?.rows.map((r, i) => {
+  const fileCats = useMemo(() => distinctCategories(parsed?.rows ?? []), [parsed]);
+  useEffect(() => { setCatMap({}); }, [parsed]);
+  /** The pocket a bank category goes to: the user's choice, else a clear name match, else none. */
+  const catChoice = (name: string): string => (catMap[name] !== undefined ? catMap[name] : matchCategoryName(name, pockets) ?? "");
+
+  /** The pocket each row will be filed under, and why: the user's pick, then the file's own category, then (when auto is on) a suggestion. */
+  const decided = useMemo(() => parsed?.rows.map((r, i): { id: string | null; from: "pick" | "file" | "suggest" | null } => {
     const pick = picked[r.line];
-    if (pick !== undefined) return pick || null;
-    return auto ? sug?.suggestions[i]?.categoryId ?? null : null;
-  }) ?? [], [parsed, picked, auto, sug]);
+    if (pick !== undefined) return { id: pick || null, from: pick ? "pick" : null };
+    if (useFileCats && r.amountCents < 0 && isUsableCategory(r.category ?? "")) {
+      const m = catMap[r.category] !== undefined ? catMap[r.category] : matchCategoryName(r.category, pockets) ?? "";
+      if (m) return { id: m, from: "file" };
+    }
+    const sg = auto ? sug?.suggestions[i]?.categoryId ?? null : null;
+    return sg ? { id: sg, from: "suggest" } : { id: null, from: null };
+  }) ?? [], [parsed, picked, auto, sug, useFileCats, catMap, pockets]);
+  const chosen = useMemo(() => decided.map((d) => d.id), [decided]);
   const suggestedCount = sug?.suggestions.filter(Boolean).length ?? 0;
+  const tally = useMemo(() => {
+    const t = { file: 0, suggest: 0, review: 0 };
+    importIdx.forEach((i) => { const d = decided[i]; if (!d) return; if (d.from === "file") t.file++; else if (d.from === "suggest") t.suggest++; else if (d.from === "pick") t.file++; else if (parsed!.rows[i].amountCents < 0) t.review++; });
+    return t;
+  }, [importIdx, decided, parsed]);
   const dedMeta = useMemo(() => {
     let n = 0, saved = 0;
     parsed?.rows.forEach((r, i) => {
       const s = sug?.suggestions[i];
-      if (s && s.deductible && chosen[i] === s.categoryId) { n++; saved += Math.round((-r.amountCents * (sug?.taxBps ?? 0)) / 10000); }
+      if (s && s.deductible && chosen[i] === s.categoryId && decided[i]?.from !== "file") { n++; saved += Math.round((-r.amountCents * (sug?.taxBps ?? 0)) / 10000); }
     });
     return { n, saved };
-  }, [parsed, sug, chosen]);
+  }, [parsed, sug, chosen, decided]);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -117,6 +136,7 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
         <section className="card overflow-hidden" aria-live="polite">
           <div className="flex flex-wrap items-center gap-3 border-b border-[#E2E8F0] px-4 py-3 dark:border-slate-800">
             <strong className="text-sm">{importIdx.length} row{importIdx.length === 1 ? "" : "s"} ready</strong>
+            {parsed.rows.length > 0 && <span className="text-xs text-slate-600 dark:text-slate-300">{tally.file} from your categories · {tally.suggest} suggested · {tally.review} left to review</span>}
             {parsed.errors.length > 0 && <span className="text-sm text-[#8A5A00]">{parsed.errors.length} skipped</span>}
             <button type="button" className="btn btn-primary ml-auto" disabled={pending || importIdx.length === 0 || result?.ok === true} onClick={commit}>
               {pending ? "Importing…" : `Import ${importIdx.length} transactions`}
@@ -146,11 +166,35 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
               </label>
             </div>
           )}
+          {fileCats.length > 0 && (
+            <div className="border-b border-[#E2E8F0] bg-emerald-50/60 px-4 py-3 text-sm dark:border-slate-800 dark:bg-emerald-950/20">
+              <label className="flex min-h-[44px] items-center gap-2 font-medium">
+                <input type="checkbox" className="h-5 w-5" checked={useFileCats} onChange={(e) => setUseFileCats(e.target.checked)} />
+                Use the categories from your file ({fileCats.length} found)
+              </label>
+              {useFileCats && (
+                <>
+                  <p className="mb-2 text-xs text-slate-600 dark:text-slate-300">Each of your bank&apos;s categories goes to the pocket you pick. Clear name matches are filled in for you; anything left on &ldquo;Use suggestion&rdquo; falls back to auto-categorize.</p>
+                  <ul className="grid gap-2 sm:grid-cols-2">
+                    {fileCats.map((c) => (
+                      <li key={c.name} className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-xs"><span className="font-semibold">{c.name}</span> <span className="nums text-slate-500">· {c.count}</span></span>
+                        <select aria-label={`Pocket for ${c.name}`} className="input !min-h-[44px] !w-44 !py-1 text-xs" value={catChoice(c.name)} onChange={(e) => setCatMap((m) => ({ ...m, [c.name]: e.target.value }))}>
+                          <option value="">Use suggestion</option>
+                          {pockets.map((p) => <option key={p.id} value={p.id}>{p.group} · {p.name}</option>)}
+                        </select>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
           {suggestedCount > 0 && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#E2E8F0] bg-indigo-50 px-4 py-3 text-sm dark:border-slate-800 dark:bg-indigo-950/40">
               <label className="flex min-h-[44px] items-center gap-2 font-medium">
                 <input type="checkbox" className="h-5 w-5" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-                Auto-categorize {suggestedCount} row{suggestedCount === 1 ? "" : "s"} with a suggested pocket
+                Auto-categorize rows without a category from your file ({suggestedCount} have a suggested pocket)
               </label>
               {sug?.isBusiness && dedMeta.n > 0 && (
                 <span className="text-xs text-slate-600 dark:text-slate-300">{dedMeta.n} deductible · about <span className="nums font-semibold">{formatCents(dedMeta.saved)}</span> est. tax saved</span>
@@ -186,13 +230,14 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
                             {pockets.map((c) => <option key={c.id} value={c.id}>{c.group} · {c.name}</option>)}
                           </select>
                         ) : <span className="text-xs text-slate-400">Income</span>}
-                        {sug?.suggestions[i] && chosen[i] === sug.suggestions[i]!.categoryId && <div className="mt-0.5 text-[11px] text-slate-500">{sug.suggestions[i]!.reason}</div>}
+                        {decided[i]?.from === "file" && <div className="mt-0.5 text-[11px] text-slate-500">From your file: {r.category}</div>}
+                        {decided[i]?.from === "suggest" && <div className="mt-0.5 text-[11px] text-slate-500">{sug?.suggestions[i]?.reason}</div>}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {parsed.rows.length > 25 && <p className="px-4 py-2 text-xs text-slate-500">Previewing the first 25 of {parsed.rows.length} rows; the rest use their suggestion when auto-categorize is on.</p>}
+              {parsed.rows.length > 25 && <p className="px-4 py-2 text-xs text-slate-500">Previewing the first 25 of {parsed.rows.length} rows; the rest use their file category or suggestion as shown above. Import only adds new rows; transactions already in the app are never changed.</p>}
             </div>
           )}
         </section>

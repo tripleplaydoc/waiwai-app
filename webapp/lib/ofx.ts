@@ -52,7 +52,7 @@ export function parseOfx(text: string): OfxResult {
     if (!date) { errors.push({ line: i + 1, message: "No valid posted date.", raw: chunk.slice(0, 80) }); return; }
     if (cents === null) { errors.push({ line: i + 1, message: "No valid amount.", raw: chunk.slice(0, 80) }); return; }
     const payee = (name || memo).slice(0, 200);
-    rows.push({ line: i + 1, date, payee, memo: name && memo && memo !== name ? memo.slice(0, 500) : "", amountCents: cents });
+    rows.push({ line: i + 1, date, payee, memo: name && memo && memo !== name ? memo.slice(0, 500) : "", amountCents: cents, category: "" });
   });
   const lb = /<LEDGERBAL>([\s\S]*?)(?:<\/LEDGERBAL>|$)/i.exec(text);
   const balCents = lb ? ofxCents(field(lb[1], "BALAMT")) : null;
