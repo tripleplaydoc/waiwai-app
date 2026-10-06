@@ -317,3 +317,96 @@ export async function setTransactionPersonAction(formData: FormData): Promise<vo
   revalidatePath("/accounts", "layout");
   revalidatePath("/reports");
 }
+
+/** Mark one transaction cleared (the bank has posted it) or pending again. Reconciled ones stay locked. */
+export async function setClearedAction(formData: FormData): Promise<void> {
+  await assertAuthed();
+  const id = z.string().min(1).parse(formData.get("transactionId"));
+  const want = String(formData.get("cleared") ?? "") === "1";
+  const tx = await prisma.transaction.findUnique({ where: { id }, select: { id: true, accountId: true, clearedStatus: true } });
+  if (!tx || tx.clearedStatus === "RECONCILED") return;
+  await prisma.transaction.update({ where: { id }, data: { clearedStatus: want ? "CLEARED" : "UNCLEARED" } });
+  revalidatePath("/accounts", "layout");
+}
+
+const editSchema = z.object({
+  transactionId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date"),
+  payee: z.string().trim().max(200).optional(),
+  categoryId: z.string().optional(),
+  memo: z.string().trim().max(500).optional(),
+  direction: z.enum(["outflow", "inflow"]).optional(),
+  amount: z.string().optional(),
+  cleared: z.string().optional(),
+  deductible: z.string().optional(),
+  personId: z.string().optional(),
+});
+
+/** Edit everything about one transaction. Transfers and split purchases keep their amount and pocket (they have two halves / several parts). */
+export async function updateTransactionAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
+  await assertAuthed();
+  const parsed = editSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
+  const d = parsed.data;
+  const tx = await prisma.transaction.findUnique({ where: { id: d.transactionId }, include: { _count: { select: { splits: true } } } });
+  if (!tx) return { ok: false, error: "Transaction not found." };
+
+  const status = d.cleared === "on" ? (tx.clearedStatus === "RECONCILED" ? "RECONCILED" : "CLEARED") : tx.clearedStatus === "RECONCILED" ? "RECONCILED" : "UNCLEARED";
+
+  // Transfers: two halves that must stay equal and opposite, so only the date, note and cleared flag change.
+  if (tx.transferGroupId) {
+    await prisma.transaction.updateMany({ where: { transferGroupId: tx.transferGroupId }, data: { date: isoToDate(d.date), memo: d.memo || null } });
+    await prisma.transaction.update({ where: { id: tx.id }, data: { clearedStatus: status } });
+    revalidatePath("/budget");
+    revalidatePath("/accounts", "layout");
+    return { ok: true };
+  }
+
+  const split = tx._count.splits > 0;
+  let signed = tx.amountCents;
+  if (!split) {
+    const cents = parseToCents(d.amount ?? "");
+    if (cents === null || cents === 0) return { ok: false, error: "Enter an amount like 42.50" };
+    signed = d.direction === "inflow" ? Math.abs(cents) : -Math.abs(cents);
+  }
+
+  let categoryId = tx.categoryId;
+  let deductible = tx.isTaxDeductible;
+  if (!split) {
+    categoryId = null;
+    if (d.categoryId) {
+      const cat = await prisma.category.findFirst({ where: { id: d.categoryId, workspaceId: tx.workspaceId, isArchived: false } });
+      if (!cat) return { ok: false, error: "Category not found in this workspace." };
+      categoryId = cat.id;
+    }
+    deductible = signed < 0 && categoryId !== null && d.deductible === "on";
+  }
+
+  let personId = tx.personId;
+  if (d.personId !== undefined) {
+    if (d.personId) {
+      const p = await prisma.user.findUnique({ where: { id: d.personId }, select: { id: true } });
+      if (!p) return { ok: false, error: "That person wasn't found." };
+      personId = p.id;
+    } else personId = null;
+  }
+
+  let payeeId: string | null = null;
+  if (d.payee) {
+    const p = await prisma.payee.upsert({
+      where: { workspaceId_name: { workspaceId: tx.workspaceId, name: d.payee } },
+      update: {},
+      create: { workspaceId: tx.workspaceId, name: d.payee, defaultCategoryId: categoryId },
+    });
+    payeeId = p.id;
+  }
+
+  await prisma.transaction.update({
+    where: { id: tx.id },
+    data: { date: isoToDate(d.date), payeeId, memo: d.memo || null, amountCents: signed, categoryId, isTaxDeductible: deductible, personId, clearedStatus: status, needsReview: split ? tx.needsReview : categoryId === null },
+  });
+  revalidatePath("/budget");
+  revalidatePath("/reports");
+  revalidatePath("/accounts", "layout");
+  return { ok: true };
+}

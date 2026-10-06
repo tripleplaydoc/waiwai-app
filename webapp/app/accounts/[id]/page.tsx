@@ -14,7 +14,7 @@ import { getBudgetSummary } from "@/lib/budget/summary";
 import { startOfMonthUTC } from "@/lib/budget/dates";
 import { isoToDate } from "@/lib/utils/dates";
 import { CardPanel } from "./card-panel";
-import { AddTransactionButton, CategorySelect, ConfirmDeleteButton, PersonSelect, ReceiptCell } from "./transaction-controls";
+import { AddTransactionButton, CategorySelect, ClearedButton, ConfirmDeleteButton, EditTransactionButton, PersonSelect, ReceiptCell, type EditableTx } from "./transaction-controls";
 
 export const dynamic = "force-dynamic";
 const LIMIT = 300;
@@ -31,7 +31,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
       where: { accountId: id, ...(person === "none" ? { personId: null } : person ? { personId: person } : {}) },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: LIMIT,
-      include: { payee: true, receipt: { select: { id: true, fileName: true } } },
+      include: { payee: true, receipt: { select: { id: true, fileName: true } }, importBatch: { select: { fileName: true } }, _count: { select: { splits: true } } },
     }),
     prisma.transaction.aggregate({ where: { accountId: id }, _sum: { amountCents: true } }),
     prisma.category.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
@@ -43,7 +43,18 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   ]);
   const people = usersDb.map((u) => ({ id: u.id, name: u.name || u.email.split("@")[0] }));
   const total = await prisma.transaction.count({ where: { accountId: id } });
+  // Pending = entered but the bank hasn't posted it yet. It still counts in the balance; this just shows how much of it is still in flight.
+  const pendingAgg = await prisma.transaction.aggregate({ where: { accountId: id, clearedStatus: "UNCLEARED" }, _sum: { amountCents: true }, _count: true });
+  const pendingCents = pendingAgg._sum.amountCents ?? 0;
+  const pendingCount = pendingAgg._count;
   const balance = account.balanceMode === "MANUAL" ? account.manualBalanceEntries[0]?.balanceCents ?? 0 : account.openingBalanceCents + (sum._sum.amountCents ?? 0);
+  const clearedBalance = balance - pendingCents;
+  const isBiz = account.workspace.type === "BUSINESS";
+  const payeeNames = payees.map((p) => p.name);
+  const editable = (t: (typeof transactions)[number]): EditableTx => ({
+    id: t.id, date: dateToIso(t.date), payee: t.payee?.name ?? "", amountCents: t.amountCents, memo: t.memo ?? "", categoryId: t.categoryId ?? "", personId: t.personId ?? "",
+    status: t.clearedStatus, isTransfer: !!t.transferGroupId, isSplit: t._count.splits > 0, deductible: t.isTaxDeductible, source: t.importBatch?.fileName ?? null,
+  });
   const wsQ = account.workspace.type === "BUSINESS" ? "?ws=business" : "";
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
   const catOptions = categories.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroupId ? groupName.get(c.categoryGroupId) ?? "Other" : "Other", type: c.type, paidFromId: c.paidFromAccountId }));
@@ -78,6 +89,14 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         </div>
       </div>
 
+      {account.balanceMode !== "MANUAL" && (
+        <section className="card grid grid-cols-3 divide-x divide-[#E2E8F0] text-center dark:divide-slate-800" aria-label="Balance breakdown">
+          <div className="px-3 py-3"><div className="text-xs text-slate-500">Cleared</div><div className="nums text-lg font-semibold">{formatCents(clearedBalance)}</div><div className="text-[11px] text-slate-400">posted at the bank</div></div>
+          <div className="px-3 py-3"><div className="text-xs text-slate-500">Pending</div><div className={`nums text-lg font-semibold ${pendingCount > 0 ? "text-warn" : ""}`}>{pendingCents > 0 ? "+" : pendingCents < 0 ? "−" : ""}{formatCents(Math.abs(pendingCents))}</div><div className="text-[11px] text-slate-400">{pendingCount} not yet cleared</div></div>
+          <div className="px-3 py-3"><div className="text-xs text-slate-500">Total</div><div className="nums text-lg font-semibold">{formatCents(balance)}</div><div className="text-[11px] text-slate-400">cleared + pending</div></div>
+        </section>
+      )}
+
       {card && <CardPanel card={card} payFrom={payFrom} pockets={cardPockets} today={todayIso()} wsQ={wsQ} />}
 
       {people.length > 1 && (
@@ -98,7 +117,8 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         {transactions.map((t) => (
           <article key={t.id} className="space-y-2 px-4 py-3">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+              <ClearedButton transactionId={t.id} status={t.clearedStatus} />
+              <div className="min-w-0 flex-1">
                 <div className="truncate text-[15px] font-semibold">{t.payee?.name ?? <span className="font-normal text-slate-400">No payee</span>}</div>
                 <div className="text-xs text-slate-500">{formatShortDate(t.date)}{t.memo ? ` · ${t.memo}` : ""}</div>
               </div>
@@ -109,7 +129,8 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
               {people.length > 1 && <div className="min-w-0 flex-1"><PersonSelect transactionId={t.id} current={t.personId ?? ""} people={people} /></div>}
               {t.amountCents < 0 && !t.transferGroupId && <TagEditor transactionId={t.id} tags={t.tags} />}
               <ReceiptCell transactionId={t.id} receipt={t.receipt} />
-              <form action={deleteTransactionAction} className="ml-auto">
+              <div className="ml-auto"><EditTransactionButton tx={editable(t)} categories={catOptions} payees={payeeNames} people={people} isBusiness={isBiz} label="Edit" /></div>
+              <form action={deleteTransactionAction}>
                 <input type="hidden" name="transactionId" value={t.id} />
                 <ConfirmDeleteButton />
               </form>
@@ -123,16 +144,17 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         <table className="w-full min-w-[1000px] border-collapse">
           <thead className="border-b border-[#E2E8F0] bg-navy-soft dark:border-slate-800 dark:bg-slate-800/50">
             <tr>
-              <th className="th">Date</th><th className="th">Payee</th><th className="th">Category</th>
+              <th className="th"><span className="sr-only">Cleared</span>✓</th><th className="th">Date</th><th className="th">Payee</th><th className="th">Category</th>
               <th className="th text-right">Outflow</th><th className="th text-right">Inflow</th><th className="th">Who</th><th className="th">Tags</th><th className="th">Receipt</th><th className="th"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {transactions.length === 0 && (
-              <tr><td colSpan={9} className="td text-slate-500">No transactions yet. Press <span className="kbd">N</span> to add one, or import a CSV.</td></tr>
+              <tr><td colSpan={10} className="td text-slate-500">No transactions yet. Press <span className="kbd">N</span> to add one, or import a CSV.</td></tr>
             )}
             {transactions.map((t) => (
-              <tr key={t.id} className="border-b border-[#E2E8F0] last:border-0 dark:border-slate-800">
+              <tr key={t.id} className={`border-b border-[#E2E8F0] last:border-0 dark:border-slate-800 ${t.clearedStatus === "UNCLEARED" ? "bg-warn-soft/20" : ""}`}>
+                <td className="td"><ClearedButton transactionId={t.id} status={t.clearedStatus} /></td>
                 <td className="td nums whitespace-nowrap" title={dateToIso(t.date)}>{formatShortDate(t.date)}</td>
                 <td className="td">
                   <div className="font-medium">{t.payee?.name ?? <span className="text-slate-400">No payee</span>}</div>
@@ -145,10 +167,13 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                 <td className="td">{t.amountCents < 0 && !t.transferGroupId && <TagEditor transactionId={t.id} tags={t.tags} />}</td>
                 <td className="td"><ReceiptCell transactionId={t.id} receipt={t.receipt} /></td>
                 <td className="td text-right">
-                  <form action={deleteTransactionAction}>
-                    <input type="hidden" name="transactionId" value={t.id} />
-                    <ConfirmDeleteButton />
-                  </form>
+                  <div className="flex items-center justify-end gap-1">
+                    <EditTransactionButton tx={editable(t)} categories={catOptions} payees={payeeNames} people={people} isBusiness={isBiz} />
+                    <form action={deleteTransactionAction}>
+                      <input type="hidden" name="transactionId" value={t.id} />
+                      <ConfirmDeleteButton />
+                    </form>
+                  </div>
                 </td>
               </tr>
             ))}

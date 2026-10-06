@@ -2,13 +2,13 @@
 
 import { FREQUENCIES } from "@/lib/recurring-math";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Check, Pencil, Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { Paperclip } from "lucide-react";
 import { TagChips } from "@/components/tag-picker";
 import { Affirmation, type Flow } from "@/components/affirmation";
 import { ReceiptField } from "@/components/receipt-field";
-import { attachReceiptAction, createTransactionAction, removeReceiptAction, setTransactionCategoryAction, setTransactionPersonAction } from "@/app/actions/transactions";
+import { attachReceiptAction, createTransactionAction, removeReceiptAction, setClearedAction, setTransactionCategoryAction, updateTransactionAction, setTransactionPersonAction } from "@/app/actions/transactions";
 
 type CatOption = { id: string; name: string; group: string; type: "INCOME" | "EXPENSE" | "SYSTEM"; paidFromId?: string | null };
 
@@ -228,5 +228,123 @@ export function PersonSelect({ transactionId, current, people }: { transactionId
         {people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
       </select>
     </form>
+  );
+}
+
+/** Round tick on each row: filled green = the bank has posted it; empty = still pending. Counts in the total either way. */
+export function ClearedButton({ transactionId, status }: { transactionId: string; status: "UNCLEARED" | "CLEARED" | "RECONCILED" }) {
+  const done = status !== "UNCLEARED";
+  const locked = status === "RECONCILED";
+  return (
+    <form action={setClearedAction}>
+      <input type="hidden" name="transactionId" value={transactionId} />
+      <input type="hidden" name="cleared" value={done ? "0" : "1"} />
+      <button
+        type="submit"
+        disabled={locked}
+        title={locked ? "Reconciled" : done ? "Cleared. Tap to mark pending again" : "Pending. Tap when the bank has posted it"}
+        aria-label={locked ? "Reconciled" : done ? "Cleared. Mark as pending" : "Pending. Mark as cleared"}
+        className={`flex size-8 items-center justify-center rounded-full border-2 transition-colors ${done ? "border-pos bg-pos text-white" : "border-slate-300 text-transparent hover:border-pos hover:text-pos/60 dark:border-slate-600"} ${locked ? "opacity-70" : ""}`}
+      >
+        <Check className="size-4" aria-hidden />
+      </button>
+    </form>
+  );
+}
+
+export type EditableTx = {
+  id: string; date: string; payee: string; amountCents: number; memo: string; categoryId: string; personId: string;
+  status: "UNCLEARED" | "CLEARED" | "RECONCILED"; isTransfer: boolean; isSplit: boolean; deductible: boolean; source: string | null;
+};
+
+/** Opens a full edit form for one transaction, so every detail can be seen and changed. */
+export function EditTransactionButton({ tx, categories, payees, people, isBusiness, label }: {
+  tx: EditableTx; categories: CatOption[]; payees: string[]; people: { id: string; name: string }[]; isBusiness: boolean; label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [direction, setDirection] = useState<Flow>(tx.amountCents > 0 ? "inflow" : "outflow");
+  const [state, action, pending] = useActionState(updateTransactionAction, undefined);
+  useEffect(() => { if (state?.ok) setOpen(false); }, [state]);
+  const locked = tx.isTransfer || tx.isSplit;
+  const listId = `edit-payees-${tx.id}`;
+  return (
+    <>
+      <button type="button" className="btn btn-sm !min-h-9" aria-label="Edit transaction" onClick={() => { setDirection(tx.amountCents > 0 ? "inflow" : "outflow"); setOpen(true); }}>
+        <Pencil className="size-3.5" aria-hidden />{label && <span>{label}</span>}
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Edit transaction">
+        <form action={action} className="space-y-3">
+          <input type="hidden" name="transactionId" value={tx.id} />
+          {tx.isTransfer && <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">This is a transfer between two accounts. You can change its date, note and cleared status; the amount stays matched on both sides.</p>}
+          {tx.isSplit && !tx.isTransfer && <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">This purchase is split between pockets (for example business and personal). Amount and pocket are locked; delete and re-enter it to change them.</p>}
+          {!locked && (
+            <fieldset className="flex gap-2" aria-label="Direction">
+              {(["outflow", "inflow"] as const).map((d) => (
+                <label key={d} className={`flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-xl border px-4 text-sm font-medium capitalize ${direction === d ? (d === "outflow" ? "border-[#C9372C] bg-red-50 text-[#C9372C] dark:bg-red-950" : "border-[#2E7D32] bg-emerald-50 text-[#2E7D32] dark:bg-emerald-950") : "border-[#E2E8F0] dark:border-slate-700"}`}>
+                  <input type="radio" name="direction" value={d} checked={direction === d} onChange={() => setDirection(d)} className="sr-only" />{d}
+                </label>
+              ))}
+            </fieldset>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor={`e-amt-${tx.id}`} className="label">Amount</label>
+              {locked
+                ? <div className="nums input flex items-center bg-slate-50 dark:bg-slate-800">{tx.amountCents < 0 ? "−" : "+"}{(Math.abs(tx.amountCents) / 100).toFixed(2)}</div>
+                : <input id={`e-amt-${tx.id}`} name="amount" required inputMode="decimal" defaultValue={(Math.abs(tx.amountCents) / 100).toFixed(2)} className="input nums" />}
+            </div>
+            <div>
+              <label htmlFor={`e-date-${tx.id}`} className="label">Date</label>
+              <input id={`e-date-${tx.id}`} name="date" type="date" required defaultValue={tx.date} className="input" />
+            </div>
+          </div>
+          {!tx.isTransfer && (
+            <>
+              <div>
+                <label htmlFor={`e-payee-${tx.id}`} className="label">Payee</label>
+                <input id={`e-payee-${tx.id}`} name="payee" list={listId} autoComplete="off" maxLength={200} defaultValue={tx.payee} className="input" />
+                <datalist id={listId}>{payees.map((p) => <option key={p} value={p} />)}</datalist>
+              </div>
+              {!tx.isSplit && (
+                <div>
+                  <label htmlFor={`e-cat-${tx.id}`} className="label">Category</label>
+                  <select id={`e-cat-${tx.id}`} name="categoryId" className="input" defaultValue={tx.categoryId}>
+                    <option value="">Uncategorized (decide later)</option>
+                    <CategoryOptions options={direction === "inflow" ? [...categories].sort((a, b) => Number(b.type === "INCOME") - Number(a.type === "INCOME")) : categories.filter((c) => c.type !== "INCOME")} />
+                  </select>
+                </div>
+              )}
+              {people.length > 1 && (
+                <div>
+                  <label htmlFor={`e-who-${tx.id}`} className="label">Who</label>
+                  <select id={`e-who-${tx.id}`} name="personId" className="input" defaultValue={tx.personId}>
+                    <option value="">Not assigned</option>
+                    {people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+          <div>
+            <label htmlFor={`e-memo-${tx.id}`} className="label">Memo</label>
+            <input id={`e-memo-${tx.id}`} name="memo" maxLength={500} defaultValue={tx.memo} className="input" />
+          </div>
+          <label className="flex min-h-11 items-center gap-3 text-sm">
+            <input type="checkbox" name="cleared" className="size-5" defaultChecked={tx.status !== "UNCLEARED"} disabled={tx.status === "RECONCILED"} />
+            {tx.status === "RECONCILED" ? "Reconciled (locked as cleared)" : "Cleared (the bank has posted it)"}
+          </label>
+          {tx.status === "RECONCILED" && <input type="hidden" name="cleared" value="on" />}
+          {isBusiness && !locked && direction === "outflow" && (
+            <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="deductible" className="size-5" defaultChecked={tx.deductible} /> Tax-deductible</label>
+          )}
+          {tx.source && <p className="text-xs text-slate-500">Imported from {tx.source}</p>}
+          {state && !state.ok && <p role="alert" className="text-sm text-[#C9372C]">{state.error}</p>}
+          <div className="sticky bottom-0 -mx-1 flex justify-end gap-2 bg-white px-1 pb-1 pt-2 dark:bg-slate-900">
+            <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel <span className="kbd">Esc</span></button>
+            <button type="submit" className="btn btn-primary" disabled={pending}>{pending ? "Saving…" : "Save changes"}</button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }
