@@ -60,6 +60,7 @@ const importSchema = z.object({
     payee: z.string().max(200),
     memo: z.string().max(500),
     amountCents: z.number().int().min(-2_000_000_000).max(2_000_000_000),
+    category: z.string().max(100).optional(),
   })).min(1, "Nothing to import").max(20000, "Import at most 20,000 rows at a time"),
 });
 export type HistoryImportResult =
@@ -94,7 +95,7 @@ export async function importHistoryAction(input: unknown): Promise<HistoryImport
   const data = keep.map((r) => {
     const base = `${accountId}|${r.date}|${r.amountCents}|${r.payee}|${r.memo}`;
     const n = seen.get(base) ?? 0; seen.set(base, n + 1);
-    const c = classifyHistoryRow({ payee: r.payee, memo: r.memo, amountCents: r.amountCents, isBusiness });
+    const c = classifyHistoryRow({ payee: r.payee, memo: r.memo, amountCents: r.amountCents, isBusiness, category: r.category });
     if (c.typeKey || c.kind === "TRANSFER") classified++;
     return {
       workspaceId: account.workspaceId, accountId, date: isoToDate(r.date), amountCents: r.amountCents,

@@ -10,6 +10,12 @@ export type HistKind = "INCOME" | "EXPENSE" | "TRANSFER";
 
 const DEF = new Map(TYPE_DEFS.map((t) => [t.key, t]));
 export const TRANSFER_RE = /\b(transfer|xfer)\b/i;
+/** Payment processors and marketplaces: a deposit from one is a sale paid out to the bank, even when the bank calls it a "transfer". */
+export const PAYOUT_RE = /\b(stripe|paypal|square|sq|venmo|cash ?app|shopify|etsy|payout|payouts)\b/i;
+/** The bank's own category label, when the file has one. Only labels that settle money-in-or-moved are used; the rest are ignored. */
+const LABEL_TRANSFER = new Set(["banktransfer", "transfer", "creditcardpayment", "equity", "ownerscontribution", "ownerdraw"]);
+const LABEL_REVENUE = new Set(["revenue", "sales", "income", "salesrevenue"]);
+const labelKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
 
 /** The kind a transaction counts as once it has a type. Null type: decided by the sign of the amount. */
 export function kindFor(typeKey: string | null, amountCents: number): HistKind {
@@ -26,8 +32,12 @@ export function isDeductibleType(typeKey: string | null, isBusiness: boolean): b
 }
 
 /** Guess kind, type and deductibility for a statement row from its wording. */
-export function classifyHistoryRow(o: { payee: string; memo: string; amountCents: number; isBusiness: boolean }): { kind: HistKind; typeKey: string | null; isTaxDeductible: boolean } {
+export function classifyHistoryRow(o: { payee: string; memo: string; amountCents: number; isBusiness: boolean; category?: string }): { kind: HistKind; typeKey: string | null; isTaxDeductible: boolean } {
   const text = `${o.payee} ${o.memo}`;
+  const label = labelKey(o.category ?? "");
+  if (LABEL_TRANSFER.has(label)) return { kind: "TRANSFER", typeKey: null, isTaxDeductible: false };
+  if (LABEL_REVENUE.has(label) && o.amountCents > 0) return { kind: "INCOME", typeKey: "SALES", isTaxDeductible: false };
+  if (o.amountCents > 0 && PAYOUT_RE.test(text)) return { kind: "INCOME", typeKey: null, isTaxDeductible: false };
   if (TRANSFER_RE.test(text)) return { kind: "TRANSFER", typeKey: null, isTaxDeductible: false };
   let typeKey: string | null = null;
   if (o.amountCents < 0) {

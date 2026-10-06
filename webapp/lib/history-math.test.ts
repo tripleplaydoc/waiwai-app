@@ -12,6 +12,21 @@ c = classifyHistoryRow({ payee: "Foodland", memo: "", amountCents: -8417, isBusi
 assert.deepEqual(c, { kind: "EXPENSE", typeKey: "FOOD", isTaxDeductible: false });
 c = classifyHistoryRow({ payee: "Foodland", memo: "", amountCents: -8417, isBusiness: true });
 assert.equal(c.typeKey, null, "a personal type is not guessed in a business workspace");
+// processor payouts are sales, not transfers; the bank's own labels are respected
+c = classifyHistoryRow({ payee: "STRIPE TRANSFER ID NBR: ST-ABC", memo: "", amountCents: 878083, isBusiness: true });
+assert.deepEqual(c, { kind: "INCOME", typeKey: null, isTaxDeductible: false });
+c = classifyHistoryRow({ payee: "PAYPAL TRANSFER", memo: "", amountCents: 1273282, isBusiness: true });
+assert.equal(c.kind, "INCOME");
+c = classifyHistoryRow({ payee: "PAYPAL INSTANT TRANSFER INST XFER", memo: "", amountCents: -7034, isBusiness: true });
+assert.equal(c.kind, "TRANSFER", "money out to a processor stays a transfer");
+c = classifyHistoryRow({ payee: "Some client", memo: "", amountCents: 50000, isBusiness: true, category: "Revenue" });
+assert.deepEqual(c, { kind: "INCOME", typeKey: "SALES", isTaxDeductible: false });
+c = classifyHistoryRow({ payee: "Online banking", memo: "", amountCents: 50000, isBusiness: true, category: "Bank Transfer" });
+assert.equal(c.kind, "TRANSFER");
+c = classifyHistoryRow({ payee: "CHASE CARD", memo: "", amountCents: -50000, isBusiness: true, category: "Credit Card Payment" });
+assert.equal(c.kind, "TRANSFER");
+c = classifyHistoryRow({ payee: "Zoom.us", memo: "", amountCents: -1599, isBusiness: true, category: "Uncategorized" });
+assert.equal(c.typeKey, "SOFTWARE", "other labels do not override the payee rules");
 assert.equal(kindFor("SALES", -500), "INCOME"); assert.equal(kindFor("SOFTWARE", 500), "EXPENSE", "a refund nets against its expense");
 assert.equal(isDeductibleType("OWNER_DRAW", true), false); assert.equal(isDeductibleType("SOFTWARE", false), false);
 assert.equal(deductibleAmount(8000, "MEALS"), 4000); assert.equal(deductibleAmount(8000, "TRAVEL"), 8000);

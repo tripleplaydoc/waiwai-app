@@ -24,7 +24,7 @@ export function HistoryImportClient({ accounts, initialAccountId, isBusiness, ws
     if (!parsed) return null;
     const usable = parsed.rows.filter((r) => r.date < cutoff);
     const late = parsed.rows.length - usable.length;
-    const classes = usable.map((r) => classifyHistoryRow({ payee: r.payee, memo: r.memo, amountCents: r.amountCents, isBusiness }));
+    const classes = usable.map((r) => classifyHistoryRow({ payee: r.payee, memo: r.memo, amountCents: r.amountCents, isBusiness, category: r.category }));
     const years = new Map<string, number>();
     usable.forEach((r) => years.set(r.date.slice(0, 4), (years.get(r.date.slice(0, 4)) ?? 0) + 1));
     return {
@@ -43,7 +43,7 @@ export function HistoryImportClient({ accounts, initialAccountId, isBusiness, ws
   function commit() {
     if (!plan || plan.usable.length === 0) return;
     start(async () => {
-      setResult(await importHistoryAction({ accountId, fileName, rows: plan.usable.map((r) => ({ date: r.date, payee: r.payee, memo: r.memo, amountCents: r.amountCents })) }));
+      setResult(await importHistoryAction({ accountId, fileName, rows: plan.usable.map((r) => ({ date: r.date, payee: r.payee, memo: r.memo, amountCents: r.amountCents, category: r.category })) }));
     });
   }
 
