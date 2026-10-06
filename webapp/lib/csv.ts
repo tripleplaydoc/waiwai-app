@@ -63,7 +63,7 @@ export function parseDate(input: string): string | null {
   let y: number, m: number, d: number;
   let match = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
   if (match) { y = +match[1]; m = +match[2]; d = +match[3]; }
-  else if ((match = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(s))) {
+  else if ((match = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/.exec(s))) {
     m = +match[1]; d = +match[2]; y = +match[3];
     if (match[3].length === 2) y += 2000;
   } else return null;
