@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { addMemberAction, removeMemberAction, resetMemberPasswordAction, switchBudgetAction } from "@/app/actions/household";
+import { addMemberAction, removeMemberAction, resetMemberPasswordAction, switchBudgetAction, setPrivateBusinessAction } from "@/app/actions/household";
 import { Avatar } from "@/components/avatar";
 import { PasswordField } from "@/components/password-field";
 
@@ -43,7 +43,7 @@ export function AddMemberForm() {
   );
 }
 
-export function MemberRow({ id, name, email, isOwner, isYou, canManage, avatar, isPrivate }: { isPrivate: boolean; avatar: string | null; id: string; name: string; email: string; isOwner: boolean; isYou: boolean; canManage: boolean }) {
+export function MemberRow({ id, name, email, isOwner, isYou, canManage, avatar, isPrivate, hasBusiness }: { isPrivate: boolean; hasBusiness: boolean; avatar: string | null; id: string; name: string; email: string; isOwner: boolean; isYou: boolean; canManage: boolean }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(resetMemberPasswordAction, undefined);
   return (
@@ -58,6 +58,13 @@ export function MemberRow({ id, name, email, isOwner, isYou, canManage, avatar, 
           <form action={switchBudgetAction}>
             <input type="hidden" name="userId" value={id} />
             <button type="submit" className="btn btn-sm">Open budget</button>
+          </form>
+        )}
+        {isPrivate && !isYou && canManage && (
+          <form action={setPrivateBusinessAction}>
+            <input type="hidden" name="userId" value={id} />
+            <input type="hidden" name="on" value={hasBusiness ? "0" : "1"} />
+            <button type="submit" className="btn btn-sm" onClick={(e) => { if (hasBusiness && !window.confirm(`Hide ${name || email}'s Business? Nothing is deleted; you can turn it back on.`)) e.preventDefault(); }}>{hasBusiness ? "Hide Business" : "Enable Business"}</button>
           </form>
         )}
         {canManage && !isOwner && (

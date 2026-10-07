@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "hasBusiness" BOOLEAN NOT NULL DEFAULT false;

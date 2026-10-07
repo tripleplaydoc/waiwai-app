@@ -108,11 +108,21 @@ export async function ensureOwnWorkspace(userId: string): Promise<Workspace> {
   return ws;
 }
 
+/** A private person's own Business workspace (with its tax reserve), created when a parent turns Business on for them. */
+export async function ensureOwnBusiness(userId: string): Promise<Workspace> {
+  const found = await prisma.workspace.findFirst({ where: { ownerId: userId, type: "BUSINESS", isArchived: false }, orderBy: { createdAt: "asc" } });
+  if (found) return found;
+  const ws = await prisma.workspace.create({ data: { ownerId: userId, name: "Business", type: "BUSINESS" } });
+  const reserve = await seedCategories(ws.id, "BUSINESS");
+  await prisma.taxProfile.create({ data: { workspaceId: ws.id, reserveCategoryId: reserve ?? null } });
+  return ws;
+}
+
 export interface BudgetView {
   /** Who is signed in. */
   me: { id: string; name: string | null; email: string; budgetMode: string };
   /** Set when a PRIVATE person's budget is the one in front of us (their own, or a household member opening it). */
-  privateUser: { id: string; name: string | null; email: string } | null;
+  privateUser: { id: string; name: string | null; email: string; hasBusiness: boolean } | null;
   /** A household member is looking at someone else's budget. */
   viewingOther: boolean;
 }
@@ -125,12 +135,12 @@ export interface BudgetView {
 export const getBudgetView = cache(async (): Promise<BudgetView | null> => {
   const me = await getCurrentUser();
   if (!me) return null;
-  const base = { id: me.id, name: me.name, email: me.email, budgetMode: me.budgetMode };
+  const base = { id: me.id, name: me.name, email: me.email, budgetMode: me.budgetMode, hasBusiness: me.hasBusiness };
   if (me.budgetMode === "PRIVATE") return { me: base, privateUser: base, viewingOther: false };
   let id: string | undefined;
   try { id = (await cookies()).get(VIEW_COOKIE)?.value; } catch { id = undefined; }
   if (id) {
-    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, name: true, email: true, budgetMode: true } });
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, name: true, email: true, budgetMode: true, hasBusiness: true } });
     if (target && target.budgetMode === "PRIVATE") return { me: base, privateUser: target, viewingOther: true };
   }
   return { me: base, privateUser: null, viewingOther: false };
@@ -139,7 +149,7 @@ export const getBudgetView = cache(async (): Promise<BudgetView | null> => {
 /** The workspace for this request. Private budgets have only a Personal workspace, so "business" falls back to it. */
 export async function getWorkspace(key: WsKey): Promise<Workspace> {
   const view = await getBudgetView();
-  if (view?.privateUser) return ensureOwnWorkspace(view.privateUser.id);
+  if (view?.privateUser) return key === "business" && view.privateUser.hasBusiness ? ensureOwnBusiness(view.privateUser.id) : ensureOwnWorkspace(view.privateUser.id);
   const { personal, business } = await ensureWorkspaces();
   return key === "business" ? business : personal;
 }
@@ -147,7 +157,11 @@ export async function getWorkspace(key: WsKey): Promise<Workspace> {
 /** Every workspace in the budget being viewed: both household ones, or the one private budget. Used for all-in-one totals. */
 export async function getScopeWorkspaceIds(): Promise<string[]> {
   const view = await getBudgetView();
-  if (view?.privateUser) return [(await ensureOwnWorkspace(view.privateUser.id)).id];
+  if (view?.privateUser) {
+    const ids = [(await ensureOwnWorkspace(view.privateUser.id)).id];
+    if (view.privateUser.hasBusiness) ids.push((await ensureOwnBusiness(view.privateUser.id)).id);
+    return ids;
+  }
   return Object.values(await ensureWorkspaces()).map((w) => w.id);
 }
 

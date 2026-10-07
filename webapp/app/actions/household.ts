@@ -5,7 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { hashPassword, passwordProblem } from "@/lib/password";
-import { VIEW_COOKIE } from "@/lib/workspace";
+import { VIEW_COOKIE, ensureOwnBusiness } from "@/lib/workspace";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -79,4 +79,17 @@ export async function switchBudgetAction(formData: FormData): Promise<void> {
   }
   jar.delete(VIEW_COOKIE);
   redirect("/home");
+}
+
+/** A parent turns a private person's own Business workspace on or off. Turning it off only hides it; nothing is deleted. */
+export async function setPrivateBusinessAction(formData: FormData): Promise<void> {
+  const auth = await requireOwner();
+  if ("error" in auth) return;
+  const id = String(formData.get("userId") ?? "");
+  const on = formData.get("on") === "1";
+  const target = await prisma.user.findUnique({ where: { id }, select: { budgetMode: true } });
+  if (target?.budgetMode !== "PRIVATE") return;
+  if (on) await ensureOwnBusiness(id);
+  await prisma.user.update({ where: { id }, data: { hasBusiness: on } });
+  revalidatePath("/", "layout");
 }

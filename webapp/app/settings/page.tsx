@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true, avatarMime: true, updatedAt: true, budgetMode: true } });
+  const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true, avatarMime: true, updatedAt: true, budgetMode: true, hasBusiness: true } });
   const ownerId = members[0]?.id;
   const isPrivate = user.budgetMode === "PRIVATE";
   const isOwner = ownerId === user.id;
@@ -57,7 +57,7 @@ export default async function SettingsPage() {
         </p>
         <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-800">
           {members.map((m) => (
-            <MemberRow key={m.id} avatar={avatarUrl(m)} id={m.id} name={m.name ?? ""} email={m.email} isOwner={m.id === ownerId} isYou={m.id === user.id} canManage={isOwner} isPrivate={m.budgetMode === "PRIVATE"} />
+            <MemberRow key={m.id} avatar={avatarUrl(m)} id={m.id} name={m.name ?? ""} email={m.email} isOwner={m.id === ownerId} isYou={m.id === user.id} canManage={isOwner} isPrivate={m.budgetMode === "PRIVATE"} hasBusiness={m.hasBusiness} />
           ))}
         </ul>
         {isOwner ? (

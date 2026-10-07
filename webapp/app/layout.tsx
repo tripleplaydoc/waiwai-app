@@ -49,7 +49,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <div className="wai-bg" aria-hidden />
         {authed && (
           <Suspense fallback={null}>
-            <Nav initial={(user?.name || user?.email || "?").trim().charAt(0).toUpperCase()} name={user?.name ?? ""} email={user?.email ?? ""} avatar={user ? avatarUrl(user) : null} privateBudgets={privateBudgets} viewingId={view?.viewingOther ? view.privateUser?.id ?? "" : ""} showBusiness={!view?.privateUser} />
+            <Nav initial={(user?.name || user?.email || "?").trim().charAt(0).toUpperCase()} name={user?.name ?? ""} email={user?.email ?? ""} avatar={user ? avatarUrl(user) : null} privateBudgets={privateBudgets} viewingId={view?.viewingOther ? view.privateUser?.id ?? "" : ""} showBusiness={!view?.privateUser || view.privateUser.hasBusiness} />
           </Suspense>
         )}
         {authed ? <main className="mx-auto w-full max-w-6xl px-4 pb-36 pt-6 sm:px-6 md:pb-24 md:pt-8">

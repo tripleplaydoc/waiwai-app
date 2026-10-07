@@ -312,6 +312,8 @@ model User {
   /// SHARED = uses the household Personal + Business budgets. PRIVATE = has their own separate Personal budget
   /// (kids, others); household members can open it, other private budgets cannot.
   budgetMode   String   @default("SHARED")
+  /// A PRIVATE person who has been given their own Business workspace (parents turn this on).
+  hasBusiness  Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
