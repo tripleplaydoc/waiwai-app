@@ -5,7 +5,7 @@ import { Modal } from "@/components/modal";
 import { archivePocketAction, saveGroupAction, savePocketAction } from "@/app/actions/pockets";
 import { centsToInput, formatCents, parseToCents } from "@/lib/utils/currency";
 import { monthsBetweenInclusive } from "@/lib/budget/dates";
-import type { PocketVM } from "@/lib/budget/board-types";
+import type { AssetOption, PocketVM } from "@/lib/budget/board-types";
 import { TYPE_DEFS, typesFor, typeLabel } from "@/lib/budget/expense-types";
 import { matchRule } from "@/lib/budget/suggest";
 import { AssignedInput } from "./budget-controls";
@@ -23,8 +23,9 @@ const KINDS: { value: TT; label: string; hint: string }[] = [
 ];
 
 export function PocketDialog({
-  open, onClose, workspaceId, isBusiness, groups, pocket, defaultGroupId, monthIso, kindOfNew, customTypes = [], tags = [],
+  open, onClose, workspaceId, isBusiness, groups, pocket, defaultGroupId, monthIso, kindOfNew, customTypes = [], tags = [], assetOptions = [],
 }: {
+  assetOptions?: AssetOption[];
   tags?: TagVM[];
   customTypes?: string[];
   open: boolean; onClose: () => void; workspaceId: string; isBusiness: boolean;
@@ -46,6 +47,8 @@ export function PocketDialog({
   const [deduct, setDeduct] = useState(pocket?.isTaxDeductible ?? false);
   const [ikind, setIkind] = useState<string>(pocket?.incomeKind ?? "EARNED");
   const [tagIds, setTagIds] = useState<string[]>(pocket?.tagIds ?? []);
+  const [assetId, setAssetId] = useState(pocket?.asset?.accountId ?? "");
+  const [assetGoal, setAssetGoal] = useState(pocket?.asset?.goalCents ? centsToInput(pocket.asset.goalCents) : "");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, startDelete] = useTransition();
   const [deleteError, setDeleteError] = useState<string>();
@@ -131,6 +134,28 @@ export function PocketDialog({
               {cash.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
             <p className="mt-1 text-xs text-slate-500">Adding money to this pocket, and the automatic Assign buttons, take from this account first.</p>
+          </div>
+        )}
+
+        {!isIncome && !system && (
+          <div>
+            <input type="hidden" name="assetSent" value="1" />
+            <label htmlFor="pk-asset" className="label">Feeds an asset <span className="font-normal text-slate-400">(optional)</span></label>
+            <select id="pk-asset" name="assetAccountId" className="input" value={assetId} onChange={(e) => setAssetId(e.target.value)}>
+              <option value="">Not tied to an asset</option>
+              {assetOptions.filter((a) => !a.takenBy || a.takenBy === pocket?.id).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            {assetId ? (
+              <div className="mt-2">
+                <label htmlFor="pk-asset-goal" className="label">What should it be worth? <span className="font-normal text-slate-400">(goal for the asset)</span></label>
+                <input id="pk-asset-goal" name="assetGoal" inputMode="decimal" placeholder="e.g. 25000.00" value={assetGoal} onChange={(e) => setAssetGoal(e.target.value)} className="input" />
+                <p className="mt-1 text-xs text-slate-500">This pocket holds the money you set aside to put into the asset. A second bar shows what the asset is worth now, measured against this goal.</p>
+              </div>
+            ) : assetOptions.length === 0 ? (
+              <p className="mt-1 text-xs text-slate-500">Add an asset on the Holdings page first, then you can tie a pocket to it.</p>
+            ) : (
+              <p className="mt-1 text-xs text-slate-500">Tie this pocket to an asset to see the asset’s current value next to its goal.</p>
+            )}
           </div>
         )}
 

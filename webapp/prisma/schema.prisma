@@ -438,6 +438,8 @@ model Account {
   fundedAssignments     BudgetAssignment[]   @relation("AssignmentFunding")
   pocketsPaidFrom       Category[]           @relation("PocketPaidFrom")
   loanPocket            Category?            @relation("PocketLoan")
+  /// The budget pocket that feeds this asset (a savings goal for it): money is set aside in the pocket, then put into the asset.
+  assetPocket           Category?            @relation("PocketAsset")
   importBatches         ImportBatch[]
   taxPaymentsSourced     TaxPayment[]
   historyAccount         HistoryAccount?
@@ -652,6 +654,12 @@ model Category {
   /// Set on the budget pocket that pays a loan (a LOAN account); the pocket follows that loan's schedule.
   loanAccountId String? @unique
   loanAccount   Account? @relation("PocketLoan", fields: [loanAccountId], references: [id], onDelete: SetNull)
+  /// Set on a pocket that feeds an asset (gold, a rental, a brokerage...). The pocket still holds the money set aside;
+  /// the asset's own current value is what its progress bar shows, measured against assetGoalCents.
+  assetAccountId String? @unique
+  assetAccount   Account? @relation("PocketAsset", fields: [assetAccountId], references: [id], onDelete: SetNull)
+  /// What you want the linked asset to be worth (null = no goal set yet).
+  assetGoalCents Int?
   paidFromAccountId String?
   paidFromAccount   Account?              @relation("PocketPaidFrom", fields: [paidFromAccountId], references: [id], onDelete: SetNull)
 

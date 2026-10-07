@@ -19,8 +19,9 @@ import { openMoveMoney } from "./move-money-host";
 import { BillBadge, MarkPaidButton } from "./bill-controls";
 import { shortDate } from "@/lib/budget/bills";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
-import type { GroupVM, PocketVM } from "@/lib/budget/board-types";
+import type { AssetOption, GroupVM, PocketVM } from "@/lib/budget/board-types";
 import type { Horizon } from "@/lib/budget/horizon";
+import { assetProgress } from "@/lib/budget/asset-progress";
 import type { TagVM } from "@/lib/budget/tags";
 import { TagChip, TagManager } from "./tag-manager";
 
@@ -58,7 +59,7 @@ function ProgressBlock({ p, onSetCost }: { p: PocketVM; onSetCost: () => void })
   if (!pr.hasTarget) {
     return (
       <button type="button" onClick={onSetCost} className="mt-0.5 text-xs text-slate-400 hover:text-[#2E6BE6] dark:hover:text-blue-300">
-        {p.availableCents < 0 ? "Overspent — cover it from another pocket" : "Set a monthly cost or goal"}
+        {p.availableCents < 0 ? "Overspent — cover it from another pocket" : p.asset ? "Set how much to add each month" : "Set a monthly cost or goal"}
       </button>
     );
   }
@@ -90,6 +91,39 @@ function ProgressBlock({ p, onSetCost }: { p: PocketVM; onSetCost: () => void })
         <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(barTone, horizon === "ahead")}`} style={{ width: `${Math.round(barFill * 100)}%` }} />
       </div>
       <div className={`mt-1 text-[11px] leading-tight ${pr.state === "partial" || pr.state === "empty" ? "text-warn" : pr.state === "overspent" ? "text-neg" : "text-slate-500 dark:text-slate-400"}`}>{line}</div>
+    </div>
+  );
+}
+
+/**
+ * For a pocket that feeds an asset: the asset's own current value against the goal for it. The pocket's pill and bar above
+ * show the money set aside to put into the asset; this bar shows what the asset is worth now, so it has its own colour.
+ */
+function AssetBlock({ p, onSetGoal }: { p: PocketVM; onSetGoal: () => void }) {
+  const a = p.asset;
+  if (!a) return null;
+  const pr = assetProgress(a.valueCents, a.goalCents);
+  const pct = Math.round(pr.fraction * 100);
+  const asOf = a.asOfIso ? ` · as of ${shortDate(a.asOfIso)}` : "";
+  return (
+    <div className="mt-2 min-w-0 rounded-lg bg-slate-50 px-2.5 py-2 dark:bg-slate-800/50" data-testid="asset-progress">
+      <div className="flex min-w-0 flex-col gap-0.5 text-[11px] leading-tight sm:flex-row sm:items-baseline sm:justify-between sm:gap-2">
+        <span className="min-w-0 truncate font-medium text-slate-600 dark:text-slate-300">{a.name} is worth</span>
+        <span className="nums font-semibold text-slate-800 sm:shrink-0 dark:text-slate-100">{formatCents(a.valueCents)}{pr.hasGoal && <span className="font-normal text-slate-500 dark:text-slate-400"> of {formatCents(a.goalCents!)}</span>}</span>
+      </div>
+      {pr.hasGoal ? (
+        <div
+          className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+          role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={`${a.name} value toward its goal`}
+        >
+          <div className={`h-full rounded-full transition-[width] duration-500 ${pr.reached ? "bg-pos" : "bg-water"}`} style={{ width: `${pct}%` }} />
+        </div>
+      ) : (
+        <button type="button" onClick={onSetGoal} className="mt-1 text-[11px] text-slate-400 hover:text-[#2E6BE6] dark:hover:text-blue-300">Set a goal for {a.name}</button>
+      )}
+      <div className={`mt-1 text-[11px] leading-tight ${pr.reached ? "font-medium text-pos" : "text-slate-500 dark:text-slate-400"}`}>
+        {pr.hasGoal ? (pr.reached ? "Goal reached" : `${formatCents(pr.remainingCents)} to go`) : "No goal yet"}{asOf}
+      </div>
     </div>
   );
 }
@@ -146,6 +180,7 @@ function PocketRowView({
           </div>
         )}
         <div className={simple ? "hidden md:block" : "hidden md:block"}><ProgressBlock p={p} onSetCost={onEdit} /></div>
+        {!overlay && <AssetBlock p={p} onSetGoal={onEdit} />}
       </div>
 
       <div className="text-right md:order-5">
@@ -261,8 +296,8 @@ const collision: CollisionDetection = (args) => {
 };
 
 export function BudgetBoard({
-  workspaceId, isBusiness, month, groups: serverGroups, allGroups, customTypes, simple, horizon, tags,
-}: { tags: TagVM[]; simple: boolean; horizon: Horizon; customTypes: string[]; workspaceId: string; isBusiness: boolean; month: string; groups: GroupVM[]; allGroups: { id: string; name: string }[] }) {
+  workspaceId, isBusiness, month, groups: serverGroups, allGroups, customTypes, simple, horizon, tags, assetOptions = [],
+}: { assetOptions?: AssetOption[]; tags: TagVM[]; simple: boolean; horizon: Horizon; customTypes: string[]; workspaceId: string; isBusiness: boolean; month: string; groups: GroupVM[]; allGroups: { id: string; name: string }[] }) {
   const [groups, setGroups] = useState(serverGroups);
   const ref = useRef(serverGroups);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -440,6 +475,7 @@ export function BudgetBoard({
 
       {pocketDlg && (
         <PocketDialog
+          assetOptions={assetOptions}
           tags={tags}
           customTypes={customTypes}
           open onClose={() => setPocketDlg(null)} workspaceId={workspaceId} isBusiness={isBusiness}

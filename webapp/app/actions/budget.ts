@@ -65,7 +65,7 @@ export async function archiveCategoryAction(formData: FormData): Promise<void> {
   const id = z.string().min(1).parse(formData.get("categoryId"));
   const cat = await prisma.category.findUnique({ where: { id } });
   if (!cat || cat.isSystemManaged) return;
-  await prisma.category.update({ where: { id }, data: { isArchived: true } });
+  await prisma.category.update({ where: { id }, data: { isArchived: true, assetAccountId: null, assetGoalCents: null } });
   revalidatePath("/budget");
 }
 

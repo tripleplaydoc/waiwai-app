@@ -1,6 +1,19 @@
 import type { PocketProgress } from "./targets";
 import type { BillStatus } from "./bills";
 
+/** The asset a pocket feeds: its own current value, and the value you want it to reach. */
+export interface AssetVM {
+  accountId: string;
+  name: string;
+  valueCents: number;
+  goalCents: number | null;
+  /** Date of the valuation the value comes from (YYYY-MM-DD), or null if it has never been valued. */
+  asOfIso: string | null;
+}
+
+/** An asset a pocket could be tied to; takenBy is the pocket that already feeds it (an asset has one pocket). */
+export interface AssetOption { id: string; name: string; takenBy: string | null }
+
 export interface PocketVM {
   id: string;
   name: string;
@@ -30,6 +43,8 @@ export interface PocketVM {
   aheadNeedCents: number;
   /** Ids of the tags on this pocket. */
   tagIds: string[];
+  /** Set when this pocket feeds an asset: the board then also shows the asset's own progress bar. */
+  asset: AssetVM | null;
 }
 
 export interface GroupVM {

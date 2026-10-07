@@ -13,6 +13,7 @@ import { getCategoryAvailableBalance } from "@/lib/budget/category-balance";
 import { endOfMonth, fundRows, loadPools, moveRows, releaseRows } from "@/lib/budget/funding";
 import { bpsProblem, planAllocation, type AllocGroup } from "@/lib/budget/allocation";
 import { customKey, isCustomKey, isTypeKey, typesFor } from "@/lib/budget/expense-types";
+import { holdingOf, holdingSide } from "@/lib/holdings";
 import type { ActionResult } from "./types";
 
 const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
@@ -36,6 +37,10 @@ const pocketSchema = z.object({
   incomeKind: z.enum(["EARNED", "PORTFOLIO", "PASSIVE"]).optional(),
   paidFromId: z.string().optional(),
   monthsAhead: z.string().optional(),
+  /** "1" when the form carried the asset section; the asset id may be blank (= not tied to an asset). */
+  assetSent: z.string().optional(),
+  assetAccountId: z.string().optional(),
+  assetGoal: z.string().optional(),
 });
 
 /** Creates or edits a pocket (an envelope inside a category). */
@@ -118,6 +123,23 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
       paidFromAccountId = a.id;
     }
   }
+  // Tied to an asset: the pocket feeds it, and its progress bar shows the asset's own value against this goal.
+  let assetData: { assetAccountId: string | null; assetGoalCents: number | null } | undefined; // undefined = leave as is
+  if (d.assetSent === "1") {
+    if (isIncome || !d.assetAccountId) assetData = { assetAccountId: null, assetGoalCents: null };
+    else {
+      const a = await prisma.account.findFirst({ where: { id: d.assetAccountId, workspaceId: d.workspaceId, isArchived: false, balanceMode: "MANUAL" } });
+      if (!a || holdingSide(holdingOf(a)) !== "ASSET") return { ok: false, error: "Pick one of your assets." };
+      const other = await prisma.category.findFirst({ where: { assetAccountId: a.id, ...(existing ? { id: { not: existing.id } } : {}) }, select: { name: true } });
+      if (other) return { ok: false, error: `${a.name} is already fed by the pocket “${other.name}”.` };
+      let goal: number | null = null;
+      if (d.assetGoal && d.assetGoal.trim() !== "") {
+        goal = parseToCents(d.assetGoal);
+        if (goal === null || goal <= 0) return { ok: false, error: "Enter the asset goal as an amount greater than zero, like 25000.00" };
+      }
+      assetData = { assetAccountId: a.id, assetGoalCents: goal };
+    }
+  }
   const incomeKind = isIncome ? d.incomeKind ?? "EARNED" : null;
   const deductible = workspace.type === "BUSINESS" && !isIncome && d.isTaxDeductible === "on";
   let newId: string | undefined;
@@ -138,6 +160,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           fundingTargetByDate: targetDate,
           monthsAhead,
           ...(paidFromAccountId !== undefined ? { paidFromAccountId } : {}),
+          ...(assetData ?? {}),
         },
       });
     } else {
@@ -159,6 +182,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           fundingTargetByDate: targetDate,
           monthsAhead,
           paidFromAccountId: paidFromAccountId ?? null,
+          ...(assetData ?? {}),
         },
       });
       newId = made.id;
@@ -212,7 +236,7 @@ async function removePockets(workspaceId: string, workspaceType: "PERSONAL" | "B
   const releaseRowsAll = (await Promise.all(release.map((x) => releaseRows(prisma, { workspaceId, categoryId: x.c.id, month, cents: x.cents, source: "CORRECTION", note: "Released back to the pool (pocket deleted)" })))).flat();
   await prisma.$transaction([
     prisma.budgetAssignment.createMany({ data: releaseRowsAll }),
-    prisma.category.updateMany({ where: { id: { in: live } }, data: { isArchived: true } }),
+    prisma.category.updateMany({ where: { id: { in: live } }, data: { isArchived: true, assetAccountId: null, assetGoalCents: null } }),
   ]);
   return { ok: true, releasedCents: release.reduce((s, x) => s + x.cents, 0) };
 }
