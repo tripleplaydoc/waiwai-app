@@ -1,6 +1,7 @@
 import { accountKind } from "@/lib/account-kind";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { budgetPeopleWhere, canAccessWorkspace } from "@/lib/workspace";
 import { Upload } from "lucide-react";
 import { getCurrentUser, requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +25,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   const { id } = await params;
   const { person } = await searchParams;
   const account = await prisma.account.findUnique({ where: { id }, include: { workspace: true, manualBalanceEntries: { orderBy: { asOfDate: "desc" }, take: 1 } } });
-  if (!account) notFound();
+  if (!account || !(await canAccessWorkspace(account.workspaceId))) notFound();
 
   const [transactions, sum, categories, groups, payees, allAccounts, usersDb, me] = await Promise.all([
     prisma.transaction.findMany({
@@ -38,7 +39,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
     prisma.categoryGroup.findMany({ where: { workspaceId: account.workspaceId, isArchived: false } }),
     prisma.payee.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: { name: "asc" }, take: 500 }),
     prisma.account.findMany({ where: { workspaceId: account.workspaceId, isArchived: false }, orderBy: [{ onBudget: "desc" }, { name: "asc" }], select: { id: true, name: true, type: true } }),
-    prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true } }),
+    prisma.user.findMany({ where: await budgetPeopleWhere(), orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true } }),
     getCurrentUser(),
   ]);
   const people = usersDb.map((u) => ({ id: u.id, name: u.name || u.email.split("@")[0] }));

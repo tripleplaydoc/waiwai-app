@@ -309,6 +309,9 @@ model User {
   /// Profile picture (square JPEG, resized in the browser).
   avatarData   Bytes?
   avatarMime   String?
+  /// SHARED = uses the household Personal + Business budgets. PRIVATE = has their own separate Personal budget
+  /// (kids, others); household members can open it, other private budgets cannot.
+  budgetMode   String   @default("SHARED")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

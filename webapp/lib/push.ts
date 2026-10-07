@@ -62,7 +62,8 @@ export async function runReminders(opts: { dry?: boolean; today?: string } = {})
   const today = opts.today ?? todayIso();
   const { reminders: all, inCents, hasGap } = await collectReminders(today);
   const win = winLine(inCents, hasGap);
-  const users = await prisma.pushSubscription.findMany({ distinct: ["userId"], select: { userId: true } });
+  // Reminders are about the household budgets, so only household members get them (private budgets have none yet).
+  const users = await prisma.pushSubscription.findMany({ where: { user: { budgetMode: "SHARED" } }, distinct: ["userId"], select: { userId: true } });
   let sent = 0;
   const shown: string[] = [];
   for (const { userId } of users) {

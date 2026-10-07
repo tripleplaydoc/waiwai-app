@@ -87,7 +87,7 @@ export default async function HoldingsPage({ searchParams }: { searchParams: Pro
                   </div>
                 </div>
                 <div className="shrink-0 text-right"><div className="nums text-[15px] font-bold">{formatCents(r.valueCents)}</div>{delta !== 0 && <div className={`nums text-[11px] ${better ? "text-pos" : "text-neg"}`}>{delta > 0 ? "▲" : "▼"} {formatCents(Math.abs(delta))}</div>}</div>
-                <HoldingButton workspaceId={ws.id} today={today} moveTo={{ id: other.id, name: other.name }} edit={{ id: r.id, name: r.name, cls: r.cls, valueCents: r.valueCents, monthlyCents: r.monthlyCashflowCents, manual: r.manual, hasPositions: (meta.get(r.id)?.positions.length ?? 0) > 0 }} />
+                <HoldingButton workspaceId={ws.id} today={today} moveTo={other.id === ws.id ? undefined : { id: other.id, name: other.name }} edit={{ id: r.id, name: r.name, cls: r.cls, valueCents: r.valueCents, monthlyCents: r.monthlyCashflowCents, manual: r.manual, hasPositions: (meta.get(r.id)?.positions.length ?? 0) > 0 }} />
               </li>
             );
           })}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
-import { ensureWorkspaces, getWorkspace, wsKeyFromParam } from "@/lib/workspace";
+import { getScopeWorkspaceIds, getWorkspace, wsKeyFromParam } from "@/lib/workspace";
 import { buildPnl } from "@/lib/reports/pnl";
 import { loadHoldings } from "@/lib/reports/holdings";
 import { freedomNumberCents, runwayDays, savingsRatePct, yearsToTarget } from "@/lib/coach/growth-math";
@@ -18,7 +18,7 @@ export default async function GrowthPage({ searchParams }: { searchParams: Promi
   const q = wsKey === "business" ? "?ws=business" : "";
   const today = todayIso();
   const from = shift(today, -89);
-  const allIds = Object.values(await ensureWorkspaces()).map((w) => w.id);
+  const allIds = await getScopeWorkspaceIds();
   const [pnl, hold] = await Promise.all([
     buildPnl(ws.id, { from, to: today, prevFrom: shift(from, -90), prevTo: shift(from, -1) }),
     loadHoldings(allIds, today, "monthly", 7),

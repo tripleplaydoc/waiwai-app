@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { addMemberAction, removeMemberAction, resetMemberPasswordAction } from "@/app/actions/household";
+import { addMemberAction, removeMemberAction, resetMemberPasswordAction, switchBudgetAction } from "@/app/actions/household";
 import { Avatar } from "@/components/avatar";
 import { PasswordField } from "@/components/password-field";
 
@@ -25,6 +25,17 @@ export function AddMemberForm() {
           <input id="m-email" name="email" type="email" required className="input" autoComplete="off" />
         </div>
       </div>
+      <fieldset className="space-y-2">
+        <legend className="label">Their budget</legend>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#E2E8F0] p-3 dark:border-slate-700">
+          <input type="radio" name="budget" value="PRIVATE" defaultChecked className="mt-1" />
+          <span className="text-sm"><strong>Their own private budget</strong> (best for kids). Separate accounts and pockets, no Business. Other kids can&apos;t see it. You can open it from the switcher.</span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#E2E8F0] p-3 dark:border-slate-700">
+          <input type="radio" name="budget" value="SHARED" className="mt-1" />
+          <span className="text-sm"><strong>Shares the household budget</strong> (best for a spouse). Sees the same Personal and Business budgets as you.</span>
+        </label>
+      </fieldset>
       <PasswordField id="m-pass" name="password" label="Starting password" autoComplete="new-password" hint="At least 10 characters. They can change it in Settings." />
       <Notice state={state} />
       <button type="submit" disabled={pending} className="btn btn-primary">{pending ? "Adding…" : "Give access"}</button>
@@ -32,7 +43,7 @@ export function AddMemberForm() {
   );
 }
 
-export function MemberRow({ id, name, email, isOwner, isYou, canManage, avatar }: { avatar: string | null; id: string; name: string; email: string; isOwner: boolean; isYou: boolean; canManage: boolean }) {
+export function MemberRow({ id, name, email, isOwner, isYou, canManage, avatar, isPrivate }: { isPrivate: boolean; avatar: string | null; id: string; name: string; email: string; isOwner: boolean; isYou: boolean; canManage: boolean }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(resetMemberPasswordAction, undefined);
   return (
@@ -40,9 +51,15 @@ export function MemberRow({ id, name, email, isOwner, isYou, canManage, avatar }
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Avatar name={name || email} src={avatar} size={36} />
         <div className="min-w-0 flex-1 basis-40">
-          <div className="truncate text-sm font-semibold">{name || email} {isYou && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 dark:bg-slate-800">you</span>} {isOwner && <span className="ml-1 rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] font-medium text-water dark:bg-cyan-950/60">owner</span>}</div>
+          <div className="truncate text-sm font-semibold">{name || email} {isYou && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 dark:bg-slate-800">you</span>} {isOwner && <span className="ml-1 rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] font-medium text-water dark:bg-cyan-950/60">owner</span>} {isPrivate && <span className="ml-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-600 dark:bg-indigo-950/60">own budget</span>}</div>
           <div className="truncate text-xs text-slate-500">{email}</div>
         </div>
+        {isPrivate && !isYou && (
+          <form action={switchBudgetAction}>
+            <input type="hidden" name="userId" value={id} />
+            <button type="submit" className="btn btn-sm">Open budget</button>
+          </form>
+        )}
         {canManage && !isOwner && (
           <div className="flex items-center gap-2">
             <button type="button" className="btn btn-sm" onClick={() => setOpen((o) => !o)} aria-expanded={open}>Reset password</button>

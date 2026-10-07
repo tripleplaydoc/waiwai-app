@@ -13,8 +13,9 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true, avatarMime: true, updatedAt: true } });
+  const members = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true, avatarMime: true, updatedAt: true, budgetMode: true } });
   const ownerId = members[0]?.id;
+  const isPrivate = user.budgetMode === "PRIVATE";
   const isOwner = ownerId === user.id;
   const pausedUntil = (await prisma.pushPref.findUnique({ where: { userId: user.id } }).catch(() => null))?.pausedUntil?.toISOString() ?? null;
   return (
@@ -43,14 +44,20 @@ export default async function SettingsPage() {
         </p>
         <PasswordForm />
       </section>
+      {isPrivate ? (
+        <section className="card p-6" aria-labelledby="hh-h">
+          <h2 id="hh-h" className="mb-1 text-base font-semibold">Your budget</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">This is your own budget, with its own accounts, pockets and history. Other kids can&apos;t see it. The parents who set up WaiWai can open it to help you.</p>
+        </section>
+      ) : (
       <section className="card p-6" aria-labelledby="hh-h">
         <h2 id="hh-h" className="mb-1 text-base font-semibold">Household access</h2>
         <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
-          Everyone below signs in with their own email and password and sees the same Personal and Business budgets, accounts and receipts.
+          Everyone signs in with their own email and password. People who share the household see the same Personal and Business budgets, accounts and receipts. People with a private budget get their own separate Personal budget that you can open from the switcher at the top.
         </p>
         <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-800">
           {members.map((m) => (
-            <MemberRow key={m.id} avatar={avatarUrl(m)} id={m.id} name={m.name ?? ""} email={m.email} isOwner={m.id === ownerId} isYou={m.id === user.id} canManage={isOwner} />
+            <MemberRow key={m.id} avatar={avatarUrl(m)} id={m.id} name={m.name ?? ""} email={m.email} isOwner={m.id === ownerId} isYou={m.id === user.id} canManage={isOwner} isPrivate={m.budgetMode === "PRIVATE"} />
           ))}
         </ul>
         {isOwner ? (
@@ -62,6 +69,7 @@ export default async function SettingsPage() {
           <p className="mt-4 text-xs text-slate-500">Only the account owner can add or remove logins.</p>
         )}
       </section>
+      )}
     </div>
   );
 }

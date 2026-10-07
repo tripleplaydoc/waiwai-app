@@ -10,7 +10,7 @@ import { ExportForm } from "./export-form";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Hourglass } from "lucide-react";
-import { ensureWorkspaces } from "@/lib/workspace";
+import { getScopeWorkspaceIds } from "@/lib/workspace";
 import { getBudgetSummary } from "@/lib/budget/summary";
 import { healthFromSummary } from "@/lib/budget/health-from-summary";
 import { startOfMonthUTC } from "@/lib/budget/dates";
@@ -80,7 +80,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: SP }
   const baseQuery = new URLSearchParams({ period: period.preset, from: period.from, to: period.to, ...(wsKey === "business" ? { ws: "business" } : {}) }).toString();
   const health = tab === "pnl" || tab === "assets" ? healthFromSummary(await getBudgetSummary(ws.id, startOfMonthUTC(new Date())), startOfMonthUTC(new Date())) : null;
   const scopeAll = sp.scope === "all";
-  const wsIds = scopeAll ? Object.values(await ensureWorkspaces()).map((w) => w.id) : [ws.id];
+  const wsIds = scopeAll ? await getScopeWorkspaceIds() : [ws.id];
   const [r, bps, people, accounts] = await Promise.all([
     buildPnl(ws.id, period), taxRateBps(ws.id), byPerson(ws.id, period.from, period.to),
     prisma.account.findMany({ where: { workspaceId: ws.id, isArchived: false }, orderBy: [{ onBudget: "desc" }, { name: "asc" }], select: { id: true, name: true } }),

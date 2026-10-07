@@ -5,6 +5,9 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { hashPassword, passwordProblem } from "@/lib/password";
+import { VIEW_COOKIE } from "@/lib/workspace";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 type FormState = { error?: string; ok?: string } | undefined;
 const MAX_MEMBERS = 6;
@@ -25,15 +28,17 @@ export async function addMemberAction(_prev: FormState, formData: FormData): Pro
     name: z.string().trim().max(80),
     email: z.string().trim().toLowerCase().pipe(z.email("Enter a valid email address.")),
     password: z.string(),
-  }).safeParse({ name: formData.get("name") ?? "", email: formData.get("email") ?? "", password: formData.get("password") ?? "" });
+    budget: z.enum(["PRIVATE", "SHARED"]),
+  }).safeParse({ name: formData.get("name") ?? "", email: formData.get("email") ?? "", password: formData.get("password") ?? "", budget: formData.get("budget") === "SHARED" ? "SHARED" : "PRIVATE" });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form." };
   const problem = passwordProblem(parsed.data.password);
   if (problem) return { error: problem };
   if ((await prisma.user.count()) >= MAX_MEMBERS) return { error: `A household can have up to ${MAX_MEMBERS} logins.` };
   if (await prisma.user.findUnique({ where: { email: parsed.data.email } })) return { error: "That email already has a login." };
-  await prisma.user.create({ data: { email: parsed.data.email, name: parsed.data.name || null, passwordHash: await hashPassword(parsed.data.password) } });
+  await prisma.user.create({ data: { email: parsed.data.email, name: parsed.data.name || null, passwordHash: await hashPassword(parsed.data.password), budgetMode: parsed.data.budget } });
   revalidatePath("/settings");
-  return { ok: `${parsed.data.name || parsed.data.email} can now sign in with that email and password. Ask them to change it in Settings.` };
+  const who = parsed.data.name || parsed.data.email;
+  return { ok: parsed.data.budget === "PRIVATE" ? `${who} can now sign in with that email and password and gets their own private budget. You can open it any time from the budget switcher at the top. Ask them to change the password in Settings.` : `${who} can now sign in with that email and password and shares your household budget. Ask them to change it in Settings.` };
 }
 
 export async function resetMemberPasswordAction(_prev: FormState, formData: FormData): Promise<NonNullable<FormState>> {
@@ -57,4 +62,21 @@ export async function removeMemberAction(formData: FormData): Promise<void> {
   if (!id || id === auth.ownerId) return;
   await prisma.user.delete({ where: { id } });
   revalidatePath("/settings");
+}
+
+/** A household member opens a private person's budget (or goes back to the household budget with an empty id). */
+export async function switchBudgetAction(formData: FormData): Promise<void> {
+  const me = await getCurrentUser();
+  if (!me) return;
+  const jar = await cookies();
+  const id = String(formData.get("userId") ?? "");
+  if (me.budgetMode === "SHARED" && id) {
+    const target = await prisma.user.findUnique({ where: { id }, select: { budgetMode: true } });
+    if (target?.budgetMode === "PRIVATE") {
+      jar.set(VIEW_COOKIE, id, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 30 });
+      redirect("/home");
+    }
+  }
+  jar.delete(VIEW_COOKIE);
+  redirect("/home");
 }

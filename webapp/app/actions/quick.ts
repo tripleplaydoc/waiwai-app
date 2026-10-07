@@ -7,7 +7,7 @@ import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
 import { addMonthsUTC } from "@/lib/budget/dates";
 import { getBudgetSummary } from "@/lib/budget/summary";
-import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
+import { getWorkspace, wsKeyFromParam, budgetPeopleWhere } from "@/lib/workspace";
 import { currentMonthIso, todayIso } from "@/lib/utils/dates";
 import { effectiveType } from "@/lib/budget/expense-types";
 import { rankSuggestions, type RuleHint, type Suggestion } from "@/lib/budget/suggest";
@@ -41,7 +41,7 @@ export async function getQuickAddDataAction(wsParam: string): Promise<QuickAddDa
     prisma.payee.findMany({ where: { workspaceId: ws.id }, orderBy: { name: "asc" }, take: 200 }),
     getReadyToAssign(prisma, ws.id, new Date(addMonthsUTC(monthDate, 1).getTime() - 1)),
     getBudgetSummary(ws.id, monthDate),
-    prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true } }),
+    prisma.user.findMany({ where: await budgetPeopleWhere(), orderBy: { createdAt: "asc" }, select: { id: true, name: true, email: true } }),
     getCurrentUser(),
   ]);
   const cardAccts = accounts.filter((a) => a.type === "CREDIT_CARD" && a.balanceMode === "TRANSACTION_DERIVED");

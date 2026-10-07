@@ -68,6 +68,7 @@ export async function setupAction(_prev: FormState, formData: FormData): Promise
 
 export async function logoutAction(): Promise<void> {
   (await cookies()).delete(SESSION_COOKIE);
+  (await cookies()).delete("ft_view");
   redirect("/login");
 }
 

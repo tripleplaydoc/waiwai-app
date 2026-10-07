@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { budgetPeopleWhere } from "@/lib/workspace";
 import { historyActivity } from "@/lib/history-activity";
 import { OWNER_DRAW, UNACCOUNTED, deductibleShareBps, effectiveType, typeLabel } from "@/lib/budget/expense-types";
 
@@ -96,7 +97,7 @@ export interface PersonRow { id: string | null; name: string; spentCents: number
 export async function byPerson(workspaceId: string, from: string, to: string): Promise<PersonRow[]> {
   const range = { gte: d(from), lte: d(to) };
   const [users, spent, received] = await Promise.all([
-    prisma.user.findMany({ select: { id: true, name: true, email: true } }),
+    prisma.user.findMany({ where: await budgetPeopleWhere(), select: { id: true, name: true, email: true } }),
     prisma.transaction.groupBy({ by: ["personId"], where: { workspaceId, date: range, transferGroupId: null, amountCents: { lt: 0 }, OR: [{ category: { type: "EXPENSE" } }, { categoryId: null }, { splits: { some: {} } }] }, _sum: { amountCents: true }, _count: true }),
     prisma.transaction.groupBy({ by: ["personId"], where: { workspaceId, date: range, transferGroupId: null, amountCents: { gt: 0 }, category: { type: "INCOME" } }, _sum: { amountCents: true } }),
   ]);

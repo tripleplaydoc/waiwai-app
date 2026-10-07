@@ -7,6 +7,7 @@ import { Moon, Sun, Monitor, LogOut, Wallet, Landmark, Upload, Settings, BarChar
 import { BrandName } from "@/components/brand";
 import { Avatar } from "@/components/avatar";
 import { logoutAction } from "@/app/actions/auth";
+import { switchBudgetAction } from "@/app/actions/household";
 
 const LINKS = [
   { href: "/home", label: "Home", icon: Home },
@@ -90,7 +91,21 @@ function UserMenu({ initial, name, email, avatar }: { initial: string; name: str
   );
 }
 
-export function Nav({ initial, name, email, avatar }: { initial: string; name: string; email: string; avatar: string | null }) {
+function BudgetSwitcher({ budgets, viewingId }: { budgets: { id: string; name: string }[]; viewingId: string }) {
+  if (budgets.length === 0) return null;
+  return (
+    <form action={switchBudgetAction} className="shrink-0">
+      <label className="sr-only" htmlFor="budget-switch">Whose budget to show</label>
+      <select id="budget-switch" name="userId" defaultValue={viewingId} onChange={(e) => e.currentTarget.form?.requestSubmit()}
+        className="max-w-[3.5rem] truncate rounded-full border-0 bg-white/10 py-1.5 pl-2 pr-5 text-[13px] font-semibold text-white focus:outline-none focus:ring-2 focus:ring-white/40 sm:max-w-[10rem] sm:pl-3 sm:pr-7 sm:text-sm">
+        <option value="" className="text-slate-900">Me</option>
+        {budgets.map((b) => <option key={b.id} value={b.id} className="text-slate-900">{b.name}</option>)}
+      </select>
+    </form>
+  );
+}
+
+export function Nav({ initial, name, email, avatar, privateBudgets, viewingId, showBusiness }: { initial: string; name: string; email: string; avatar: string | null; privateBudgets: { id: string; name: string }[]; viewingId: string; showBusiness: boolean }) {
   const pathname = usePathname();
   const { ws, q } = useWs();
   return (
@@ -112,8 +127,9 @@ export function Nav({ initial, name, email, avatar }: { initial: string; name: s
             );
           })}
         </nav>
-        <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
-          <div role="group" aria-label="Workspace" className="flex rounded-full bg-white/10 p-0.5">
+        <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
+          <BudgetSwitcher budgets={privateBudgets} viewingId={viewingId} />
+          {showBusiness && <div role="group" aria-label="Workspace" className="flex rounded-full bg-white/10 p-0.5">
             {(["personal", "business"] as const).map((w) => (
               <Link
                 key={w}
@@ -124,7 +140,7 @@ export function Nav({ initial, name, email, avatar }: { initial: string; name: s
                 {w}
               </Link>
             ))}
-          </div>
+          </div>}
           <UserMenu initial={initial} name={name} email={email} avatar={avatar} />
         </div>
       </div>
