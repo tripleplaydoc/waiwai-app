@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { POOL_INFLOW } from "./pool-inflow";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -6,21 +7,21 @@ type Db = PrismaClient | Prisma.TransactionClient;
  * Ready to Assign, as of the end of `asOfDate` (inclusive):
  *
  *   RTA = starting balances of on-budget, non-credit-card accounts (dated on or before asOfDate)
- *       + cumulative inflow to on-budget accounts categorized as INCOME
+ *       + cumulative money in to on-budget accounts (see POOL_INFLOW: Income-
+ *         categorized inflows, plus any other money in that has no pocket yet)
  *       − cumulative BudgetAssignment.amountCents across every category
  *         and month, for this workspace
  *
- * This matches the schema's ENVELOPE ENGINE header note exactly. It is
- * intentionally NOT cached — RTA is a running pool, not a per-month value,
- * so it has to be summed from the beginning of the workspace's history
- * every time. If that becomes a performance problem at real data volumes,
- * add a materialized cache behind this same function signature rather than
- * changing callers.
+ * It is intentionally NOT cached — RTA is a running pool, not a per-month
+ * value, so it has to be summed from the beginning of the workspace's
+ * history every time. If that becomes a performance problem at real data
+ * volumes, add a materialized cache behind this same function signature
+ * rather than changing callers.
  *
- * Uncategorized inflows (categoryId null, not a transfer) deliberately do
- * NOT count toward RTA here — they should be flagged for review and given a
- * real category (INCOME or otherwise) rather than silently inflating the
- * assignable pool.
+ * All money coming in lands in the pool first; it is then assigned out to
+ * pockets. Transfers between your own accounts never count (they only move
+ * money), and money filed under a spending pocket (a refund) reduces that
+ * pocket's spending instead of the pool.
  */
 export async function getReadyToAssign(
   db: Db,
@@ -49,12 +50,7 @@ export async function getReadyToAssign(
       _sum: { openingBalanceCents: true },
     }),
     db.transaction.aggregate({
-      where: {
-        workspaceId,
-        date: { lt: periodEnd },
-        account: { onBudget: true },
-        category: { type: "INCOME" },
-      },
+      where: { workspaceId, date: { lt: periodEnd }, ...POOL_INFLOW },
       _sum: { amountCents: true },
     }),
     db.budgetAssignment.aggregate({
