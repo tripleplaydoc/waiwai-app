@@ -43,7 +43,7 @@ export function AssignedInput({ categoryId, month, initial, label }: { categoryI
           if (e.key === "Enter") { e.preventDefault(); commit(); }
           if (e.key === "Escape") { setValue(initial); setError(undefined); e.currentTarget.blur(); }
         }}
-        className={`input nums !min-h-10 w-28 !px-3 text-right md:w-full md:max-w-32 md:!px-4 ${error ? "!border-[#C9372C]" : ""}`}
+        className={`input nums !min-h-11 w-28 !px-3 text-right md:w-full md:max-w-32 md:!px-4 ${error ? "!border-[#C9372C]" : ""}`}
       />
       {error && <span role="alert" className="mt-1 text-[11px] text-[#C9372C]">{error}</span>}
     </div>

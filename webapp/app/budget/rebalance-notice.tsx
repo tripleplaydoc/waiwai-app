@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Scale } from "lucide-react";
+import { Hint } from "@/components/hint";
 import { formatCents } from "@/lib/utils/currency";
 import { rebalanceHeldInAction } from "@/app/actions/funding";
 import { useFunding } from "./funding-view";
@@ -26,8 +27,9 @@ export function RebalanceNotice({ workspaceId }: { workspaceId: string }) {
       <span className="flex min-w-0 flex-1 basis-64 items-start gap-2">
         <Scale className="mt-0.5 size-4 shrink-0" aria-hidden />
         <span><strong>{over.map((a) => a.name).join(", ")}</strong> {over.length === 1 ? "has" : "have"} {formatCents(owed)} less cash than your pockets say they hold, while other accounts have free cash. Rebalance fixes the &quot;Held in&quot; labels only; no pocket amount changes.</span>
+        <Hint label="What does Rebalance do?">Each pocket remembers which bank account its money sits in. Rebalance just moves those labels so every account matches its real cash. Nothing is spent or moved at the bank, and no pocket gets more or less.</Hint>
       </span>
-      <button type="button" disabled={pending} className="btn btn-sm"
+      <button type="button" disabled={pending} className="btn btn-sm !min-h-11"
         onClick={() => start(async () => { const r = await rebalanceHeldInAction(workspaceId); setMsg(r.ok ? r.message ?? "Done." : r.error); router.refresh(); })}>
         {pending ? "Rebalancing…" : "Rebalance"}
       </button>

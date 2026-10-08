@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { formatCents } from "@/lib/utils/currency";
+import { Hint } from "@/components/hint";
 
 export interface CoverItem { id: string; name: string; group: string; needCents: number }
 
@@ -15,26 +16,32 @@ export function CoverBox({ ahead, anyTargets, text, canCover, stillCents, rtaCen
   const bar = canCover ? "bg-pos" : "bg-warn";
   const value = stillCents === 0 ? 1 : Math.min(1, Math.max(0, rtaCents) / stillCents);
   const canOpen = anyTargets && items.length > 0 && stillCents > 0;
-  const head = (
+  const labelText = ahead ? "Cover this month and next?" : "Cover this month?";
+  const label = (
+    <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+      {labelText}
+      <Hint label="What does this mean?">
+        This checks whether the money in your pool is enough to fund everything your pockets still need {ahead ? "this month and next" : "this month"}. If it isn&apos;t, it shows how much is short.
+      </Hint>
+    </span>
+  );
+  const body = (
     <>
-      <span className="flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-        {ahead ? "Cover this month and next?" : "Cover this month?"}
-        {canOpen && <ChevronDown className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />}
+      <span className={`flex items-center justify-between gap-2 text-sm font-bold leading-tight ${tone}`}>
+        {text}
+        {canOpen && <ChevronDown className={`size-4 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />}
       </span>
-      <span className={`block text-sm font-bold leading-tight ${tone}`}>{text}</span>
       <span className="block h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="presentation"><span className={`block h-full rounded-full ${bar} transition-[width] duration-500`} style={{ width: `${Math.round(value * 100)}%` }} /></span>
     </>
   );
   return (
-    <div className="flex flex-col justify-center gap-1 border-t border-[#E2E8F0] px-3 py-2 md:border-l md:border-t-0 dark:border-slate-800" aria-label="Can I cover this month">
+    <div className="flex flex-col justify-center gap-1 border-t border-slate-100 px-4 py-2.5 md:border-l md:border-t-0 dark:border-slate-800" aria-label="Can I cover this month">
+      {label}
       {!anyTargets ? (
-        <>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{ahead ? "Cover this month and next?" : "Cover this month?"}</span>
-          <p className="text-xs text-slate-600 dark:text-slate-300">Add a monthly cost or goal.</p>
-        </>
+        <p className="text-xs text-slate-600 dark:text-slate-300">Add a monthly cost or goal.</p>
       ) : canOpen ? (
-        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-11 w-full flex-col justify-center gap-1 text-left">{head}</button>
-      ) : <div className="flex flex-col gap-1">{head}</div>}
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-11 w-full flex-col justify-center gap-1.5 text-left">{body}</button>
+      ) : <div className="flex flex-col gap-1.5">{body}</div>}
       {children}
       {open && canOpen && (
         <div className="mt-1 space-y-2 border-t border-[#E2E8F0] pt-2 dark:border-slate-800">

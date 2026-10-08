@@ -97,7 +97,8 @@ function BudgetSwitcher({ budgets, viewingId }: { budgets: { id: string; name: s
     <form action={switchBudgetAction} className="shrink-0">
       <label className="sr-only" htmlFor="budget-switch">Whose budget to show</label>
       <select id="budget-switch" name="userId" defaultValue={viewingId} onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        className="max-w-[4.25rem] truncate rounded-full border-0 bg-white/10 py-1.5 pl-2 pr-5 text-[13px] font-semibold text-white focus:outline-none focus:ring-2 focus:ring-white/40 sm:max-w-[10rem] sm:pl-3 sm:pr-7 sm:text-sm">
+        style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='white' stroke-width='1.5'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 6px center" }}
+        className="w-[3.1rem] appearance-none truncate rounded-full border-0 bg-white/10 py-1.5 pl-2.5 pr-5 text-[13px] font-semibold text-white focus:outline-none focus:ring-2 focus:ring-white/40 sm:w-auto sm:max-w-[10rem] sm:pl-3 sm:pr-7 sm:text-sm">
         <option value="" className="text-slate-900">Me</option>
         {budgets.map((b) => <option key={b.id} value={b.id} className="text-slate-900">{b.name}</option>)}
       </select>

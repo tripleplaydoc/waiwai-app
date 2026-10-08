@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { CheckCircle2, AlertTriangle, Lock } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Lock, Search, X } from "lucide-react";
+import { amountText, matchesSearch } from "@/lib/search-text";
+import { NeedsAttention, type AttentionRow } from "./needs-attention";
 import { addClosedAccountAction, classifyPayeeAction, payeeRowsAction, type PayeeRowsResult, clearHistoryAction, saveYearTotalsAction, setGoLiveAction, setHistoryStartAction, setSealAction } from "@/app/actions/history";
 import { typesFor } from "@/lib/budget/expense-types";
 import { centsToInput, formatCents } from "@/lib/utils/currency";
@@ -18,18 +20,44 @@ function Delta({ cur, prev, goodWhenUp }: { cur: number; prev: number | undefine
   return <span className={(p > 0) === goodWhenUp ? "text-pos" : "text-neg"}>{p > 0 ? "▲" : "▼"} {Math.abs(p)}%</span>;
 }
 
-export function HistoryClient({ vm, workspaceId, isBusiness, taxBps, wsQuery }: { vm: HistoryVM; workspaceId: string; isBusiness: boolean; taxBps: number; wsQuery: string }) {
+export function HistoryClient({ vm, attention, attentionCount, workspaceId, isBusiness, taxBps, wsQuery }: { vm: HistoryVM; attention: AttentionRow[]; attentionCount: number; workspaceId: string; isBusiness: boolean; taxBps: number; wsQuery: string }) {
+  const [q, setQ] = useState("");
+  const payees = vm.payees.filter((p) => matchesSearch([p.payee], q));
   return (
     <div className="space-y-5">
+      {vm.totalRows > 0 && <HistorySearch q={q} setQ={setQ} wsQuery={wsQuery} rowMatches={attention.filter((r) => matchesSearch([r.payee, r.memo, r.account, r.date, amountText(r.amountCents)], q)).length} payeeMatches={payees.length} />}
+      {attentionCount > 0 && <NeedsAttention rows={attention} total={attentionCount} q={q} workspaceId={workspaceId} isBusiness={isBusiness} wsQuery={wsQuery} />}
       <GoLive workspaceId={workspaceId} goLive={vm.goLive} />
       <Proof accounts={vm.accounts} wsQuery={wsQuery} workspaceId={workspaceId} />
-      {vm.payees.length > 0 && <Classify payees={vm.payees} workspaceId={workspaceId} isBusiness={isBusiness} wsQuery={wsQuery} />}
+      {payees.length > 0 && <Classify payees={payees} workspaceId={workspaceId} isBusiness={isBusiness} wsQuery={wsQuery} />}
       <Years years={vm.years} isBusiness={isBusiness} taxBps={taxBps} empty={vm.totalRows === 0} wsQuery={wsQuery} />
       <Totals vm={vm} workspaceId={workspaceId} isBusiness={isBusiness} />
       <Seal vm={vm} workspaceId={workspaceId} />
       {vm.totalRows > 0 && <Link href={`/history/rows${wsQuery}`} className="btn min-h-11 w-full justify-center">Browse, edit or add history rows</Link>}
       <Link href={`/history/export${wsQuery}`} prefetch={false} className="btn min-h-11 w-full justify-center">Download Schedule C by year (CSV)</Link>
     </div>
+  );
+}
+
+function HistorySearch({ q, setQ, wsQuery, rowMatches, payeeMatches }: { q: string; setQ: (v: string) => void; wsQuery: string; rowMatches: number; payeeMatches: number }) {
+  const active = q.trim().length > 0;
+  const allHref = `/history/rows?${new URLSearchParams({ q: q.trim(), ...(wsQuery ? { ws: "business" } : {}) })}`;
+  return (
+    <section aria-label="Search history" className="space-y-1.5">
+      <div className="relative">
+        <label htmlFor="hist-q" className="sr-only">Search history by payee, memo, account or amount</label>
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
+        <input id="hist-q" type="search" inputMode="search" autoComplete="off" enterKeyHint="search" className="input !pl-10 !pr-12 [&::-webkit-search-cancel-button]:hidden" placeholder="Search payee, memo or amount"
+          value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }} />
+        {active && <button type="button" aria-label="Clear search" onClick={() => setQ("")} className="absolute right-1 top-1/2 inline-flex size-11 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-100"><X className="size-4" aria-hidden /></button>}
+      </div>
+      {active && (
+        <p role="status" className="flex flex-wrap items-center gap-x-3 text-sm text-slate-600 dark:text-slate-300">
+          <span className="nums">{rowMatches.toLocaleString()} item{rowMatches === 1 ? "" : "s"} below need attention and match; {payeeMatches.toLocaleString()} payee{payeeMatches === 1 ? "" : "s"} to name.</span>
+          <Link href={allHref} className="inline-flex min-h-11 items-center font-semibold text-[#2E6BE6] underline dark:text-indigo-300">Search all history rows →</Link>
+        </p>
+      )}
+    </section>
   );
 }
 

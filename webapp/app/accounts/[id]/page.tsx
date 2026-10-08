@@ -15,6 +15,9 @@ import { getBudgetSummary } from "@/lib/budget/summary";
 import { startOfMonthUTC } from "@/lib/budget/dates";
 import { isoToDate } from "@/lib/utils/dates";
 import { CardPanel } from "./card-panel";
+import { amountText } from "@/lib/search-text";
+import { CategoryPickerProvider, SwipeRow } from "./swipe-categorize";
+import { TxFilterBar } from "./tx-filter";
 import { AddTransactionButton, CategorySelect, ClearedButton, ConfirmDeleteButton, EditTransactionButton, PersonSelect, ReceiptCell, type EditableTx } from "./transaction-controls";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +49,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   const total = await prisma.transaction.count({ where: { accountId: id } });
   // Pending = entered but the bank hasn't posted it yet. It still counts in the balance; this just shows how much of it is still in flight.
   const pendingAgg = await prisma.transaction.aggregate({ where: { accountId: id, clearedStatus: "UNCLEARED" }, _sum: { amountCents: true }, _count: true });
+  const uncategorized = await prisma.transaction.count({ where: { accountId: id, categoryId: null, transferGroupId: null, splits: { none: {} } } });
   const pendingCents = pendingAgg._sum.amountCents ?? 0;
   const pendingCount = pendingAgg._count;
   const balance = account.balanceMode === "MANUAL" ? account.manualBalanceEntries[0]?.balanceCents ?? 0 : account.openingBalanceCents + (sum._sum.amountCents ?? 0);
@@ -58,6 +62,10 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   });
   const wsQ = account.workspace.type === "BUSINESS" ? "?ws=business" : "";
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
+  const catName = new Map(categories.map((c) => [c.id, c.name]));
+  const isUncat = (t: (typeof transactions)[number]) => !t.categoryId && !t.transferGroupId && t._count.splits === 0;
+  /** Everything the search box looks at for one transaction. */
+  const searchText = (t: (typeof transactions)[number]) => [t.payee?.name, t.memo, t.categoryId ? catName.get(t.categoryId) : isUncat(t) ? "uncategorized" : t.transferGroupId ? "transfer" : "", amountText(t.amountCents), formatShortDate(t.date), dateToIso(t.date), t.tags.join(" ")].filter(Boolean).join(" | ");
   const catOptions = categories.map((c) => ({ id: c.id, name: c.name, group: c.categoryGroupId ? groupName.get(c.categoryGroupId) ?? "Other" : "Other", type: c.type, paidFromId: c.paidFromAccountId }));
 
   const isCard = account.type === "CREDIT_CARD" && account.onBudget && account.balanceMode !== "MANUAL";
@@ -72,6 +80,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         <div>
           <Link href={`/accounts${wsQ}`} className="text-xs text-slate-500 hover:underline">← All accounts</Link>
           <h1 className="text-2xl font-semibold tracking-tight">{account.name}</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300">{uncategorized > 0 ? `${uncategorized} transaction${uncategorized === 1 ? "" : "s"} still need a category.` : "Every transaction in this account, newest first."}</p>
         </div>
         <div className={`nums text-2xl font-semibold ${balance < 0 ? "text-[#C9372C]" : "text-[#2E7D32]"}`}>{formatCents(balance)}</div>
         {account.balanceMode !== "MANUAL" && <EditAccountButton label="Edit" account={{ id: account.id, name: account.name, type: account.type, openingBalanceCents: account.openingBalanceCents, openingBalanceDate: account.openingBalanceDate ? dateToIso(account.openingBalanceDate) : null, onBudget: account.onBudget }} />}
@@ -112,11 +121,14 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         </form>
       )}
 
-      {/* Phone: one tidy card per transaction */}
+      {transactions.length > 0 && <TxFilterBar loaded={transactions.length} uncategorized={uncategorized} />}
+
+      {/* Phone: one tidy card per transaction. Swipe a card sideways to pick its category. */}
+      <CategoryPickerProvider categories={catOptions.map((c) => ({ id: c.id, name: c.name, group: c.group, type: c.type }))}>
       <section className="card divide-y divide-[#E2E8F0] overflow-hidden md:hidden dark:divide-slate-800" aria-label="Transactions">
         {transactions.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-500">No transactions yet. Tap + to add one, or import a CSV.</p>}
         {transactions.map((t) => (
-          <article key={t.id} className="space-y-2 px-4 py-3">
+          <SwipeRow key={t.id} transactionId={t.id} payee={t.payee?.name ?? ""} amountCents={t.amountCents} current={t.categoryId ?? ""} canCategorize={!t.transferGroupId && t._count.splits === 0} search={searchText(t)} uncategorized={isUncat(t)}>
             <div className="flex items-start justify-between gap-3">
               <ClearedButton transactionId={t.id} status={t.clearedStatus} />
               <div className="min-w-0 flex-1">
@@ -136,10 +148,11 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                 <ConfirmDeleteButton />
               </form>
             </div>
-          </article>
+          </SwipeRow>
         ))}
         {total > LIMIT && <p className="px-4 py-2 text-xs text-slate-500">Showing the latest {LIMIT} of {total} transactions.</p>}
       </section>
+      </CategoryPickerProvider>
 
       <section className="card hidden overflow-x-auto md:block">
         <table className="w-full min-w-[1000px] border-collapse">
@@ -154,7 +167,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
               <tr><td colSpan={10} className="td text-slate-500">No transactions yet. Press <span className="kbd">N</span> to add one, or import a CSV.</td></tr>
             )}
             {transactions.map((t) => (
-              <tr key={t.id} className={`border-b border-[#E2E8F0] last:border-0 dark:border-slate-800 ${t.clearedStatus === "UNCLEARED" ? "bg-warn-soft/20" : ""}`}>
+              <tr key={t.id} data-tx={t.id} data-s={searchText(t)} data-uncat={isUncat(t) ? "1" : "0"} className={`border-b border-[#E2E8F0] last:border-0 dark:border-slate-800 ${t.clearedStatus === "UNCLEARED" ? "bg-warn-soft/20" : ""}`}>
                 <td className="td"><ClearedButton transactionId={t.id} status={t.clearedStatus} /></td>
                 <td className="td nums whitespace-nowrap" title={dateToIso(t.date)}>{formatShortDate(t.date)}</td>
                 <td className="td">

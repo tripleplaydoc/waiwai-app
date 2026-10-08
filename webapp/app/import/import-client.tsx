@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Hint } from "@/components/hint";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { CSV_TEMPLATES, parseBankCsv, type CsvTemplateId } from "@/lib/csv";
 import { formatCents } from "@/lib/utils/currency";
@@ -114,7 +115,7 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
             </select>
           </div>
           <div>
-            <label htmlFor="imp-tpl" className="label">Column layout{isOfx ? " (not needed for bank files)" : ""}</label>
+            <label htmlFor="imp-tpl" className="label">Column layout{isOfx ? " (not needed for bank files)" : ""} <Hint>Banks order their CSV columns differently. Pick the one that matches your file, or leave Auto-detect and the header row is read for you.</Hint></label>
             <select id="imp-tpl" className="input" disabled={isOfx} value={template} onChange={(e) => setTemplate(e.target.value as CsvTemplateId)}>
               {CSV_TEMPLATES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
@@ -122,7 +123,7 @@ export function ImportClient({ accounts, initialAccountId, pockets, workspaceLab
         </div>
         {hint && <p className="text-xs text-slate-500 dark:text-slate-400">{hint} A header row is detected automatically; without one, the layout you pick is used.</p>}
         <div>
-          <label htmlFor="imp-file" className="label">Bank file: CSV, or OFX / QFX / QBO (QuickBooks)</label>
+          <label htmlFor="imp-file" className="label">Bank file: CSV, or OFX / QFX / QBO (QuickBooks) <Hint>OFX, QFX and QBO are the "Download for Quicken or QuickBooks" files most banks offer. They carry the bank's own balance, so the app can check itself against it.</Hint></label>
           <input id="imp-file" type="file" accept=".csv,.ofx,.qfx,.qbo,text/csv,text/plain" onChange={(e) => onFile(e.target.files?.[0])} className="input !py-2" />
         </div>
         <div>

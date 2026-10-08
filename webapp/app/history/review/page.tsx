@@ -15,12 +15,18 @@ export default async function HistoryReviewPage({ searchParams }: { searchParams
   const wsKey = wsKeyFromParam(sp.ws);
   const ws = await getWorkspace(wsKey);
   const q = wsKey === "business" ? "?ws=business" : "";
-  const back = <Link href={`/history${q}`} className="text-sm font-semibold text-blue-700 dark:text-blue-300">← History</Link>;
-  if (!(await historyReady())) return <div className="space-y-3">{back}<div className="card p-5 text-sm">Run the History migration first.</div></div>;
+  const back = <Link href={`/history${q}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-700 dark:text-blue-300">← History</Link>;
+  const heading = (title: string) => (
+    <div>
+      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <p className="text-sm text-slate-600 dark:text-slate-300">Go through one past year payee by payee, so its income and expense totals can be trusted.</p>
+    </div>
+  );
+  if (!(await historyReady())) return <div className="space-y-3">{back}{heading("Review a past year")}<div className="card p-5 text-sm">Run the History migration first.</div></div>;
 
   const years = (await prisma.$queryRaw<{ y: number }[]>`select distinct extract(year from "date")::int as y from "historical_transactions" where "workspaceId" = ${ws.id} order by y desc`).map((r) => r.y);
   const year = /^\d{4}$/.test(sp.year ?? "") ? Number(sp.year) : years[0];
-  if (!year) return <div className="space-y-3">{back}<div className="card p-5 text-sm">Import some past years first, then come back to go through them.</div></div>;
+  if (!year) return <div className="space-y-3">{back}{heading("Review a past year")}<div className="card p-5 text-sm">Import some past years first, then come back to go through them.</div></div>;
 
   const [rows, sealed, accounts] = await Promise.all([
     prisma.historicalTransaction.findMany({ where: { workspaceId: ws.id, date: { gte: new Date(`${year}-01-01T00:00:00.000Z`), lte: new Date(`${year}-12-31T00:00:00.000Z`) } }, orderBy: [{ date: "desc" }, { id: "asc" }] }),
@@ -34,7 +40,7 @@ export default async function HistoryReviewPage({ searchParams }: { searchParams
   return (
     <div className="space-y-4">
       {back}
-      <h1 className="text-2xl font-semibold tracking-tight">Review {year}</h1>
+      {heading(`Review ${year}`)}
       <ReviewClient workspaceId={ws.id} isBusiness={ws.type === "BUSINESS"} year={year} years={years} wsQuery={q} sealed={sealed !== null && year <= sealed}
         reviewedAt={reviewedAt} groups={groupForReview(vm)} totals={reviewTotals(vm)} />
     </div>

@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Check, ChevronDown, Lock } from "lucide-react";
 import { markYearReviewedAction, setReviewBulkAction, setReviewGroupAction, setReviewRowAction } from "@/app/actions/history";
-import { typeLabel, typesFor } from "@/lib/budget/expense-types";
+import { Hint } from "@/components/hint";
+import { typeOptionsFor } from "../type-options";
 import { currentOf, filterGroups, type ReviewFilter, type ReviewGroup, type ReviewRow, type ReviewTotals } from "@/lib/history-review";
 import { formatCents } from "@/lib/utils/currency";
 
@@ -49,10 +50,10 @@ export function ReviewClient({ workspaceId, isBusiness, year, years, wsQuery, se
         <dl className="nums grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
           <div><dt className="text-slate-500">{isBusiness ? "Revenue" : "Income"}</dt><dd className="font-semibold">{formatCents(totals.incomeCents)}</dd></div>
           <div><dt className="text-slate-500">Expenses</dt><dd className="font-semibold">{formatCents(totals.expenseCents)}</dd></div>
-          <div><dt className="text-slate-500">Excluded (not counted)</dt><dd className="font-semibold">{formatCents(totals.transferCents)} <span className="text-xs font-normal text-slate-500">· {totals.transferCount}</span></dd></div>
+          <div><dt className="text-slate-500">Excluded (not counted) <Hint>Money that moved between your own accounts, or personal spending in a business book. It is kept in history but left out of income and expense totals so nothing is counted twice.</Hint></dt><dd className="font-semibold">{formatCents(totals.transferCents)} <span className="text-xs font-normal text-slate-500">· {totals.transferCount}</span></dd></div>
           <div><dt className="text-slate-500">Rows</dt><dd className="font-semibold">{totals.rows.toLocaleString()}{totals.needsType > 0 && <span className="text-xs font-normal text-[#8A5A00]"> · {totals.needsType} need a type</span>}</dd></div>
         </dl>
-        <p className="text-xs text-slate-500">Each line below is one payee. Change its type and every row from that payee in {year} follows. Open a line to fix single rows. Income and expense totals update as you go.</p>
+        <p className="text-xs text-slate-500">A payee is whoever the money went to or came from. <Hint>A type is the label that decides where a row lands in your yearly totals, such as Software or Sales. Rows without one are guessed from the wording or left for you.</Hint> Each line below is one payee. Change its type and every row from that payee in {year} follows. Open a line to fix single rows. Income and expense totals update as you go.</p>
         {err && <p role="alert" className="text-sm text-neg">{err}</p>}
       </div>
 
@@ -86,12 +87,7 @@ export function ReviewClient({ workspaceId, isBusiness, year, years, wsQuery, se
   );
 }
 
-function optionsFor(dir: "in" | "out", isBusiness: boolean, current: string) {
-  const base = dir === "in" ? typesFor("INCOME") : typesFor("EXPENSE").filter((t) => (t.group === "Business") === isBusiness);
-  const list = base.map((t) => ({ key: t.key, label: t.label }));
-  if (current && current !== "TRANSFER" && !list.some((o) => o.key === current)) list.unshift({ key: current, label: typeLabel(current) ?? current });
-  return list;
-}
+const optionsFor = typeOptionsFor;
 
 function TypeSelect({ id, label, value, dir, isBusiness, disabled, onPick }: { id: string; label: string; value: string | null; dir: "in" | "out"; isBusiness: boolean; disabled: boolean; onPick: (v: string) => void }) {
   const opts = optionsFor(dir, isBusiness, value ?? "");

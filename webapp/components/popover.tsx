@@ -36,7 +36,7 @@ export function Popover({ label, icon, align = "left", width = "w-[min(92vw,26re
     <div ref={box} className="relative">
       <button
         type="button" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}
-        className="flex min-h-9 items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        className="relative flex min-h-9 items-center gap-1.5 rounded-full border before:absolute before:-inset-y-1 before:inset-x-0 border-[#E2E8F0] bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
       >
         {icon}{label}
       </button>

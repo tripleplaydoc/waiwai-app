@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { formatCents } from "@/lib/utils/currency";
+import { Hint } from "@/components/hint";
 import type { CashView } from "@/lib/budget/funding";
 
 interface View { cash: CashView; meId: string | null }
@@ -55,7 +56,14 @@ export function ReadyAmount({ rtaCents }: { rtaCents: number }) {
   const split = hasSeveralStewards(cash) && rtaCents > 0 ? readyBySteward(cash) : [];
   return (
     <div className="flex flex-col">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">{rtaCents < 0 ? "Over-assigned" : "Money in pool"}</span>
+      <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+        {rtaCents < 0 ? "Over-assigned" : "Money in pool"}
+        <Hint label={rtaCents < 0 ? "What does over-assigned mean?" : "What is the money in the pool?"}>
+          {rtaCents < 0
+            ? "You have given pockets more money than your accounts actually hold. Take some back from a pocket to fix it."
+            : "The pool is money that has arrived but doesn't have a job yet. Give it a job by assigning it to your pockets."}
+        </Hint>
+      </span>
       <span className={`nums text-2xl font-bold leading-tight tracking-tight ${rtaCents < 0 ? "text-neg" : "text-pos"}`}>{formatCents(rtaCents)}</span>
       {rtaCents < 0 && (() => {
         const over = cash.accounts.filter((a) => a.readyCents < 0).sort((a, b) => a.readyCents - b.readyCents);

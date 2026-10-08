@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { ArrowDownToLine, Droplets, Pencil } from "lucide-react";
 import { Modal } from "@/components/modal";
+import { Hint } from "@/components/hint";
 import { assignPersonalFlowAction, savePersonalFlowSettingsAction, setupPersonalFlowAction } from "@/app/actions/personal-flow";
 import { formatCents } from "@/lib/utils/currency";
 import type { PersonalFlowVM } from "@/lib/budget/personal-flow-types";
@@ -35,7 +36,7 @@ export function PersonalFlowPanel({ workspaceId, flow }: { workspaceId: string; 
   if (!flow.enabled) {
     return (
       <div className="space-y-2 text-sm">
-        <p className="font-bold">Give · Save · Live</p>
+        <p className="flex items-center gap-1.5 font-bold">Give · Save · Live <Hint label="What are Give, Save and Live?">Give is for generosity, Save is for your future, and Live is for everyday spending. One Assign button splits your money in the pool across the three using the percentages you choose.</Hint></p>
         <p className="text-xs text-slate-600 dark:text-slate-300">
           One <strong>Assign</strong> button splits the money in the pool into Give 20%, Save 10% and Live 70% (you can change every percentage).
           This adds a Give, a Save and a Live category to your budget.
@@ -51,7 +52,7 @@ export function PersonalFlowPanel({ workspaceId, flow }: { workspaceId: string; 
   return (
     <div className="text-sm">
       <div className="mb-1 flex items-center justify-between">
-        <span className="font-bold">Give · Save · Live · Reservoirs</span>
+        <span className="flex items-center gap-1.5 font-bold">Give · Save · Live · Reservoirs <Hint label="What are Give, Save, Live and Reservoirs?">Give, Save and Live are the three shares your money is split into. Reservoirs are safety cushions of cash, a few months of living costs, that fill up before extra money goes on to Save.</Hint></span>
         <button type="button" className="btn btn-sm" onClick={() => setEditing(true)} aria-label="Flow settings"><Pencil className="size-3.5" aria-hidden /> Settings</button>
       </div>
       <p className="mb-1 text-[11px] text-slate-500">Assign sends money: {flow.buckets.filter((b) => b.bps > 0).map((b) => `${pct(b.bps)}% ${b.label}`).join(" · ")}.</p>

@@ -10,7 +10,7 @@ function Seg<T extends string>({ label, value, options, onPick, disabled }: { la
     <div role="group" aria-label={label} className="inline-flex rounded-full bg-slate-100 p-0.5 dark:bg-slate-800">
       {options.map((o) => (
         <button key={o.v} type="button" aria-pressed={value === o.v} disabled={disabled} onClick={() => value !== o.v && onPick(o.v)}
-          className={`min-h-7 rounded-full px-2.5 text-[11px] font-semibold leading-none ${value === o.v ? "bg-white text-[#4F46E5] shadow-sm dark:bg-slate-700 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:text-slate-400"}`}>{o.text}</button>
+          className={`relative min-h-7 rounded-full px-2.5 text-[11px] font-semibold leading-none before:absolute before:-inset-y-2 before:-inset-x-0.5 ${value === o.v ? "bg-white text-[#4F46E5] shadow-sm dark:bg-slate-700 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:text-slate-400"}`}>{o.text}</button>
       ))}
     </div>
   );

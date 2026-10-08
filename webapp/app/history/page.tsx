@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
-import { historyReady, loadHistory } from "@/lib/history";
+import { prisma } from "@/lib/prisma";
+import { dateToIso } from "@/lib/utils/dates";
+import { getSealedThrough, historyReady, loadHistory } from "@/lib/history";
 import { taxRateBps } from "@/lib/reports/pnl";
 import { HistoryClient } from "./history-client";
+import type { AttentionRow } from "./needs-attention";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +28,16 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       </div>
     );
   }
-  const [vm, bps] = await Promise.all([loadHistory(ws.id, ws.type === "BUSINESS"), taxRateBps(ws.id)]);
+  const todo = { workspaceId: ws.id, typeKey: null, kind: { not: "TRANSFER" } };
+  const [vm, bps, todoCount, todoRows, sealed, accts] = await Promise.all([
+    loadHistory(ws.id, ws.type === "BUSINESS"), taxRateBps(ws.id),
+    prisma.historicalTransaction.count({ where: todo }),
+    prisma.historicalTransaction.findMany({ where: todo, orderBy: [{ date: "desc" }, { id: "asc" }], take: 40 }),
+    getSealedThrough(ws.id),
+    prisma.account.findMany({ where: { workspaceId: ws.id }, select: { id: true, name: true } }),
+  ]);
+  const accName = new Map(accts.map((a) => [a.id, a.name]));
+  const attention: AttentionRow[] = todoRows.map((r) => ({ id: r.id, date: dateToIso(r.date), amountCents: r.amountCents, payee: r.payee, memo: r.memo, account: accName.get(r.accountId) ?? "", sealed: sealed !== null && r.date.getUTCFullYear() <= sealed }));
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end gap-3">
@@ -35,7 +47,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
         </div>
         <Link href={`/history/import${q}`} className="btn btn-primary ml-auto min-h-11">Import past years</Link>
       </div>
-      <HistoryClient vm={vm} workspaceId={ws.id} isBusiness={ws.type === "BUSINESS"} taxBps={bps} wsQuery={q} />
+      <HistoryClient vm={vm} attention={attention} attentionCount={todoCount} workspaceId={ws.id} isBusiness={ws.type === "BUSINESS"} taxBps={bps} wsQuery={q} />
     </div>
   );
 }

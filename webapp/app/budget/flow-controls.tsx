@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDownToLine, Droplets, Pencil, Plus, ShieldPlus } from "lucide-react";
 import { Modal } from "@/components/modal";
+import { Hint } from "@/components/hint";
 import { addCashPocketAction, assignWaterfallAction, combineTaxReserveAction, coverShortfallAction, saveWaterfallSettingsAction, splitTaxReserveAction, setOpexMonthsAheadAction, setupWaterfallAction } from "@/app/actions/cashflow";
 import { formatCents } from "@/lib/utils/currency";
 import type { FlowVM } from "@/lib/budget/flow-types";
@@ -59,7 +60,7 @@ export function FlowPanel({ workspaceId, month, flow }: { workspaceId: string; m
   if (!flow.enabled) {
     return (
       <div className="space-y-2 text-sm">
-        <p className="font-bold">Cashflow waterfall</p>
+        <p className="flex items-center gap-1.5 font-bold">Cashflow waterfall <Hint label="What is the waterfall?">Money in the pool flows down in order: first the tax share, then OPEX (running costs), then Reservoir 1, then Reservoir 2 and Cash. Each step fills up before the next one gets any. Reservoirs are cash cushions that cover a few months of OPEX.</Hint></p>
         <p className="text-xs text-slate-600 dark:text-slate-300">
           One <strong>Assign</strong> button sends the money in the pool down a chain: {pct(flow.taxBps)}% to taxes, the rest to OPEX, then Reservoir 1, then Reservoir 2 and Cash.
           This adds a Reserves category (Reservoir 1 &amp; 2) and a Cash category (Sinking Funds, Future Investments, Distributions) to your budget.
@@ -77,7 +78,7 @@ export function FlowPanel({ workspaceId, month, flow }: { workspaceId: string; m
   return (
     <div className="text-sm">
       <div className="mb-1 flex items-center justify-between">
-        <span className="font-bold">Cashflow waterfall</span>
+        <span className="flex items-center gap-1.5 font-bold">Cashflow waterfall <Hint label="What is the waterfall?">Money in the pool flows down in order: first the tax share, then OPEX (running costs), then Reservoir 1, then Reservoir 2 and Cash. Each step fills up before the next one gets any. Reservoirs are cash cushions that cover a few months of OPEX.</Hint></span>
         <button type="button" className="btn btn-sm" onClick={() => setEditing(true)} aria-label="Waterfall settings"><Pencil className="size-3.5" aria-hidden /> Settings</button>
       </div>
       <p className="mb-1 text-[11px] text-slate-500">Assign sends money: {pct(flow.taxBps)}% taxes · {pct(10000 - flow.taxBps)}% OPEX → Reservoir 1 → Reservoir 2 / Cash.</p>

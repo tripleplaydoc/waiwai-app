@@ -15,8 +15,14 @@ export default async function HistoryRowsPage({ searchParams }: { searchParams: 
   const wsKey = wsKeyFromParam(sp.ws);
   const ws = await getWorkspace(wsKey);
   const q = wsKey === "business" ? "?ws=business" : "";
-  const back = <Link href={`/history${q}`} className="text-sm font-semibold text-blue-700 dark:text-blue-300">← History</Link>;
-  if (!(await historyReady())) return <div className="space-y-3">{back}<div className="card p-5 text-sm">Run the History migration first.</div></div>;
+  const back = <Link href={`/history${q}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-700 dark:text-blue-300">← History</Link>;
+  const heading = (
+    <div>
+      <h1 className="text-2xl font-semibold tracking-tight">History rows</h1>
+      <p className="text-sm text-slate-600 dark:text-slate-300">Every past-year row, one at a time. Search, fix a type, or add one by hand. None of it changes your live balances.</p>
+    </div>
+  );
+  if (!(await historyReady())) return <div className="space-y-3">{back}{heading}<div className="card p-5 text-sm">Run the History migration first.</div></div>;
 
   const year = /^\d{4}$/.test(sp.year ?? "") ? Number(sp.year) : null;
   const page = Math.max(1, Number(sp.page) || 1);
@@ -39,7 +45,7 @@ export default async function HistoryRowsPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-4">
       {back}
-      <h1 className="text-2xl font-semibold tracking-tight">History rows</h1>
+      {heading}
       <RowsClient workspaceId={ws.id} isBusiness={ws.type === "BUSINESS"} rows={vms} total={total} page={page} pageSize={PAGE}
         accounts={allAccounts.map((a) => ({ id: a.id, name: a.isArchived ? `${a.name} (closed)` : a.name }))}
         filters={{ account: sp.account ?? "", year: sp.year ?? "", q: sp.q ?? "", todo: sp.todo === "1" }} wsQuery={q} />

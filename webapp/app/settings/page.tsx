@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowRight, CircleHelp } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -24,6 +26,11 @@ export default async function SettingsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage how you sign in.</p>
       </div>
+      <Link href="/help" className="card flex min-h-14 items-center gap-3 px-5 py-3">
+        <CircleHelp className="size-5 shrink-0 text-water" aria-hidden />
+        <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">How WaiWai works</span><span className="block text-xs text-slate-500 dark:text-slate-400">The pool, pockets, flow and more, explained in a minute.</span></span>
+        <ArrowRight className="size-4 shrink-0 text-slate-400" aria-hidden />
+      </Link>
       <section className="card p-6" aria-labelledby="profile-h">
         <h2 id="profile-h" className="mb-4 text-base font-semibold">Profile</h2>
         <div className="mb-5"><AvatarForm name={user.name || user.email} src={avatarUrl(user)} /></div>

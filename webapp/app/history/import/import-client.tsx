@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Hint } from "@/components/hint";
 import { useMemo, useState, useTransition } from "react";
 import { CSV_TEMPLATES, parseBankCsv, type CsvTemplateId } from "@/lib/csv";
 import { classifyHistoryRow } from "@/lib/history-math";
@@ -58,7 +59,7 @@ export function HistoryImportClient({ accounts, initialAccountId, isBusiness, ws
             </select>
           </div>
           <div>
-            <label htmlFor="hi-tpl" className="label">Column layout</label>
+            <label htmlFor="hi-tpl" className="label">Column layout <Hint>Banks order their CSV columns differently. Pick the one that matches your file, or leave Auto-detect and the header row is read for you.</Hint></label>
             <select id="hi-tpl" className="input" value={template} onChange={(e) => setTemplate(e.target.value as CsvTemplateId)}>
               {CSV_TEMPLATES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
@@ -84,7 +85,7 @@ export function HistoryImportClient({ accounts, initialAccountId, isBusiness, ws
             </div>
             <ul className="space-y-0.5 text-xs text-slate-600 dark:text-slate-300">
               <li>Years: {plan.years.map(([y, n]) => `${y} (${n})`).join(", ") || "none"}. Net movement <span className="nums">{formatCents(plan.net)}</span>.</li>
-              <li>{plan.typed} typed automatically, {plan.transfers} transfers set aside, {plan.usable.length - plan.typed - plan.transfers} left to name on the History page.</li>
+              <li>{plan.typed} typed automatically, {plan.transfers} transfers set aside <Hint>A transfer is money moving between your own accounts. It is kept but not counted as income or spending.</Hint>, {plan.usable.length - plan.typed - plan.transfers} left to name on the History page.</li>
               {plan.late > 0 && <li className="text-[#8A5A00]">{plan.late} row{plan.late === 1 ? "" : "s"} dated on or after {cutoff} will be left out.</li>}
               {parsed.errors.length > 0 && <li className="text-[#8A5A00]">{parsed.errors.length} line{parsed.errors.length === 1 ? "" : "s"} could not be read and will be skipped.</li>}
             </ul>

@@ -188,7 +188,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="text-lg font-bold tracking-tight sm:text-xl">{workspace.name} budget</h1>
         {!simple && (allPockets.length > 0 || goals.length > 0 || loans.length > 0) && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Popover icon={<Droplets className="size-3.5 text-[#2E6BE6]" aria-hidden />} label={!isPersonal && flow.enabled && flow.owedCents > 0 ? <>Flow <span className="rounded-full bg-warn-soft px-1.5 text-warn">owes</span></> : "Flow"}>
               {pflow ? <PersonalFlowPanel workspaceId={workspace.id} flow={pflow} /> : <FlowPanel workspaceId={workspace.id} month={mp} flow={flow} />}
             </Popover>
@@ -208,7 +208,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
             >
               <LoansPanel workspaceId={workspace.id} loans={loans} groups={allGroups} defaultGroupId={flow.opexGroupId && allGroups.some((g) => g.id === flow.opexGroupId) ? flow.opexGroupId : "__new"} banks={cash.accounts.map((a) => ({ id: a.id, name: a.name }))} assets={assetChoices} pockets={pocketChoices} />
             </Popover>
-            <Link href={`/forecast${wsKey === "business" ? "?ws=business" : ""}`} className="flex min-h-9 items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+            <Link href={`/forecast${wsKey === "business" ? "?ws=business" : ""}`} className="relative flex min-h-9 items-center gap-1.5 rounded-full border before:absolute before:-inset-y-1 before:inset-x-0 border-[#E2E8F0] bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
               <LineChart className="size-3.5 text-[#2E6BE6]" aria-hidden />Forecast{cashShort && <span className="rounded-full bg-indigo-50 px-1.5 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200">plan ahead</span>}
             </Link>
             {goals.length > 0 && (
@@ -221,9 +221,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         )}
         <ViewToggle mode={mode} horizon={horizon} />
         <div className="flex w-full items-center justify-between sm:ml-auto sm:w-auto">
-          <Link href={`/budget?month=${monthParam(shiftMonth(month, -1))}${wsQ}`} className="btn size-10 !px-0" aria-label="Previous month"><ChevronLeft className="size-4" aria-hidden /></Link>
+          <Link href={`/budget?month=${monthParam(shiftMonth(month, -1))}${wsQ}`} className="btn size-11 !px-0" aria-label="Previous month"><ChevronLeft className="size-4" aria-hidden /></Link>
           <span className="min-w-28 text-center text-sm font-semibold">{monthLabel(month)}</span>
-          <Link href={`/budget?month=${monthParam(shiftMonth(month, 1))}${wsQ}`} className="btn size-10 !px-0" aria-label="Next month"><ChevronRight className="size-4" aria-hidden /></Link>
+          <Link href={`/budget?month=${monthParam(shiftMonth(month, 1))}${wsQ}`} className="btn size-11 !px-0" aria-label="Next month"><ChevronRight className="size-4" aria-hidden /></Link>
         </div>
       </div>
 

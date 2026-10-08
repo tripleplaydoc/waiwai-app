@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowDownLeft, ArrowRight, ArrowUpRight, Sparkles } from "lucide-react";
 import { getCurrentUser, requireAuth } from "@/lib/auth";
-import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
+import { cookies } from "next/headers";
+import { getBudgetView, getWorkspace, wsKeyFromParam } from "@/lib/workspace";
 import { loadHome } from "@/lib/home";
 import { formatCents } from "@/lib/utils/currency";
 import { daysBetween } from "@/lib/forecast-math";
@@ -11,6 +12,14 @@ import { DailyVerse } from "@/components/daily-verse";
 import { parseLayout } from "@/lib/home-layout";
 import { prisma } from "@/lib/prisma";
 import { HomeSections } from "./home-sections";
+import { Hint } from "@/components/hint";
+import { Sparkline } from "@/components/sparkline";
+import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
+import { startProgress, startSteps } from "@/lib/home-start";
+import { loadCashTrend, loadGoals, loadRecent, loadStartCounts } from "@/lib/home-extras";
+import { isoToDate } from "@/lib/utils/dates";
+import { StartCard } from "./start-card";
+import { KidHome } from "./kid-home";
 
 /** The saved Home layout JSON for this person (null when none or the table is not there yet). */
 async function loadLayout(userId: string | undefined): Promise<string | null> {
@@ -36,13 +45,30 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const total = h.accounts.reduce((s, a) => s + Math.max(0, a.cents), 0) || 1;
   const today = h.forecast.today;
 
+  const view = await getBudgetView();
+  const cashIds = h.forecast.accounts.map((a) => a.id);
+  const trend = await loadCashTrend(ws.id, cashIds, h.cashCents, today);
+
+  // A private (kid) budget gets the simple layout: what you can spend, goals, recent activity.
+  if (view?.privateUser) {
+    const [{ goals, setAsideCents }, recent] = await Promise.all([loadGoals(ws.id, isoToDate(`${today.slice(0, 7)}-01`)), loadRecent(ws.id, 6)]);
+    return <KidHome greeting={h.greeting} cashCents={h.cashCents} setAsideCents={setAsideCents} goals={goals} recent={recent} trend={trend} q={q} />;
+  }
+
+  const [counts, poolCents] = await Promise.all([loadStartCounts(ws.id), getReadyToAssign(prisma, ws.id, new Date())]);
+  const steps = startSteps(counts, q);
+  const hideName = `ww_hide_start_${ws.id}`;
+  let hiddenStart = false;
+  try { hiddenStart = (await cookies()).get(hideName)?.value === "1"; } catch { hiddenStart = false; }
+  const showStart = !startProgress(steps).complete && !hiddenStart;
+
   const layout = parseLayout(await loadLayout(me?.id));
   const nodes: Record<string, React.ReactNode> = {
     verse: <DailyVerse />,
     cash: (
       <section className="card p-4 sm:p-5" aria-label="Cash on hand">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cash on hand</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cash on hand <Hint>All the money sitting in your checking, savings and cash accounts right now. It is what you have, not what is already promised to a pocket.</Hint></span>
           {h.gap ? (
             <Link href={`/forecast${q}`} className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200">Plan ahead for {shortDay(h.gap.iso)}</Link>
           ) : (
@@ -50,12 +76,21 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           )}
         </div>
         <div className="nums mt-1 text-4xl font-bold tracking-tight text-water">{formatCents(h.cashCents)}</div>
-        {h.accounts.length > 0 && (
+        {trend.length > 1 && (
+          <div className="mt-2">
+            <Sparkline values={trend} color="#0E7C86" label="Cash on hand over the last 30 days" />
+            <div className="mt-0.5 flex justify-between text-[11px] text-slate-500"><span>30 days ago</span><span>Today</span></div>
+          </div>
+        )}
+        <div className="mt-3 flex min-h-11 items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 text-sm dark:bg-slate-800/60">
+          <span className="text-slate-600 dark:text-slate-300">In the pool <Hint>The pool (&quot;Ready to assign&quot;) is money that has arrived but doesn&apos;t have a job yet. Move it into pockets on the Budget page.</Hint></span>
+          <Link href={`/budget${q}`} className={`nums font-semibold ${poolCents < 0 ? "text-neg" : poolCents > 0 ? "text-pos" : ""}`}>{formatCents(poolCents)}</Link>
+        </div>        {h.accounts.length > 0 && (
           <>
             <div className="mt-4 flex h-3 gap-0.5 overflow-hidden rounded-full" role="img" aria-label="Where your cash sits">
               {h.accounts.map((a, i) => <div key={a.id} className={SWATCH[i % SWATCH.length]} style={{ flex: Math.max(0, a.cents) / total || 0.001 }} />)}
             </div>
-            <ul className="mt-2 divide-y divide-[#EEF2F7] dark:divide-slate-800">
+            <ul className="mt-3">
               {h.accounts.map((a, i) => (
                 <li key={a.id} className="flex min-h-11 items-center gap-3 text-sm">
                   <span className={`size-2.5 shrink-0 rounded-[3px] ${SWATCH[i % SWATCH.length]}`} aria-hidden />
@@ -92,7 +127,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         {h.coming.inEvents.length + h.coming.outEvents.length === 0 ? (
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">A quiet week. Nothing is scheduled to move.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-[#EEF2F7] dark:divide-slate-800">
+          <ul className="mt-2">
             {[...h.coming.inEvents, ...h.coming.outEvents].map((e, i) => (
               <li key={`${e.id}-${i}`} className="flex min-h-12 items-center gap-3">
                 <div className="w-11 shrink-0 text-center leading-tight"><div className="text-[11px] font-semibold uppercase text-slate-500">{weekday(e.date)}</div><div className="text-lg font-bold">{dayNum(e.date)}</div></div>
@@ -105,7 +140,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             ))}
           </ul>
         )}
-        <Link href={`/forecast${q}`} className="mt-1 flex min-h-11 items-center justify-between border-t border-[#EEF2F7] pt-1 text-sm font-semibold text-[#2E6BE6] dark:border-slate-800 dark:text-indigo-300">See the 60-day forecast <ArrowRight className="size-4" aria-hidden /></Link>
+        <Link href={`/forecast${q}`} className="mt-1 flex min-h-11 items-center justify-between pt-1 text-sm font-semibold text-[#2E6BE6] dark:border-slate-800 dark:text-indigo-300">See the 60-day forecast <ArrowRight className="size-4" aria-hidden /></Link>
       </section>
 
     ),
@@ -117,7 +152,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         ) : (
           <ul>
             {h.steps.map((s) => (
-              <li key={s.key} className="flex items-center gap-3 border-t border-[#EEF2F7] px-4 py-3 first:border-t-0 dark:border-slate-800 sm:px-5">
+              <li key={s.key} className="flex items-center gap-3 px-4 py-3 sm:px-5">
                 <span className="size-2 shrink-0 rounded-full bg-indigo-400" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold">{s.title}</div>
@@ -139,11 +174,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-2xl space-y-5">
       <div>
         <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{h.greeting}</h1>
         <p className="text-sm text-slate-600 dark:text-slate-300">Here&apos;s how your {ws.name.toLowerCase()} money is flowing today.</p>
       </div>
+      {showStart && <StartCard steps={steps} cookieName={hideName} q={q} />}
       <HomeSections nodes={nodes} layout={layout} />
     </div>
   );
