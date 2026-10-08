@@ -27,6 +27,8 @@ export function MoveMoneyHost({ workspaceId, month, pockets, readyToAssignCents,
   // Start on one of your own accounts that has cash, so the money is credited to you; "Any account" otherwise.
   const myAccount = cash.accounts.filter((a) => a.stewardId === meId && a.readyCents > 0).sort((x, y) => y.readyCents - x.readyCents)[0]?.id ?? null;
   const thisPocket = open?.fromId ? pockets.find((p) => p.id === open.fromId) : undefined;
+  // A pocket that has its own "Paid from" account always starts there, so the money comes from the account you chose for it.
+  const startAccount = thisPocket?.paidFromId && cash.accounts.some((a) => a.id === thisPocket.paidFromId) ? thisPocket.paidFromId : myAccount;
   const funded = thisPocket && hasSeveralStewards(cash) ? pocketBySteward(cash, thisPocket.id) : [];
   const done = () => { setOpen(null); router.refresh(); };
   const tabCls = (on: boolean) => `min-h-11 flex-1 rounded-lg text-sm font-semibold ${on ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white" : "text-slate-600 dark:text-slate-300"}`;
@@ -46,7 +48,7 @@ export function MoveMoneyHost({ workspaceId, month, pockets, readyToAssignCents,
             </p>
           )}
           {open.tab === "add" || thisPocket?.system
-            ? <AddForm workspaceId={workspaceId} month={month} pockets={pockets} readyToAssignCents={readyToAssignCents} initialId={open.fromId} accounts={accountList} initialAccountId={myAccount} onCancel={() => setOpen(null)} onDone={done} />
+            ? <AddForm workspaceId={workspaceId} month={month} pockets={pockets} readyToAssignCents={readyToAssignCents} initialId={open.fromId} accounts={accountList} initialAccountId={startAccount} onCancel={() => setOpen(null)} onDone={done} />
             : <MoveForm workspaceId={workspaceId} month={month} pockets={pockets} initialFromId={open.fromId} onCancel={() => setOpen(null)} onDone={done} />}
         </Modal>
       )}
