@@ -138,6 +138,35 @@ function NeedChip({ p, horizon }: { p: PocketVM; horizon: Horizon }) {
     : <div className="mb-0.5 text-[11px] font-medium text-pos">covered {when}</div>;
 }
 
+const SOURCE_COLORS = ["#2E6BE6", "#059669", "#D97706", "#7C3AED", "#0891B2", "#DB2777", "#64748B"];
+
+/** Which account the money in a pocket sits in: a thin split bar with a chip per account (account tags follow every Add/Move). */
+function SourceStrip({ pocketId, simple }: { pocketId: string; simple: boolean }) {
+  const { cash } = useFunding();
+  if (cash.accounts.length < 2) return null;
+  const rows = Object.entries(cash.byPocket[pocketId] ?? {})
+    .filter(([, c]) => c > 0)
+    .map(([k, cents]) => ({ k, cents, name: k === "none" ? "Not tagged" : cash.accounts.find((a) => a.id === k)?.name ?? "Other account", color: SOURCE_COLORS[Math.max(0, cash.accounts.findIndex((a) => a.id === k)) % SOURCE_COLORS.length] }))
+    .sort((a, b) => b.cents - a.cents);
+  if (rows.length === 0) return null;
+  const total = rows.reduce((t, r) => t + r.cents, 0);
+  return (
+    <div className="mt-1.5" data-testid="source-strip">
+      {!simple && rows.length > 0 && (
+        <div className="mb-1 flex h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="img" aria-label={`Held in ${rows.map((r) => `${r.name} ${formatCents(r.cents)}`).join(", ")}`}>
+          {rows.map((r) => <span key={r.k} style={{ width: `${(r.cents / total) * 100}%`, background: r.color }} />)}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 dark:text-slate-300">
+        <span className="font-semibold text-slate-500">Held in</span>
+        {rows.map((r) => (
+          <span key={r.k} className="inline-flex items-center gap-1"><span className="size-2 rounded-full" style={{ background: r.color }} aria-hidden />{r.name} <span className="nums font-semibold">{formatCents(r.cents)}</span></span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PocketRowView({
   p, workspaceId, month, onEdit, handleProps, overlay,
 }: {
@@ -179,6 +208,7 @@ function PocketRowView({
             <MarkPaidButton workspaceId={workspaceId} categoryId={p.id} month={month} status={p.bill} manualPaid={p.manualPaid} />
           </div>
         )}
+        {!overlay && <SourceStrip pocketId={p.id} simple={simple} />}
         <div className={simple ? "hidden md:block" : "hidden md:block"}><ProgressBlock p={p} onSetCost={onEdit} /></div>
         {!overlay && <AssetBlock p={p} onSetGoal={onEdit} />}
       </div>
