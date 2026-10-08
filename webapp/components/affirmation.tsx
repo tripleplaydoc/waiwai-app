@@ -17,8 +17,14 @@ export function Affirmation({ flow, onDone, onAnother }: { flow: Flow; onDone: (
   const inflow = flow === "inflow";
   return (
     <div role="status" aria-live="polite" className="space-y-5 py-2 text-center" data-testid="affirmation">
-      <div className={`mx-auto flex size-16 items-center justify-center rounded-full ${inflow ? "bg-pos-soft text-pos" : "bg-blue-50 text-[#2E6BE6] dark:bg-blue-950"}`}>
-        {inflow ? <Sparkles className="size-8" aria-hidden /> : <Waves className="size-8" aria-hidden />}
+      <div className="relative mx-auto flex size-20 items-center justify-center" aria-hidden>
+        <span className={`ripple-ring absolute inset-0 rounded-full border-2 ${inflow ? "border-emerald-500" : "border-blue-500"}`} />
+        <span className={`ripple-ring d2 absolute inset-0 rounded-full border-2 ${inflow ? "border-emerald-500" : "border-blue-500"}`} />
+        <span className={`ripple-ring d3 absolute inset-0 rounded-full border-2 ${inflow ? "border-emerald-500" : "border-blue-500"}`} />
+        {inflow && <span className="water-drop absolute -top-3 left-1/2 size-3 -translate-x-1/2 rounded-full bg-emerald-500" />}
+        <div className={`water-float relative flex size-16 items-center justify-center rounded-full ${inflow ? "bg-pos-soft text-pos" : "bg-blue-50 text-[#2E6BE6] dark:bg-blue-950"}`}>
+          {inflow ? <Sparkles className="size-8" aria-hidden /> : <Waves className="size-8" aria-hidden />}
+        </div>
       </div>
       <p className="text-xl font-semibold leading-snug tracking-tight text-balance">{AFFIRMATIONS[flow]}</p>
       <p className="text-xs text-slate-500">{inflow ? "Saved as an inflow." : "Saved as an outflow."}</p>

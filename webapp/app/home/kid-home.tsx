@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowDownLeft, ArrowRight, ArrowUpRight, Target } from "lucide-react";
 import { formatCents } from "@/lib/utils/currency";
+import { CountUp } from "@/components/count-up";
 import { Hint } from "@/components/hint";
 import { Sparkline } from "@/components/sparkline";
 import { shortDay } from "@/lib/home-math";
@@ -18,7 +19,7 @@ export function KidHome({ greeting, cashCents, setAsideCents, spendableCents, go
 
       <section className="card p-5 text-center sm:p-6" aria-label="You can spend">
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">You can spend <Hint>{marked ? "This adds up the money in your spending pockets. A parent can choose which pockets count." : "This is the cash you have, minus the money you've set aside for your goals. Your goal money stays safe until you reach the goal."}</Hint></div>
-        <div className="nums mt-1 text-5xl font-bold tracking-tight text-pos sm:text-6xl">{formatCents(spendable)}</div>
+        <div className="nums mt-1 text-5xl font-bold tracking-tight text-pos sm:text-6xl"><CountUp cents={spendable} /></div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
           {marked ? <>This is the money in your spending pockets.</> : setAsideCents > 0 ? <>You have {formatCents(cashCents)} in total, and {formatCents(setAsideCents)} is set aside for your goals.</> : <>That&apos;s all the cash you have right now.</>}
         </p>
@@ -40,7 +41,7 @@ export function KidHome({ greeting, cashCents, setAsideCents, spendableCents, go
                   <span className="nums shrink-0 text-sm text-slate-600 dark:text-slate-300"><span className="font-semibold text-slate-900 dark:text-slate-100">{formatCents(g.savedCents)}</span> of {formatCents(g.targetCents)}</span>
                 </div>
                 <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(g.fraction * 100)} aria-label={`${g.name} progress`}>
-                  <div className={`h-full rounded-full ${g.reached ? "bg-pos" : "bg-water"}`} style={{ width: `${Math.max(g.fraction > 0 ? 3 : 0, g.fraction * 100)}%` }} />
+                  <div className={`bar-grow h-full rounded-full ${g.reached ? "bg-pos" : "bg-water"}`} style={{ width: `${Math.max(g.fraction > 0 ? 3 : 0, g.fraction * 100)}%` }} />
                 </div>
                 <div className="mt-1 text-xs text-slate-500">{g.reached ? "You did it!" : `${formatCents(g.targetCents - g.savedCents)} to go`}{g.byDate && !g.reached ? ` · by ${shortDay(g.byDate)}` : ""}</div>
               </li>

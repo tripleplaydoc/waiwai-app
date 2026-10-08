@@ -90,14 +90,14 @@ export function QuickAdd() {
   );
 }
 
-function CategoryOptions({ options }: { options: QuickAddData["categories"] }) {
+function CategoryOptions({ options, showAvailable = false }: { options: QuickAddData["categories"]; showAvailable?: boolean }) {
   const groups = [...new Set(options.map((o) => o.group))];
   return (
     <>
       {groups.map((g) => (
         <optgroup key={g} label={g}>
           {options.filter((o) => o.group === g).map((o) => (
-            <option key={o.id} value={o.id}>{o.name}{o.type === "INCOME" ? " (income)" : ""}</option>
+            <option key={o.id} value={o.id}>{o.name}{o.type === "INCOME" ? " (income)" : ""}{showAvailable && o.type !== "INCOME" ? ` · ${formatCents(o.availableCents)} available` : ""}</option>
           ))}
         </optgroup>
       ))}
@@ -181,7 +181,13 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
         </div>
       </div>
       <div>
-        <label htmlFor="qa-payee" className="label">Payee</label>
+        <label htmlFor="qa-acct" className="label">{direction === "outflow" ? "Paid from (account)" : "Deposited into (account)"}</label>
+        <select id="qa-acct" name="accountId" className="input" value={acct} onChange={(e) => setAcct(e.target.value)}>
+          {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind ? ` (${a.kind})` : ""}</option>)}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="qa-payee" className="label">{direction === "outflow" ? "Payee" : "From (payer)"}</label>
         <input id="qa-payee" name="payee" list="qa-payees" autoComplete="off" maxLength={200} className="input" value={payeeText} onChange={(e) => setPayeeText(e.target.value)} />
         <datalist id="qa-payees">{data.payees.map((p) => <option key={p} value={p} />)}</datalist>
       </div>
@@ -209,21 +215,31 @@ function TxForm({ data, onDone, onCancel, onAnother }: { data: QuickAddData; onD
           )}
         </div>
       )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label htmlFor="qa-acct" className="label">Account</label>
-          <select id="qa-acct" name="accountId" className="input" value={acct} onChange={(e) => setAcct(e.target.value)}>
-            {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind ? ` (${a.kind})` : ""}</option>)}
-          </select>
-        </div>
+      {direction === "outflow" ? (
         <div>
           <label htmlFor="qa-cat" className="label">Pocket</label>
           <select id="qa-cat" name="categoryId" className="input" value={category} onChange={(e) => pickCategory(e.target.value)}>
             <option value="">Uncategorized (decide later)</option>
-            <CategoryOptions options={direction === "inflow" ? [...data.categories].sort((a, b) => Number(b.type === "INCOME") - Number(a.type === "INCOME")) : data.categories.filter((c) => c.type !== "INCOME")} />
+            <CategoryOptions showAvailable options={data.categories.filter((c) => c.type !== "INCOME")} />
           </select>
+          {(() => {
+            const c = data.categories.find((x) => x.id === category);
+            if (!c) return null;
+            const over = amountCents > 0 && amountCents > c.availableCents;
+            return (
+              <p className={`nums mt-1.5 text-sm font-medium ${c.availableCents <= 0 || over ? "text-neg" : "text-pos"}`} aria-live="polite">
+                {formatCents(c.availableCents)} available to spend in {c.name}
+                {over && <span className="font-normal"> · this is {formatCents(amountCents - Math.max(0, c.availableCents))} more than the pocket has</span>}
+              </p>
+            );
+          })()}
         </div>
-      </div>
+      ) : (
+        <>
+          <input type="hidden" name="categoryId" value={firstIncome} />
+          <p className="rounded-xl bg-pos-soft px-3 py-2 text-sm text-pos">This goes straight into your Pool. You decide later which pockets it fills.</p>
+        </>
+      )}
       {askUse && (
         <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
           <label htmlFor="qa-biz" className="label">How much of this is for the business?</label>

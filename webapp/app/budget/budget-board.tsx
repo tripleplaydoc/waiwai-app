@@ -141,7 +141,7 @@ function ProgressBlock({ p, onSetCost, compact }: { p: PocketVM; onSetCost: () =
         className={`${compact ? "h-1.5" : "h-2"} w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800`}
         role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(barFill * 100)} aria-label={`${p.name} progress`}
       >
-        <div className={`h-full rounded-full transition-[width] duration-500 ${barColor(barTone, horizon === "ahead")}`} style={{ width: `${Math.round(barFill * 100)}%` }} />
+        <div className={`bar-grow h-full rounded-full transition-[width] duration-500 ${barColor(barTone, horizon === "ahead")}`} style={{ width: `${Math.round(barFill * 100)}%` }} />
       </div>
       {!compact && <div className={`nums mt-1.5 text-[11px] leading-tight ${barTone === "partial" || barTone === "empty" ? "text-warn" : barTone === "overspent" ? "text-neg" : "text-slate-500 dark:text-slate-400"}`}>{line}</div>}
     </div>
@@ -169,7 +169,7 @@ function AssetBlock({ p, onSetGoal }: { p: PocketVM; onSetGoal: () => void }) {
           className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
           role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={`${a.name} value toward its goal`}
         >
-          <div className={`h-full rounded-full transition-[width] duration-500 ${pr.reached ? "bg-pos" : "bg-water"}`} style={{ width: `${pct}%` }} />
+          <div className={`bar-grow h-full rounded-full transition-[width] duration-500 ${pr.reached ? "bg-pos" : "bg-water"}`} style={{ width: `${pct}%` }} />
         </div>
       ) : (
         <button type="button" onClick={onSetGoal} className={`${TAP} mt-1 text-[11px] text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-300`}>Set a goal for {a.name}</button>

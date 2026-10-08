@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { formatCents } from "@/lib/utils/currency";
+import { CountUp } from "@/components/count-up";
 import { Hint } from "@/components/hint";
 import type { CashView } from "@/lib/budget/funding";
 
@@ -64,7 +65,7 @@ export function ReadyAmount({ rtaCents }: { rtaCents: number }) {
             : "The pool is money that has arrived but doesn't have a job yet. Give it a job by assigning it to your pockets."}
         </Hint>
       </span>
-      <span className={`nums text-2xl font-bold leading-tight tracking-tight ${rtaCents < 0 ? "text-neg" : "text-pos"}`}>{formatCents(rtaCents)}</span>
+      <span className={`nums text-2xl font-bold leading-tight tracking-tight ${rtaCents < 0 ? "text-neg" : "text-pos"}`}><CountUp cents={rtaCents} /></span>
       {rtaCents < 0 && (() => {
         const over = cash.accounts.filter((a) => a.readyCents < 0).sort((a, b) => a.readyCents - b.readyCents);
         return (

@@ -11,6 +11,7 @@ import { LiveRefresh } from "@/components/live-refresh";
 import { avatarUrl } from "@/components/avatar";
 import { QuickAdd } from "@/components/quick-add";
 import { AutoPrices } from "@/components/auto-prices";
+import { OpenOnHome } from "@/components/open-home";
 
 export const metadata: Metadata = {
   title: "WaiWai",
@@ -47,6 +48,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <div className="wai-bg" aria-hidden />
+        {authed && <OpenOnHome />}
         {authed && (
           <Suspense fallback={null}>
             <Nav initial={(user?.name || user?.email || "?").trim().charAt(0).toUpperCase()} name={user?.name ?? ""} email={user?.email ?? ""} avatar={user ? avatarUrl(user) : null} privateBudgets={privateBudgets} viewingId={view?.viewingOther ? view.privateUser?.id ?? "" : ""} showBusiness={!view?.privateUser || view.privateUser.hasBusiness} />

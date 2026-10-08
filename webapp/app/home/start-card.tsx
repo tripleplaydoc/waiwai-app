@@ -18,7 +18,7 @@ export function StartCard({ steps, cookieName, q }: { steps: StartStep[]; cookie
       </div>
       <div className="mt-3 flex items-center gap-3">
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label="Setup progress">
-          <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${(done / total) * 100}%` }} />
+          <div className="bar-grow h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${(done / total) * 100}%` }} />
         </div>
         <span className="nums text-xs font-semibold text-slate-600 dark:text-slate-300">{done} of {total}</span>
       </div>

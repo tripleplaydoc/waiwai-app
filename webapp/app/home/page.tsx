@@ -12,6 +12,7 @@ import { DailyVerse } from "@/components/daily-verse";
 import { parseLayout } from "@/lib/home-layout";
 import { prisma } from "@/lib/prisma";
 import { HomeSections } from "./home-sections";
+import { CountUp } from "@/components/count-up";
 import { Hint } from "@/components/hint";
 import { Sparkline } from "@/components/sparkline";
 import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
@@ -75,7 +76,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <Link href={`/forecast${q}`} className="rounded-full bg-pos-soft px-3 py-1 text-xs font-semibold text-pos">Covered for 60 days</Link>
           )}
         </div>
-        <div className="nums mt-1 text-4xl font-bold tracking-tight text-water">{formatCents(h.cashCents)}</div>
+        <div className="nums mt-1 text-4xl font-bold tracking-tight text-water"><CountUp cents={h.cashCents} /></div>
         {trend.length > 1 && (
           <div className="mt-2">
             <Sparkline values={trend} color="#0E7C86" label="Cash on hand over the last 30 days" />
