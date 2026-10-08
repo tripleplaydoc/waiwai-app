@@ -1,7 +1,7 @@
 /**
  * Personal flow — pure math, integer cents, no database.
  *
- *   Ready to assign  →  Give / Save / Live (adjustable percentages that add to 100%)
+ *   Ready to assign  →  Give / Save / Live / Reservoirs (adjustable percentages that add to 100%)
  *   Inside each bucket:
  *     1. pockets with a target are filled by need (proportionally if the bucket is short)
  *     2. whatever is left is shared by each pocket's flowShareBps
@@ -11,8 +11,8 @@
 import { distribute } from "./allocation";
 import { fillByNeed } from "./cashflow-waterfall";
 
-export type PersonalBucket = "GIVE" | "SAVE" | "LIVE";
-export const BUCKETS: PersonalBucket[] = ["GIVE", "SAVE", "LIVE"];
+export type PersonalBucket = "GIVE" | "SAVE" | "LIVE" | "RESERVE";
+export const BUCKETS: PersonalBucket[] = ["GIVE", "SAVE", "LIVE", "RESERVE"];
 
 export interface PersonalPocket { id: string; needCents: number; shareBps: number }
 export interface PersonalAssignInput {
@@ -42,7 +42,7 @@ export function splitAll(total: number, weights: number[]): number[] {
 export function planPersonalAssign(input: PersonalAssignInput): PersonalPlan {
   const ready = Math.max(0, Math.floor(input.readyCents));
   const shares = distribute(ready, BUCKETS.map((b) => Math.max(0, input.splits[b])));
-  const totals: Record<PersonalBucket, number> = { GIVE: 0, SAVE: 0, LIVE: 0 };
+  const totals: Record<PersonalBucket, number> = { GIVE: 0, SAVE: 0, LIVE: 0, RESERVE: 0 };
   const moves: PersonalMove[] = [];
 
   BUCKETS.forEach((bucket, bi) => {
@@ -65,6 +65,6 @@ export function planPersonalAssign(input: PersonalAssignInput): PersonalPlan {
     for (const p of pockets) { const c = got.get(p.id); if (c) { moves.push({ categoryId: p.id, cents: c, bucket }); totals[bucket] += c; } }
   });
 
-  const assigned = totals.GIVE + totals.SAVE + totals.LIVE;
+  const assigned = totals.GIVE + totals.SAVE + totals.LIVE + totals.RESERVE;
   return { moves, totals, leftoverCents: ready - assigned };
 }

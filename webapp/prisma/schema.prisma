@@ -1168,10 +1168,13 @@ model PersonalFlowConfig {
   giveBps Int     @default(2000)
   saveBps Int     @default(1000)
   liveBps Int     @default(7000)
+  /// Reservoirs: a fourth bucket, 0% until you give it a share.
+  reserveBps Int @default(0)
   /// The categories (groups) each bucket pays into. A category belongs to at most one bucket.
   giveGroupIds String[] @default([])
   saveGroupIds String[] @default([])
   liveGroupIds String[] @default([])
+  reserveGroupIds String[] @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

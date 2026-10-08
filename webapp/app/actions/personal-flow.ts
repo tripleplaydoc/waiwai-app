@@ -37,8 +37,10 @@ export async function setupPersonalFlowAction(workspaceId: string): Promise<Acti
   const give = existing?.giveGroupIds.length ? existing.giveGroupIds : named("give", "giving").map((g) => g.id);
   const save = existing?.saveGroupIds.length ? existing.saveGroupIds : named("save", "savings").map((g) => g.id);
   const live = existing?.liveGroupIds.length ? existing.liveGroupIds : named("live", "bills", "everyday").map((g) => g.id);
+  const reserve = existing?.reserveGroupIds.length ? existing.reserveGroupIds : named("reservoir", "reservoirs", "reserve", "reserves").map((g) => g.id);
   const data = {
     enabled: true,
+    reserveGroupIds: reserve,
     giveGroupIds: give.length ? give : await make("Give", "Giving"),
     saveGroupIds: save.length ? save : await make("Save", "Savings"),
     liveGroupIds: live.length ? live : await make("Live", "Everyday Spending"),
@@ -54,9 +56,11 @@ const settingsSchema = z.object({
   givePct: z.number().min(0).max(100),
   savePct: z.number().min(0).max(100),
   livePct: z.number().min(0).max(100),
+  reservePct: z.number().min(0).max(100).default(0),
   giveGroupIds: z.array(z.string().min(1)),
   saveGroupIds: z.array(z.string().min(1)),
   liveGroupIds: z.array(z.string().min(1)),
+  reserveGroupIds: z.array(z.string().min(1)).default([]),
   shares: z.array(z.object({ id: z.string().min(1), pct: z.number().min(0).max(100) })),
 });
 
@@ -69,16 +73,16 @@ export async function savePersonalFlowSettingsAction(input: z.input<typeof setti
   const cfg = await prisma.personalFlowConfig.findUnique({ where: { workspaceId: d.workspaceId } });
   if (!cfg) return { ok: false, error: "Set up Give / Save / Live first." };
 
-  const give = Math.round(d.givePct * 100), save = Math.round(d.savePct * 100), live = Math.round(d.livePct * 100);
-  if (give + save + live !== 10000) return { ok: false, error: `Give, Save and Live add up to ${(give + save + live) / 100}% — they need to add up to 100%.` };
-  const gids = [...d.giveGroupIds, ...d.saveGroupIds, ...d.liveGroupIds];
-  if (new Set(gids).size !== gids.length) return { ok: false, error: "A category can only be in one of Give, Save or Live." };
+  const give = Math.round(d.givePct * 100), save = Math.round(d.savePct * 100), live = Math.round(d.livePct * 100), reserve = Math.round(d.reservePct * 100);
+  if (give + save + live + reserve !== 10000) return { ok: false, error: `Give, Save, Live and Reservoirs add up to ${(give + save + live + reserve) / 100}% — they need to add up to 100%.` };
+  const gids = [...d.giveGroupIds, ...d.saveGroupIds, ...d.liveGroupIds, ...d.reserveGroupIds];
+  if (new Set(gids).size !== gids.length) return { ok: false, error: "A category can only be in one of Give, Save, Live or Reservoirs." };
   if (gids.length) {
     const found = await prisma.categoryGroup.count({ where: { id: { in: gids }, workspaceId: d.workspaceId } });
     if (found !== gids.length) return { ok: false, error: "One of those categories wasn't found." };
   }
   await prisma.$transaction([
-    prisma.personalFlowConfig.update({ where: { workspaceId: d.workspaceId }, data: { giveBps: give, saveBps: save, liveBps: live, giveGroupIds: d.giveGroupIds, saveGroupIds: d.saveGroupIds, liveGroupIds: d.liveGroupIds } }),
+    prisma.personalFlowConfig.update({ where: { workspaceId: d.workspaceId }, data: { giveBps: give, saveBps: save, liveBps: live, reserveBps: reserve, reserveGroupIds: d.reserveGroupIds, giveGroupIds: d.giveGroupIds, saveGroupIds: d.saveGroupIds, liveGroupIds: d.liveGroupIds } }),
     ...d.shares.map((s) => prisma.category.updateMany({ where: { id: s.id, workspaceId: d.workspaceId }, data: { flowShareBps: Math.round(s.pct * 100) } })),
   ]);
   revalidatePath("/budget");
@@ -99,12 +103,12 @@ export async function assignPersonalFlowAction(workspaceId: string, month: strin
 
   const plan = planPersonalAssign({
     readyCents: summary.readyToAssignCents,
-    splits: { GIVE: cfg.giveBps, SAVE: cfg.saveBps, LIVE: cfg.liveBps },
+    splits: { GIVE: cfg.giveBps, SAVE: cfg.saveBps, LIVE: cfg.liveBps, RESERVE: cfg.reserveBps },
     buckets: input,
   });
-  if (plan.moves.length === 0) return { ok: false, error: "Nothing to assign yet — each of Give, Save and Live needs at least one pocket." };
+  if (plan.moves.length === 0) return { ok: false, error: "Nothing to assign yet — each bucket with a percentage needs at least one pocket." };
 
-  const label = { GIVE: "Give", SAVE: "Save", LIVE: "Live" } as const;
+  const label = { GIVE: "Give", SAVE: "Save", LIVE: "Live", RESERVE: "Reservoirs" } as const;
   const flowRows = await fundRows(prisma, workspaceId, endOfMonth(md), plan.moves.map((mv) => ({ categoryId: mv.categoryId, month: md, amountCents: mv.cents, source: "WATERFALL" as const, note: `Flow → ${label[mv.bucket]}` })));
   await prisma.budgetAssignment.createMany({ data: flowRows });
   const parts = vm.buckets.filter((b) => plan.totals[b.key] > 0).map((b) => `${formatCents(plan.totals[b.key])} ${b.label}`);

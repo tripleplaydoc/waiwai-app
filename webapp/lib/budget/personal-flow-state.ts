@@ -5,7 +5,7 @@ import type { EnvelopeRow } from "./summary";
 import type { PersonalAssignInput, PersonalBucket } from "./personal-flow";
 import type { PersonalBucketVM, PersonalFlowVM } from "./personal-flow-types";
 
-export const BUCKET_LABEL: Record<PersonalBucket, string> = { GIVE: "Give", SAVE: "Save", LIVE: "Live" };
+export const BUCKET_LABEL: Record<PersonalBucket, string> = { GIVE: "Give", SAVE: "Save", LIVE: "Live", RESERVE: "Reservoirs" };
 
 export async function loadPersonalFlow(workspaceId: string, month: Date, rows: EnvelopeRow[]) {
   const [cfg, groups, cats] = await Promise.all([
@@ -15,11 +15,11 @@ export async function loadPersonalFlow(workspaceId: string, month: Date, rows: E
   ]);
   const share = new Map(cats.map((c) => [c.id, c.flowShareBps ?? 0]));
   const order = new Map(cats.map((c, i) => [c.id, i]));
-  const groupIds: Record<PersonalBucket, string[]> = { GIVE: cfg?.giveGroupIds ?? [], SAVE: cfg?.saveGroupIds ?? [], LIVE: cfg?.liveGroupIds ?? [] };
-  const bps: Record<PersonalBucket, number> = { GIVE: cfg?.giveBps ?? 2000, SAVE: cfg?.saveBps ?? 1000, LIVE: cfg?.liveBps ?? 7000 };
+  const groupIds: Record<PersonalBucket, string[]> = { GIVE: cfg?.giveGroupIds ?? [], SAVE: cfg?.saveGroupIds ?? [], LIVE: cfg?.liveGroupIds ?? [], RESERVE: cfg?.reserveGroupIds ?? [] };
+  const bps: Record<PersonalBucket, number> = { GIVE: cfg?.giveBps ?? 2000, SAVE: cfg?.saveBps ?? 1000, LIVE: cfg?.liveBps ?? 7000, RESERVE: cfg?.reserveBps ?? 0 };
 
-  const input: PersonalAssignInput["buckets"] = { GIVE: [], SAVE: [], LIVE: [] };
-  const buckets: PersonalBucketVM[] = (["GIVE", "SAVE", "LIVE"] as const).map((key) => {
+  const input: PersonalAssignInput["buckets"] = { GIVE: [], SAVE: [], LIVE: [], RESERVE: [] };
+  const buckets: PersonalBucketVM[] = (["GIVE", "SAVE", "LIVE", "RESERVE"] as const).map((key) => {
     const gids = groupIds[key];
     const gpos = (id: string | null) => gids.indexOf(id ?? "");
     const pockets = rows

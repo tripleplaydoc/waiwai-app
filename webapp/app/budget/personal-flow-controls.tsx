@@ -51,10 +51,10 @@ export function PersonalFlowPanel({ workspaceId, flow }: { workspaceId: string; 
   return (
     <div className="text-sm">
       <div className="mb-1 flex items-center justify-between">
-        <span className="font-bold">Give · Save · Live</span>
-        <button type="button" className="btn btn-sm" onClick={() => setEditing(true)} aria-label="Give Save Live settings"><Pencil className="size-3.5" aria-hidden /> Settings</button>
+        <span className="font-bold">Give · Save · Live · Reservoirs</span>
+        <button type="button" className="btn btn-sm" onClick={() => setEditing(true)} aria-label="Flow settings"><Pencil className="size-3.5" aria-hidden /> Settings</button>
       </div>
-      <p className="mb-1 text-[11px] text-slate-500">Assign sends money: {flow.buckets.map((b) => `${pct(b.bps)}% ${b.label}`).join(" · ")}.</p>
+      <p className="mb-1 text-[11px] text-slate-500">Assign sends money: {flow.buckets.filter((b) => b.bps > 0).map((b) => `${pct(b.bps)}% ${b.label}`).join(" · ")}.</p>
       <ul className="divide-y divide-[#E2E8F0] dark:divide-slate-800">
         {flow.buckets.map((b) => {
           const target = b.balanceCents + b.needCents;
@@ -69,7 +69,7 @@ export function PersonalFlowPanel({ workspaceId, flow }: { workspaceId: string; 
                   <div className="h-full rounded-full bg-warn" style={{ width: `${Math.round(Math.min(1, b.balanceCents / target) * 100)}%` }} />
                 </div>
               )}
-              {b.pockets.length === 0 && <p className="mt-0.5 text-[11px] text-neg">No pockets yet — add one to this category.</p>}
+              {b.pockets.length === 0 && b.bps > 0 && <p className="mt-0.5 text-[11px] text-neg">No pockets yet — add one to this category.</p>}
             </li>
           );
         })}
@@ -93,7 +93,7 @@ function SettingsDialog({ workspaceId, flow, onClose }: { workspaceId: string; f
     start(async () => {
       const r = await savePersonalFlowSettingsAction({
         workspaceId, givePct: num(p.GIVE), savePct: num(p.SAVE), livePct: num(p.LIVE),
-        giveGroupIds: g.GIVE, saveGroupIds: g.SAVE, liveGroupIds: g.LIVE,
+        reservePct: num(p.RESERVE), giveGroupIds: g.GIVE, saveGroupIds: g.SAVE, liveGroupIds: g.LIVE, reserveGroupIds: g.RESERVE,
         shares: Object.entries(sh).map(([id, t]) => ({ id, pct: num(t) })),
       });
       if (r.ok) onClose(); else setErr(r.error);
@@ -101,7 +101,7 @@ function SettingsDialog({ workspaceId, flow, onClose }: { workspaceId: string; f
   };
 
   return (
-    <Modal open onClose={onClose} title="Give · Save · Live settings">
+    <Modal open onClose={onClose} title="Give · Save · Live · Reservoirs settings">
       <div className="space-y-4 text-sm">
         <p className={`nums text-xs ${total === 100 ? "text-slate-500" : "text-neg"}`}>Total {total}% — must be 100%.</p>
         {flow.buckets.map((b) => (

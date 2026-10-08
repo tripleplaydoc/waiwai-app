@@ -8,18 +8,19 @@ const eq = (name: string, a: unknown, b: unknown) => {
 
 const base: PersonalAssignInput = {
   readyCents: 100000,
-  splits: { GIVE: 2000, SAVE: 1000, LIVE: 7000 },
+  splits: { GIVE: 2000, SAVE: 1000, LIVE: 7000, RESERVE: 0 },
   buckets: {
     GIVE: [{ id: "tithe", needCents: 0, shareBps: 10000 }],
     SAVE: [{ id: "emerg", needCents: 0, shareBps: 6000 }, { id: "trip", needCents: 0, shareBps: 4000 }],
     LIVE: [{ id: "rent", needCents: 40000, shareBps: 0 }, { id: "food", needCents: 20000, shareBps: 0 }, { id: "fun", needCents: 0, shareBps: 10000 }],
+    RESERVE: [],
   },
 };
 const sum = (p: ReturnType<typeof planPersonalAssign>) => p.moves.reduce((s, m) => s + m.cents, 0);
 const by = (p: ReturnType<typeof planPersonalAssign>, id: string) => p.moves.find((m) => m.categoryId === id)?.cents ?? 0;
 
 let p = planPersonalAssign(base);
-eq("20/10/70 totals", p.totals, { GIVE: 20000, SAVE: 10000, LIVE: 70000 });
+eq("20/10/70 totals", p.totals, { GIVE: 20000, SAVE: 10000, LIVE: 70000, RESERVE: 0 });
 eq("give goes to its pocket", by(p, "tithe"), 20000);
 eq("save shared 60/40", [by(p, "emerg"), by(p, "trip")], [6000, 4000]);
 eq("live fills needs then extra", [by(p, "rent"), by(p, "food"), by(p, "fun")], [40000, 20000, 10000]);
@@ -32,8 +33,8 @@ eq("live short is proportional", [by(p, "rent"), by(p, "food"), by(p, "fun")], [
 eq("live short conservation", sum(p) + p.leftoverCents, 50000);
 
 // adjustable percentages
-p = planPersonalAssign({ ...base, splits: { GIVE: 1000, SAVE: 2500, LIVE: 6500 } });
-eq("custom split", p.totals, { GIVE: 10000, SAVE: 25000, LIVE: 65000 });
+p = planPersonalAssign({ ...base, splits: { GIVE: 1000, SAVE: 2500, LIVE: 6500, RESERVE: 0 } });
+eq("custom split", p.totals, { GIVE: 10000, SAVE: 25000, LIVE: 65000, RESERVE: 0 });
 
 // odd cents never lost or invented
 p = planPersonalAssign({ ...base, readyCents: 100001 });
@@ -49,10 +50,16 @@ p = planPersonalAssign({ ...base, buckets: { ...base.buckets, SAVE: [{ id: "a", 
 eq("first pocket takes extra", [by(p, "a"), by(p, "b")], [10000, 0]);
 
 // splits that don't add to 100% leave the rest in Ready to assign
-p = planPersonalAssign({ ...base, splits: { GIVE: 2000, SAVE: 1000, LIVE: 5000 } });
+p = planPersonalAssign({ ...base, splits: { GIVE: 2000, SAVE: 1000, LIVE: 5000, RESERVE: 0 } });
 eq("under 100% leaves remainder", p.leftoverCents, 20000);
 
 eq("splitAll", splitAll(100, [1, 1, 1]), [34, 33, 33]);
 eq("zero ready", planPersonalAssign({ ...base, readyCents: 0 }).moves.length, 0);
 
 if (failed) { console.error(`${failed} failed`); process.exit(1); }
+
+// Reservoirs: a fourth bucket that takes its own share, filled by need first.
+p = planPersonalAssign({ ...base, splits: { GIVE: 1000, SAVE: 1000, LIVE: 6000, RESERVE: 2000 }, buckets: { ...base.buckets, RESERVE: [{ id: "res1", needCents: 5000, shareBps: 0 }, { id: "res2", needCents: 0, shareBps: 10000 }] } });
+eq("reservoir bucket total", p.totals.RESERVE, 20000);
+eq("reservoir fills need then extra", [by(p, "res1"), by(p, "res2")], [5000, 15000]);
+eq("reservoir conservation", sum(p) + p.leftoverCents, 100000);
