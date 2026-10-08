@@ -625,6 +625,8 @@ model Category {
   /// Business tax engine fields — only meaningful when workspace.type =
   /// BUSINESS and type = EXPENSE.
   isTaxDeductible   Boolean            @default(false)
+  /// Personal pockets: money here counts as "you can spend" on the simple (kid) home screen.
+  spendable         Boolean            @default(false)
   scheduleCLineItem ScheduleCLineItem?
   /// WaiWai classification key (lib/budget/expense-types.ts), e.g. ADVERTISING.
   expenseType       String?

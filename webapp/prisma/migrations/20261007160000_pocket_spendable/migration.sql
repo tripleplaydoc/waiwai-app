@@ -1,0 +1,1 @@
+ALTER TABLE categories ADD COLUMN "spendable" BOOLEAN NOT NULL DEFAULT false;

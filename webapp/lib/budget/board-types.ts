@@ -23,6 +23,7 @@ export interface PocketVM {
   availableCents: number;
   isSystemManaged: boolean;
   isTaxDeductible: boolean;
+  spendable: boolean;
   priorityRank: number | null;
   targetType: "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE" | null;
   targetCents: number | null;

@@ -16,6 +16,7 @@ export interface EnvelopeRow {
   priorityRank: number | null;
   isSystemManaged: boolean;
   isTaxDeductible: boolean;
+  spendable: boolean;
   targetType: "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE" | null;
   targetCents: number | null;
   targetDate: string | null; // YYYY-MM-DD
@@ -94,6 +95,7 @@ export async function getBudgetSummary(workspaceId: string, month: Date): Promis
       priorityRank: c.priorityRank,
       isSystemManaged: c.isSystemManaged,
       isTaxDeductible: c.isTaxDeductible,
+      spendable: c.spendable,
       targetType: c.fundingTargetType,
       targetCents: c.fundingTargetCents,
       targetDate: c.fundingTargetByDate ? c.fundingTargetByDate.toISOString().slice(0, 10) : null,

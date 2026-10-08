@@ -48,7 +48,7 @@ export interface Goal { id: string; name: string; savedCents: number; targetCent
  * Savings goals = pockets that have a "reach this balance" target. Also returns what is set aside in them, so the
  * "You can spend" figure can leave that money alone.
  */
-export async function loadGoals(workspaceId: string, month: Date): Promise<{ goals: Goal[]; setAsideCents: number }> {
+export async function loadGoals(workspaceId: string, month: Date): Promise<{ goals: Goal[]; setAsideCents: number; spendableCents: number | null }> {
   const summary = await getBudgetSummary(workspaceId, month);
   const goals = summary.rows
     .filter((r) => r.type === "EXPENSE" && !r.isSystemManaged && (r.targetType === "TARGET_BALANCE" || r.targetType === "TARGET_BALANCE_BY_DATE") && (r.targetCents ?? 0) > 0)
@@ -57,5 +57,8 @@ export async function loadGoals(workspaceId: string, month: Date): Promise<{ goa
       const saved = Math.max(0, r.availableCents);
       return { id: r.id, name: r.name, savedCents: saved, targetCents: target, fraction: Math.min(1, saved / target), reached: saved >= target, byDate: r.targetDate };
     });
-  return { goals, setAsideCents: goals.reduce((s, g) => s + g.savedCents, 0) };
+  const spendRows = summary.rows.filter((r) => r.type === "EXPENSE" && r.spendable);
+  // null = nothing is marked as spending money yet, so callers fall back to "cash minus goals".
+  const spendableCents = spendRows.length ? spendRows.reduce((s, r) => s + Math.max(0, r.availableCents), 0) : null;
+  return { goals, setAsideCents: goals.reduce((s, g) => s + g.savedCents, 0), spendableCents };
 }

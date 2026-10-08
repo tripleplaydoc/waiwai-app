@@ -51,8 +51,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   // A private (kid) budget gets the simple layout: what you can spend, goals, recent activity.
   if (view?.privateUser) {
-    const [{ goals, setAsideCents }, recent] = await Promise.all([loadGoals(ws.id, isoToDate(`${today.slice(0, 7)}-01`)), loadRecent(ws.id, 6)]);
-    return <KidHome greeting={h.greeting} cashCents={h.cashCents} setAsideCents={setAsideCents} goals={goals} recent={recent} trend={trend} q={q} />;
+    const [{ goals, setAsideCents, spendableCents }, recent] = await Promise.all([loadGoals(ws.id, isoToDate(`${today.slice(0, 7)}-01`)), loadRecent(ws.id, 6)]);
+    return <KidHome greeting={h.greeting} cashCents={h.cashCents} setAsideCents={setAsideCents} spendableCents={spendableCents} goals={goals} recent={recent} trend={trend} q={q} />;
   }
 
   const [counts, poolCents] = await Promise.all([loadStartCounts(ws.id), getReadyToAssign(prisma, ws.id, new Date())]);

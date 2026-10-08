@@ -33,6 +33,7 @@ const pocketSchema = z.object({
   priorityRank: z.string().optional(),
   dueDay: z.string().optional(),
   isTaxDeductible: z.string().optional(),
+  spendable: z.string().optional(),
   expenseType: z.string().optional(),
   customType: z.string().optional(),
   incomeKind: z.enum(["EARNED", "PORTFOLIO", "PASSIVE"]).optional(),
@@ -144,6 +145,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
   }
   const incomeKind = isIncome ? d.incomeKind ?? "EARNED" : null;
   const deductible = workspace.type === "BUSINESS" && !isIncome && d.isTaxDeductible === "on";
+  const spendable = workspace.type === "PERSONAL" && !isIncome && d.spendable === "on";
   let newId: string | undefined;
   try {
     if (existing) {
@@ -153,6 +155,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           // System envelopes keep their name and category.
           ...(existing.isSystemManaged ? {} : { name: d.name, categoryGroupId: groupId }),
           isTaxDeductible: existing.isSystemManaged ? existing.isTaxDeductible : deductible,
+          spendable,
           priorityRank: isIncome ? null : rank,
           dueDay,
           ...(isIncome ? { incomeKind } : {}),
@@ -175,6 +178,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           type: d.type ?? "EXPENSE",
           sortOrder: (top._max.sortOrder ?? -1) + 1,
           isTaxDeductible: deductible,
+          spendable,
           priorityRank: isIncome ? null : rank,
           dueDay,
           expenseType,

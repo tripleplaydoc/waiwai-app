@@ -45,6 +45,7 @@ export function PocketDialog({
   const [etype, setEtype] = useState(pocket?.expenseType ?? "");
   const [name, setName] = useState(pocket?.name ?? "");
   const [deduct, setDeduct] = useState(pocket?.isTaxDeductible ?? false);
+  const [spend, setSpend] = useState(pocket?.spendable ?? false);
   const [ikind, setIkind] = useState<string>(pocket?.incomeKind ?? "EARNED");
   const [tagIds, setTagIds] = useState<string[]>(pocket?.tagIds ?? []);
   const [assetId, setAssetId] = useState(pocket?.asset?.accountId ?? "");
@@ -280,6 +281,12 @@ export function PocketDialog({
             {isBusiness && (
               <label className="flex min-h-11 items-center gap-3 self-end text-sm">
                 <input type="checkbox" name="isTaxDeductible" checked={deduct} onChange={(e) => setDeduct(e.target.checked)} className="size-5" /> Tax-deductible
+              </label>
+            )}
+            {!isBusiness && (
+              <label className="flex min-h-11 items-center gap-3 self-end text-sm">
+                <input type="checkbox" name="spendable" checked={spend} onChange={(e) => setSpend(e.target.checked)} className="size-5" />
+                <span>Spending money <span className="text-slate-400">(counts as &ldquo;You can spend&rdquo; on the simple home)</span></span>
               </label>
             )}
           </div>

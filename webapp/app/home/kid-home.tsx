@@ -7,19 +7,20 @@ import { shortDay } from "@/lib/home-math";
 import type { Goal, Recent } from "@/lib/home-extras";
 
 /** Simplified Home for a private (kid) budget: one big spendable number, friendly goals, recent activity. */
-export function KidHome({ greeting, cashCents, setAsideCents, goals, recent, trend, q }: {
-  greeting: string; cashCents: number; setAsideCents: number; goals: Goal[]; recent: Recent[]; trend: number[]; q: string;
+export function KidHome({ greeting, cashCents, setAsideCents, spendableCents, goals, recent, trend, q }: {
+  greeting: string; cashCents: number; setAsideCents: number; spendableCents: number | null; goals: Goal[]; recent: Recent[]; trend: number[]; q: string;
 }) {
-  const spendable = Math.max(0, cashCents - setAsideCents);
+  const marked = spendableCents !== null;
+  const spendable = marked ? spendableCents : Math.max(0, cashCents - setAsideCents);
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{greeting}</h1>
 
       <section className="card p-5 text-center sm:p-6" aria-label="You can spend">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">You can spend <Hint>This is the cash you have, minus the money you&apos;ve set aside for your goals. Your goal money stays safe until you reach the goal.</Hint></div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">You can spend <Hint>{marked ? "This adds up the money in your spending pockets. A parent can choose which pockets count." : "This is the cash you have, minus the money you've set aside for your goals. Your goal money stays safe until you reach the goal."}</Hint></div>
         <div className="nums mt-1 text-5xl font-bold tracking-tight text-pos sm:text-6xl">{formatCents(spendable)}</div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          {setAsideCents > 0 ? <>You have {formatCents(cashCents)} in total, and {formatCents(setAsideCents)} is set aside for your goals.</> : <>That&apos;s all the cash you have right now.</>}
+          {marked ? <>This is the money in your spending pockets.</> : setAsideCents > 0 ? <>You have {formatCents(cashCents)} in total, and {formatCents(setAsideCents)} is set aside for your goals.</> : <>That&apos;s all the cash you have right now.</>}
         </p>
         {trend.length > 1 && <div className="mx-auto mt-3 max-w-xs"><Sparkline values={trend} color="#2E7D32" label="Your cash over the last 30 days" /><div className="text-[11px] text-slate-500">Your cash, last 30 days</div></div>}
       </section>
