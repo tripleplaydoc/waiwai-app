@@ -27,6 +27,7 @@ import { CardReminders } from "@/components/card-reminders";
 import { BillsCalendar, type CalItem } from "./bills-calendar";
 import { MoveMoneyHost } from "./move-money-host";
 import { FundingProvider, ReadyAmount } from "./funding-view";
+import { RebalanceNotice } from "./rebalance-notice";
 import { loadCashView } from "@/lib/budget/funding";
 import { toVM } from "@/lib/budget/to-vm";
 import { isCustomKey } from "@/lib/budget/expense-types";
@@ -249,6 +250,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
         </CoverBox>
 
       </section>
+
+      <RebalanceNotice workspaceId={workspace.id} />
 
       {accountCount === 0 && (
         <div className="card p-5 text-sm">

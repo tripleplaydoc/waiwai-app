@@ -10,6 +10,8 @@ import { isoToDate, todayIso } from "@/lib/utils/dates";
 import { startOfMonthUTC } from "@/lib/budget/dates";
 import { endOfMonth, loadAllPocketBalances, loadPocketBalances, loadPocketTags, loadPools, retagRows } from "@/lib/budget/funding";
 import { splitProRata } from "@/lib/budget/funding-math";
+import { planRebalance } from "@/lib/budget/rebalance-math";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 import type { ActionResult } from "./types";
 
 const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
@@ -75,4 +77,27 @@ export async function transferAction(_prev: ActionResult | undefined, formData: 
   if (movedWith > 0) parts.push(`${formatCents(movedWith)} of pocket money moved with it.`);
   if (short > 0) parts.push(`${from!.name} now holds ${formatCents(short)} less than your budget expects.`);
   return { ok: true, message: parts.join(" ") };
+}
+
+/**
+ * Fixes accounts whose pockets claim more cash than the account holds, by moving the "held in" label of pocket money
+ * to accounts with free cash. Pocket amounts and Ready to assign do not change.
+ */
+export async function rebalanceHeldInAction(workspaceId: string): Promise<ActionResult> {
+  await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
+  const month = startOfMonthUTC(isoToDate(todayIso()));
+  const [pools, balances, accounts] = await Promise.all([
+    loadPools(prisma, workspaceId, endOfMonth(month)),
+    loadAllPocketBalances(prisma, workspaceId, month),
+    prisma.account.findMany({ where: { workspaceId }, select: { id: true, name: true } }),
+  ]);
+  const moves = planRebalance(pools, balances);
+  if (moves.length === 0) return { ok: true, message: "Nothing to rebalance." };
+  const name = new Map(accounts.map((a) => [a.id, a.name]));
+  const rows = moves.flatMap((m) => retagRows({ categoryId: m.pocketId, month, cents: m.cents, from: m.from, to: m.to, note: `Rebalanced: ${m.from ? name.get(m.from) ?? "account" : "untagged"} to ${name.get(m.to) ?? "account"}` }));
+  await prisma.budgetAssignment.createMany({ data: rows });
+  refresh();
+  const total = moves.reduce((t, m) => t + m.cents, 0);
+  return { ok: true, message: `Moved ${formatCents(total)} of labels so each account matches the cash it holds. No pocket amounts changed.` };
 }
