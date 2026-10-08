@@ -1,9 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { getBudgetSummary } from "@/lib/budget/summary";
+import { getBudgetSummary, type EnvelopeRow } from "@/lib/budget/summary";
 import { cashTrend } from "@/lib/home-trend";
 import type { StartCounts } from "@/lib/home-start";
 import { addDays } from "@/lib/forecast-math";
+import type { LegacyPocket } from "@/lib/generations";
 import { isoToDate } from "@/lib/utils/dates";
 
 /** Counts that tell us how far through first-time setup this budget is. */
@@ -44,21 +45,33 @@ export async function loadRecent(workspaceId: string, take = 6): Promise<Recent[
 
 export interface Goal { id: string; name: string; savedCents: number; targetCents: number; fraction: number; reached: boolean; byDate: string | null }
 
+/** Pockets saved for the next generation, with what is in them and the goal (if one was set). */
+export function legacyPockets(rows: EnvelopeRow[]): LegacyPocket[] {
+  return rows
+    .filter((r) => r.type === "EXPENSE" && !r.isSystemManaged && r.legacy)
+    .map((r) => ({
+      id: r.id, name: r.name, savedCents: Math.max(0, r.availableCents),
+      targetCents: (r.targetType === "TARGET_BALANCE" || r.targetType === "TARGET_BALANCE_BY_DATE") && (r.targetCents ?? 0) > 0 ? (r.targetCents as number) : null,
+    }));
+}
+
 /**
- * Savings goals = pockets that have a "reach this balance" target. Also returns what is set aside in them, so the
- * "You can spend" figure can leave that money alone.
+ * Savings goals = pockets that have a "reach this balance" target (pockets saved for the next generation are listed
+ * apart, as `gifts`). Also returns what is set aside in them, so the "You can spend" figure can leave that money alone.
  */
-export async function loadGoals(workspaceId: string, month: Date): Promise<{ goals: Goal[]; setAsideCents: number; spendableCents: number | null }> {
+export async function loadGoals(workspaceId: string, month: Date): Promise<{ goals: Goal[]; gifts: Goal[]; setAsideCents: number; spendableCents: number | null }> {
   const summary = await getBudgetSummary(workspaceId, month);
-  const goals = summary.rows
-    .filter((r) => r.type === "EXPENSE" && !r.isSystemManaged && (r.targetType === "TARGET_BALANCE" || r.targetType === "TARGET_BALANCE_BY_DATE") && (r.targetCents ?? 0) > 0)
-    .map((r) => {
-      const target = r.targetCents as number;
-      const saved = Math.max(0, r.availableCents);
-      return { id: r.id, name: r.name, savedCents: saved, targetCents: target, fraction: Math.min(1, saved / target), reached: saved >= target, byDate: r.targetDate };
-    });
+  const mk = (r: EnvelopeRow): Goal => {
+    const target = r.targetCents ?? 0;
+    const hasGoal = (r.targetType === "TARGET_BALANCE" || r.targetType === "TARGET_BALANCE_BY_DATE") && target > 0;
+    const saved = Math.max(0, r.availableCents);
+    return { id: r.id, name: r.name, savedCents: saved, targetCents: hasGoal ? target : 0, fraction: hasGoal ? Math.min(1, saved / target) : 0, reached: hasGoal && saved >= target, byDate: hasGoal ? r.targetDate : null };
+  };
+  const pockets = summary.rows.filter((r) => r.type === "EXPENSE" && !r.isSystemManaged);
+  const goals = pockets.filter((r) => !r.legacy && (r.targetType === "TARGET_BALANCE" || r.targetType === "TARGET_BALANCE_BY_DATE") && (r.targetCents ?? 0) > 0).map(mk);
+  const gifts = pockets.filter((r) => r.legacy).map(mk);
   const spendRows = summary.rows.filter((r) => r.type === "EXPENSE" && r.spendable);
   // null = nothing is marked as spending money yet, so callers fall back to "cash minus goals".
   const spendableCents = spendRows.length ? spendRows.reduce((s, r) => s + Math.max(0, r.availableCents), 0) : null;
-  return { goals, setAsideCents: goals.reduce((s, g) => s + g.savedCents, 0), spendableCents };
+  return { goals, gifts, setAsideCents: [...goals, ...gifts].reduce((s, g) => s + g.savedCents, 0), spendableCents };
 }

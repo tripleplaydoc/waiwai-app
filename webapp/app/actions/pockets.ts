@@ -34,6 +34,7 @@ const pocketSchema = z.object({
   dueDay: z.string().optional(),
   isTaxDeductible: z.string().optional(),
   spendable: z.string().optional(),
+  legacy: z.string().optional(),
   expenseType: z.string().optional(),
   customType: z.string().optional(),
   incomeKind: z.enum(["EARNED", "PORTFOLIO", "PASSIVE"]).optional(),
@@ -146,6 +147,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
   const incomeKind = isIncome ? d.incomeKind ?? "EARNED" : null;
   const deductible = workspace.type === "BUSINESS" && !isIncome && d.isTaxDeductible === "on";
   const spendable = workspace.type === "PERSONAL" && !isIncome && d.spendable === "on";
+  const legacy = workspace.type === "PERSONAL" && !isIncome && d.legacy === "on";
   let newId: string | undefined;
   try {
     if (existing) {
@@ -156,6 +158,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           ...(existing.isSystemManaged ? {} : { name: d.name, categoryGroupId: groupId }),
           isTaxDeductible: existing.isSystemManaged ? existing.isTaxDeductible : deductible,
           spendable,
+          legacy,
           priorityRank: isIncome ? null : rank,
           dueDay,
           ...(isIncome ? { incomeKind } : {}),
@@ -179,6 +182,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
           sortOrder: (top._max.sortOrder ?? -1) + 1,
           isTaxDeductible: deductible,
           spendable,
+          legacy,
           priorityRank: isIncome ? null : rank,
           dueDay,
           expenseType,

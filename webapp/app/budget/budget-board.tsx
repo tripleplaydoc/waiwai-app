@@ -8,7 +8,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, ChevronDown, GripVertical, Pencil, Plus } from "lucide-react";
+import { Check, ChevronDown, GripVertical, Pencil, Plus, Sprout } from "lucide-react";
 import { AssignedInput } from "./budget-controls";
 import { GroupDialog, PocketDialog } from "./pocket-dialog";
 import { useFunding } from "./funding-view";
@@ -253,6 +253,7 @@ function PocketRowView({
           {!simple && typeLabel(p.expenseType) && <span className="hidden rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] font-medium text-water md:inline dark:bg-cyan-950/60">{typeLabel(p.expenseType)}</span>}
           {!simple && p.priorityRank !== null && <span className="hidden rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-[#1E4FBF] md:inline dark:bg-blue-950 dark:text-blue-300">P{p.priorityRank}</span>}
           {funded && !overlay && <FundedBadge fresh={fresh} />}
+          {p.legacy && <span title="Saved for the next generation" className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"><Sprout className="size-3" aria-hidden />Generations</span>}
           {p.isSystemManaged && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800">system</span>}
           {!simple && p.allocationBps !== null && <span className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 md:inline dark:bg-slate-800">{p.allocationBps / 100}%</span>}
         </div>
@@ -383,8 +384,8 @@ const collision: CollisionDetection = (args) => {
 };
 
 export function BudgetBoard({
-  workspaceId, isBusiness, month, groups: serverGroups, allGroups, customTypes, simple, horizon, tags, assetOptions = [],
-}: { assetOptions?: AssetOption[]; tags: TagVM[]; simple: boolean; horizon: Horizon; customTypes: string[]; workspaceId: string; isBusiness: boolean; month: string; groups: GroupVM[]; allGroups: { id: string; name: string }[] }) {
+  workspaceId, isBusiness, month, groups: serverGroups, allGroups, customTypes, simple, horizon, tags, assetOptions = [], isPrivate = false,
+}: { isPrivate?: boolean; assetOptions?: AssetOption[]; tags: TagVM[]; simple: boolean; horizon: Horizon; customTypes: string[]; workspaceId: string; isBusiness: boolean; month: string; groups: GroupVM[]; allGroups: { id: string; name: string }[] }) {
   const [groups, setGroups] = useState(serverGroups);
   const ref = useRef(serverGroups);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -560,7 +561,7 @@ export function BudgetBoard({
           assetOptions={assetOptions}
           tags={tags}
           customTypes={customTypes}
-          open onClose={() => setPocketDlg(null)} workspaceId={workspaceId} isBusiness={isBusiness}
+          open onClose={() => setPocketDlg(null)} workspaceId={workspaceId} isBusiness={isBusiness} isPrivate={isPrivate}
           groups={allGroups} pocket={pocketDlg.pocket} defaultGroupId={pocketDlg.groupId} monthIso={month}
         />
       )}

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CalendarClock, ChevronLeft, ChevronRight, Droplets, Landmark, LineChart, Target } from "lucide-react";
 import { requireAuth, getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getWorkspace, wsKeyFromParam } from "@/lib/workspace";
+import { getBudgetView, getWorkspace, wsKeyFromParam } from "@/lib/workspace";
 import { getBudgetSummary, type EnvelopeRow } from "@/lib/budget/summary";
 import { budgetHealth, pocketProgress } from "@/lib/budget/targets";
 import { billStatus, DUE_SOON_DAYS } from "@/lib/budget/bills";
@@ -60,6 +60,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
   const sp = await searchParams;
   const wsKey = wsKeyFromParam(sp.ws);
   const workspace = await getWorkspace(wsKey);
+  const isPrivate = !!(await getBudgetView())?.privateUser;
   const jar = await cookies();
   const mode = parseMode(jar.get("ww_budget_mode")?.value);
   const horizon = parseHorizon(jar.get("ww_budget_horizon")?.value);
@@ -292,7 +293,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: SP })
       <MoveMoneyHost hideButton workspaceId={workspace.id} month={mp} readyToAssignCents={rta} pockets={allPockets.map((p) => ({ system: p.isSystemManaged, id: p.id, name: p.name, group: boardGroups.find((g) => g.pockets.some((q) => q.id === p.id))?.name ?? "Other", availableCents: p.availableCents, assignedCents: p.assignedCents, paidFromId: p.paidFromId, needCents: p.progress.hasTarget || p.availableCents < 0 ? Math.max(p.progress.stillNeededCents, p.availableCents < 0 ? -p.availableCents : 0) : undefined }))} />
 
 
-      <BudgetBoard assetOptions={assetState.options} tags={tagState.tags} simple={simple} horizon={horizon} customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} month={mp} groups={boardGroups} allGroups={allGroups} />
+      <BudgetBoard assetOptions={assetState.options} tags={tagState.tags} simple={simple} horizon={horizon} customTypes={customTypes} workspaceId={workspace.id} isBusiness={workspace.type === "BUSINESS"} isPrivate={isPrivate} month={mp} groups={boardGroups} allGroups={allGroups} />
 
       {!simple && <section className="card px-5 py-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Totals">
         <span className="nums">Totals this month — assigned {formatCents(summary.totalAssignedCents)} · activity {formatCents(summary.totalActivityCents)} · available {formatCents(summary.totalAvailableCents)}</span>

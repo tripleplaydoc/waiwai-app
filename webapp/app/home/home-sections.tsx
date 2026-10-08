@@ -28,7 +28,7 @@ export function HomeSections({ nodes, layout }: { nodes: Record<string, ReactNod
 
   return (
     <>
-      {layout.order.filter((id) => !layout.hidden.includes(id)).map((id) => <div key={id}>{nodes[id]}</div>)}
+      {layout.order.filter((id) => !layout.hidden.includes(id) && nodes[id] != null && nodes[id] !== false).map((id) => <div key={id}>{nodes[id]}</div>)}
 
       {!editing ? (
         <button type="button" onClick={open} className="mx-auto flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">

@@ -2,6 +2,9 @@
 export const HOME_SECTIONS = [
   { id: "verse", label: "Daily verse" },
   { id: "cash", label: "Cash on hand" },
+  { id: "stewardship", label: "Where your water went" },
+  { id: "flow", label: "Let it flow (resting money)" },
+  { id: "generations", label: "For the next generation" },
   { id: "wins", label: "What's going well" },
   { id: "ahead", label: "Looking ahead: 7 days" },
   { id: "steps", label: "Your next steps" },
@@ -14,12 +17,26 @@ export const homeLabel = (id: string) => HOME_SECTIONS.find((s) => s.id === id)?
 
 export interface HomeLayout { order: string[]; hidden: string[] }
 
-/** Saved order first (known ids only, no repeats), then any section added since, in default order. */
+/** Sections added after the first release. In a layout saved before they existed they go next to their default neighbour. */
+const ADDED_LATER = ["stewardship", "flow", "generations"];
+
+/**
+ * Saved order first (known ids only, no repeats), then any original section that is missing, in default order.
+ * A newer section missing from the saved layout goes right after the section before it in the default order
+ * (so a new card lands next to its neighbour, not at the very end).
+ */
 export function normalizeLayout(order: unknown, hidden: unknown): HomeLayout {
   const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const id of [...strs(order), ...HOME_IDS]) if (HOME_IDS.includes(id) && !seen.has(id)) { seen.add(id); out.push(id); }
+  for (const id of strs(order)) if (HOME_IDS.includes(id) && !seen.has(id)) { seen.add(id); out.push(id); }
+  for (const id of HOME_IDS) if (!seen.has(id) && !ADDED_LATER.includes(id)) { seen.add(id); out.push(id); }
+  HOME_IDS.forEach((id, i) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    const prev = i > 0 ? out.indexOf(HOME_IDS[i - 1]) : -1;
+    if (prev >= 0) out.splice(prev + 1, 0, id); else out.push(id);
+  });
   const hide = [...new Set(strs(hidden).filter((id) => HOME_IDS.includes(id)))];
   return { order: out, hidden: hide };
 }

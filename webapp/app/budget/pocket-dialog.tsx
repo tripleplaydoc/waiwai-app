@@ -23,8 +23,10 @@ const KINDS: { value: TT; label: string; hint: string }[] = [
 ];
 
 export function PocketDialog({
-  open, onClose, workspaceId, isBusiness, groups, pocket, defaultGroupId, monthIso, kindOfNew, customTypes = [], tags = [], assetOptions = [],
+  open, onClose, workspaceId, isBusiness, groups, pocket, defaultGroupId, monthIso, kindOfNew, customTypes = [], tags = [], assetOptions = [], isPrivate = false,
 }: {
+  /** A private (kid) budget words the next-generation option as "A gift for your future". */
+  isPrivate?: boolean;
   assetOptions?: AssetOption[];
   tags?: TagVM[];
   customTypes?: string[];
@@ -46,6 +48,7 @@ export function PocketDialog({
   const [name, setName] = useState(pocket?.name ?? "");
   const [deduct, setDeduct] = useState(pocket?.isTaxDeductible ?? false);
   const [spend, setSpend] = useState(pocket?.spendable ?? false);
+  const [legacy, setLegacy] = useState(pocket?.legacy ?? false);
   const [ikind, setIkind] = useState<string>(pocket?.incomeKind ?? "EARNED");
   const [tagIds, setTagIds] = useState<string[]>(pocket?.tagIds ?? []);
   const [assetId, setAssetId] = useState(pocket?.asset?.accountId ?? "");
@@ -287,6 +290,17 @@ export function PocketDialog({
               <label className="flex min-h-11 items-center gap-3 self-end text-sm">
                 <input type="checkbox" name="spendable" checked={spend} onChange={(e) => setSpend(e.target.checked)} className="size-5" />
                 <span>Spending money <span className="text-slate-400">(counts as &ldquo;You can spend&rdquo; on the simple home)</span></span>
+              </label>
+            )}
+            {!isBusiness && (
+              <label className="flex items-start gap-3 py-2 text-sm sm:col-span-2">
+                <input type="checkbox" name="legacy" checked={legacy} onChange={(e) => setLegacy(e.target.checked)} className="mt-0.5 size-5 shrink-0" />
+                <span>
+                  <span className="font-medium">{isPrivate ? "A gift for your future" : "For the next generation"}</span>
+                  <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                    {isPrivate ? "Money you are saving for the grown-up you will be someday. It gets its own spot on your Home screen." : "Money you are setting aside for your children, grandchildren or the family's future. It gets a small sprout on the board and is added up together on Home."}
+                  </span>
+                </span>
               </label>
             )}
           </div>

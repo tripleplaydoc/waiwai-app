@@ -24,6 +24,8 @@ export interface PocketVM {
   isSystemManaged: boolean;
   isTaxDeductible: boolean;
   spendable: boolean;
+  /** Saved for the next generation. */
+  legacy: boolean;
   priorityRank: number | null;
   targetType: "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE" | null;
   targetCents: number | null;

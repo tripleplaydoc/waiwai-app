@@ -109,7 +109,9 @@ html.dark .wai-bg { opacity: .55; }
 @keyframes wai-ripple { 0% { transform: scale(.35); opacity: .55; } 100% { transform: scale(1.9); opacity: 0; } }
 @keyframes wai-drop { 0% { transform: translateY(-34px) scale(.7); opacity: 0; } 55% { opacity: 1; } 100% { transform: translateY(16px) scale(1); opacity: 0; } }
 @keyframes wai-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes wai-ring { from { stroke-dashoffset: var(--ring-c); } to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: no-preference) {
+  .ring-wipe { animation: wai-ring 1.2s cubic-bezier(.3,.6,.2,1) both; }
   .wai-bg { animation: wai-drift 90s linear infinite; background-size: 1440px 100%, 1440px 80%; background-repeat: repeat-x; }
   .page-rise { animation: wai-rise .45s cubic-bezier(.2,.7,.2,1) both; }
   .bar-grow { transform-origin: left center; animation: wai-grow .8s cubic-bezier(.2,.7,.2,1) both; }

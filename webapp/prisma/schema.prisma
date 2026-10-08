@@ -627,6 +627,8 @@ model Category {
   isTaxDeductible   Boolean            @default(false)
   /// Personal pockets: money here counts as "you can spend" on the simple (kid) home screen.
   spendable         Boolean            @default(false)
+  /// Personal pockets: saved for the next generation (a long-view gift). Shown as "For the next generation" / "A gift for your future" on a private budget.
+  legacy            Boolean            @default(false)
   scheduleCLineItem ScheduleCLineItem?
   /// WaiWai classification key (lib/budget/expense-types.ts), e.g. ADVERTISING.
   expenseType       String?

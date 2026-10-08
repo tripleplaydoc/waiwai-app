@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Banknote, Building2, Droplets, Landmark, Layers, Repeat, TrendingUp, Wallet } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { wsKeyFromParam } from "@/lib/workspace";
+import { WHY_WAIWAI } from "@/lib/why-waiwai";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,10 @@ export default async function HelpPage({ searchParams }: { searchParams: Promise
 
       <Section icon={Banknote} title="Your daily routine">
         Add what you spend with the + button. Check Home for the Pool and anything that needs you. Once a week, give any new money a job. That is it.
+      </Section>
+
+      <Section icon={Droplets} title="Why WaiWai?">
+        {WHY_WAIWAI.map((t) => <p key={t} className="mt-2 first:mt-0">{t}</p>)}
       </Section>
 
       <div className="flex flex-wrap gap-2">

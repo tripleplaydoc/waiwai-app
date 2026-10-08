@@ -1,15 +1,16 @@
 import Link from "next/link";
-import { ArrowDownLeft, ArrowRight, ArrowUpRight, Target } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, ArrowUpRight, Sprout, Target } from "lucide-react";
 import { formatCents } from "@/lib/utils/currency";
 import { CountUp } from "@/components/count-up";
 import { Hint } from "@/components/hint";
 import { Sparkline } from "@/components/sparkline";
 import { shortDay } from "@/lib/home-math";
 import type { Goal, Recent } from "@/lib/home-extras";
+import { generationsCaption, generationsTotals } from "@/lib/generations";
 
 /** Simplified Home for a private (kid) budget: one big spendable number, friendly goals, recent activity. */
-export function KidHome({ greeting, cashCents, setAsideCents, spendableCents, goals, recent, trend, q }: {
-  greeting: string; cashCents: number; setAsideCents: number; spendableCents: number | null; goals: Goal[]; recent: Recent[]; trend: number[]; q: string;
+export function KidHome({ greeting, cashCents, setAsideCents, spendableCents, goals, gifts = [], recent, trend, q }: {
+  greeting: string; cashCents: number; setAsideCents: number; spendableCents: number | null; goals: Goal[]; gifts?: Goal[]; recent: Recent[]; trend: number[]; q: string;
 }) {
   const marked = spendableCents !== null;
   const spendable = marked ? spendableCents : Math.max(0, cashCents - setAsideCents);
@@ -49,6 +50,31 @@ export function KidHome({ greeting, cashCents, setAsideCents, spendableCents, go
           </ul>
         )}
       </section>
+
+      {gifts.length > 0 && (
+        <section aria-label="A gift for your future">
+          <h2 className="mb-1 flex items-center gap-2 text-base font-bold"><Sprout className="size-4 text-pos" aria-hidden />A gift for your future <Hint>Money you are saving for the grown-up you will be someday. It is for the long run, so it is not part of what you can spend.</Hint></h2>
+          <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">{generationsCaption(generationsTotals(gifts.map((g) => ({ id: g.id, name: g.name, savedCents: g.savedCents, targetCents: g.targetCents > 0 ? g.targetCents : null }))), true)}</p>
+          <ul className="space-y-3">
+            {gifts.map((g) => (
+              <li key={g.id} className="card p-4">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate text-sm font-semibold">{g.name}</span>
+                  <span className="nums shrink-0 text-sm text-slate-600 dark:text-slate-300"><span className="font-semibold text-slate-900 dark:text-slate-100">{formatCents(g.savedCents)}</span>{g.targetCents > 0 && <> of {formatCents(g.targetCents)}</>}</span>
+                </div>
+                {g.targetCents > 0 && (
+                  <>
+                    <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(g.fraction * 100)} aria-label={`${g.name} progress`}>
+                      <div className={`bar-grow h-full rounded-full ${g.reached ? "bg-pos" : "bg-water"}`} style={{ width: `${Math.max(g.fraction > 0 ? 3 : 0, g.fraction * 100)}%` }} />
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">{g.reached ? "You did it!" : `${formatCents(g.targetCents - g.savedCents)} to go`}</div>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section aria-label="Recent activity">
         <h2 className="mb-1 text-base font-bold">Recent activity</h2>

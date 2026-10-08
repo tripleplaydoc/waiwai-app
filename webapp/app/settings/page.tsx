@@ -9,6 +9,7 @@ import { AvatarForm } from "./avatar-form";
 import { QuietMode } from "./quiet-mode";
 import { PushToggle } from "./push-toggle";
 import { avatarUrl } from "@/components/avatar";
+import { WHY_WAIWAI } from "@/lib/why-waiwai";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,12 @@ export default async function SettingsPage() {
         )}
       </section>
       )}
+      <section className="card p-6" aria-labelledby="about-h">
+        <h2 id="about-h" className="mb-2 text-base font-semibold">About WaiWai</h2>
+        <div className="space-y-2 text-sm text-slate-500 dark:text-slate-400">
+          {WHY_WAIWAI.map((t) => <p key={t}>{t}</p>)}
+        </div>
+      </section>
     </div>
   );
 }

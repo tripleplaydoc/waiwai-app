@@ -1,0 +1,1 @@
+ALTER TABLE categories ADD COLUMN "legacy" BOOLEAN NOT NULL DEFAULT false;

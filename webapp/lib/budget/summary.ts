@@ -17,6 +17,7 @@ export interface EnvelopeRow {
   isSystemManaged: boolean;
   isTaxDeductible: boolean;
   spendable: boolean;
+  legacy: boolean;
   targetType: "MONTHLY_FUNDING" | "TARGET_BALANCE" | "TARGET_BALANCE_BY_DATE" | null;
   targetCents: number | null;
   targetDate: string | null; // YYYY-MM-DD
@@ -96,6 +97,7 @@ export async function getBudgetSummary(workspaceId: string, month: Date): Promis
       isSystemManaged: c.isSystemManaged,
       isTaxDeductible: c.isTaxDeductible,
       spendable: c.spendable,
+      legacy: c.legacy,
       targetType: c.fundingTargetType,
       targetCents: c.fundingTargetCents,
       targetDate: c.fundingTargetByDate ? c.fundingTargetByDate.toISOString().slice(0, 10) : null,

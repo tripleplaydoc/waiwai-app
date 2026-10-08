@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { getBudgetSummary } from "@/lib/budget/summary";
+import { getBudgetSummary, type EnvelopeRow } from "@/lib/budget/summary";
 import { billStatus } from "@/lib/budget/bills";
 import { loadCardStatuses } from "@/lib/budget/cards";
 import { loadLoans } from "@/lib/budget/loans-state";
@@ -27,7 +27,7 @@ function hourNow(): number {
 }
 
 /** Everything the Home screen shows for one workspace: what is good first, then the gentle next steps. */
-export async function loadHome(workspaceId: string, firstName: string, opts: { today?: string; wsQ?: string } = {}): Promise<HomeVM & { forecast: ForecastVM }> {
+export async function loadHome(workspaceId: string, firstName: string, opts: { today?: string; wsQ?: string } = {}): Promise<HomeVM & { forecast: ForecastVM; rows: EnvelopeRow[] }> {
   const today = opts.today ?? todayIso();
   const q = opts.wsQ ? `?${opts.wsQ.replace(/^[?&]/, "")}` : "";
   const month = isoToDate(`${today.slice(0, 7)}-01`);
@@ -100,6 +100,7 @@ export async function loadHome(workspaceId: string, firstName: string, opts: { t
     coming: { inEvents, outEvents, inCents, outCents },
     steps: orderSteps(steps),
     forecast,
+    rows: summary.rows,
   };
 }
 

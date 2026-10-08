@@ -9,6 +9,7 @@ import { daysBetween } from "@/lib/forecast-math";
 import { shortDay } from "@/lib/home-math";
 import { postDue } from "@/lib/recurring";
 import { DailyVerse } from "@/components/daily-verse";
+import { DailyOlelo } from "@/components/daily-olelo";
 import { parseLayout } from "@/lib/home-layout";
 import { prisma } from "@/lib/prisma";
 import { HomeSections } from "./home-sections";
@@ -17,8 +18,14 @@ import { Hint } from "@/components/hint";
 import { Sparkline } from "@/components/sparkline";
 import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
 import { startProgress, startSteps } from "@/lib/home-start";
-import { loadCashTrend, loadGoals, loadRecent, loadStartCounts } from "@/lib/home-extras";
-import { isoToDate } from "@/lib/utils/dates";
+import { legacyPockets, loadCashTrend, loadGoals, loadRecent, loadStartCounts } from "@/lib/home-extras";
+import { isoToDate, monthLabel } from "@/lib/utils/dates";
+import { loadStewardship } from "@/lib/stewardship-state";
+import { loadFlowNudge } from "@/lib/flow-nudge-state";
+import { isSnoozed } from "@/lib/flow-nudge";
+import { StewardshipCard } from "./stewardship-card";
+import { GenerationsCard } from "./generations-card";
+import { FlowNudgeCard } from "./flow-nudge-card";
 import { StartCard } from "./start-card";
 import { KidHome } from "./kid-home";
 
@@ -52,8 +59,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   // A private (kid) budget gets the simple layout: what you can spend, goals, recent activity.
   if (view?.privateUser) {
-    const [{ goals, setAsideCents, spendableCents }, recent] = await Promise.all([loadGoals(ws.id, isoToDate(`${today.slice(0, 7)}-01`)), loadRecent(ws.id, 6)]);
-    return <KidHome greeting={h.greeting} cashCents={h.cashCents} setAsideCents={setAsideCents} spendableCents={spendableCents} goals={goals} recent={recent} trend={trend} q={q} />;
+    const [{ goals, gifts, setAsideCents, spendableCents }, recent] = await Promise.all([loadGoals(ws.id, isoToDate(`${today.slice(0, 7)}-01`)), loadRecent(ws.id, 6)]);
+    return <KidHome greeting={h.greeting} cashCents={h.cashCents} setAsideCents={setAsideCents} spendableCents={spendableCents} goals={goals} gifts={gifts} recent={recent} trend={trend} q={q} />;
   }
 
   const [counts, poolCents] = await Promise.all([loadStartCounts(ws.id), getReadyToAssign(prisma, ws.id, new Date())]);
@@ -63,9 +70,22 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   try { hiddenStart = (await cookies()).get(hideName)?.value === "1"; } catch { hiddenStart = false; }
   const showStart = !startProgress(steps).complete && !hiddenStart;
 
+  // Personal-only cards: where this month's money went, and what is set aside for the next generation.
+  const isPersonal = ws.type === "PERSONAL";
+  const steward = isPersonal ? await loadStewardship(ws.id, today) : null;
+  const legacy = isPersonal ? legacyPockets(h.rows) : [];
+  // "Let it flow": money resting in the Pool for a week or more, unless it was snoozed ("Maybe later" keeps it quiet for 3 days).
+  const nudgeCookie = `ww_nudge_${ws.id}`;
+  let snoozed = false;
+  try { snoozed = isSnoozed((await cookies()).get(nudgeCookie)?.value, today); } catch { snoozed = false; }
+  const nudge = snoozed ? null : await loadFlowNudge(ws.id, poolCents, today);
+
   const layout = parseLayout(await loadLayout(me?.id));
   const nodes: Record<string, React.ReactNode> = {
-    verse: <DailyVerse />,
+    verse: <div className="space-y-2"><DailyVerse /><DailyOlelo /></div>,
+    stewardship: steward ? <StewardshipCard data={steward} monthLabel={monthLabel(isoToDate(`${today.slice(0, 7)}-01`))} /> : null,
+    flow: nudge ? <FlowNudgeCard amount={formatCents(nudge.cents)} days={nudge.days} today={today} cookieName={nudgeCookie} href={`/budget${q}`} /> : null,
+    generations: isPersonal ? <GenerationsCard pockets={legacy} q={q} /> : null,
     cash: (
       <section className="card p-4 sm:p-5" aria-label="Cash on hand">
         <div className="flex items-center justify-between gap-3">
