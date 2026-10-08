@@ -3,6 +3,8 @@
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertTransactionAccess } from "@/lib/access";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
@@ -43,6 +45,7 @@ export async function createTransactionAction(_prev: ActionResult | undefined, f
   const signed = d.direction === "outflow" ? -Math.abs(cents) : Math.abs(cents);
 
   const account = await prisma.account.findUnique({ where: { id: d.accountId } });
+  if (account) await assertWorkspaceAccess(account.workspaceId);
   if (!account || account.isArchived) return { ok: false, error: "Account not found." };
 
   let personId: string | null = (await getCurrentUser())?.id ?? null;
@@ -141,6 +144,7 @@ async function ownerDrawPocket(workspaceId: string): Promise<string> {
 
 export async function setTransactionTagsAction(transactionId: string, tags: string[]): Promise<ActionResult> {
   await assertAuthed();
+  await assertTransactionAccess(transactionId);
   const tx = await prisma.transaction.findUnique({ where: { id: transactionId }, select: { id: true, accountId: true } });
   if (!tx) return { ok: false, error: "Transaction not found." };
   await prisma.transaction.update({ where: { id: tx.id }, data: { tags: parseTags(tags) } });
@@ -154,6 +158,7 @@ export async function setTransactionCategoryAction(formData: FormData): Promise<
   const id = z.string().min(1).parse(formData.get("transactionId"));
   const categoryRaw = String(formData.get("categoryId") ?? "");
   const tx = await prisma.transaction.findUnique({ where: { id } });
+  if (tx) await assertWorkspaceAccess(tx.workspaceId);
   if (!tx) return;
   let categoryId: string | null = null;
   if (categoryRaw) {
@@ -170,6 +175,7 @@ export async function deleteTransactionAction(formData: FormData): Promise<void>
   await assertAuthed();
   const id = z.string().min(1).parse(formData.get("transactionId"));
   const tx = await prisma.transaction.findUnique({ where: { id } });
+  if (tx) await assertWorkspaceAccess(tx.workspaceId);
   if (!tx) return;
   // A transfer (like a card payment) has two halves; removing one removes both so the books stay balanced.
   const halves = tx.transferGroupId ? await prisma.transaction.findMany({ where: { transferGroupId: tx.transferGroupId }, select: { id: true, accountId: true } }) : [];
@@ -212,6 +218,7 @@ export async function importTransactionsAction(input: unknown): Promise<ImportRe
   const { accountId, fileName, rows } = parsed.data;
 
   const account = await prisma.account.findUnique({ where: { id: accountId } });
+  if (account) await assertWorkspaceAccess(account.workspaceId);
   if (!account || account.isArchived) return { ok: false, error: "Account not found." };
 
   const names = [...new Set(rows.map((r) => r.payee).filter(Boolean))];
@@ -283,6 +290,7 @@ export async function attachReceiptAction(_prev: ActionResult | undefined, formD
   const id = z.string().min(1).safeParse(formData.get("transactionId"));
   if (!id.success) return { ok: false, error: "Bad request." };
   const tx = await prisma.transaction.findUnique({ where: { id: id.data } });
+  if (tx) await assertWorkspaceAccess(tx.workspaceId);
   if (!tx) return { ok: false, error: "Transaction not found." };
   const rec = await readReceipt(formData);
   if ("error" in rec) return { ok: false, error: rec.error };
@@ -296,6 +304,7 @@ export async function removeReceiptAction(formData: FormData): Promise<void> {
   await assertAuthed();
   const id = z.string().min(1).parse(formData.get("transactionId"));
   const tx = await prisma.transaction.findUnique({ where: { id } });
+  if (tx) await assertWorkspaceAccess(tx.workspaceId);
   if (!tx) return;
   await prisma.receipt.deleteMany({ where: { transactionId: id } });
   revalidatePath(`/accounts/${tx.accountId}`);
@@ -306,6 +315,7 @@ export async function setTransactionPersonAction(formData: FormData): Promise<vo
   const id = z.string().min(1).parse(formData.get("transactionId"));
   const raw = String(formData.get("personId") ?? "");
   const tx = await prisma.transaction.findUnique({ where: { id } });
+  if (tx) await assertWorkspaceAccess(tx.workspaceId);
   if (!tx) return;
   let personId: string | null = null;
   if (raw) {
@@ -324,6 +334,7 @@ export async function setClearedAction(formData: FormData): Promise<void> {
   const id = z.string().min(1).parse(formData.get("transactionId"));
   const want = String(formData.get("cleared") ?? "") === "1";
   const tx = await prisma.transaction.findUnique({ where: { id }, select: { id: true, accountId: true, clearedStatus: true } });
+  if (tx) await assertTransactionAccess(tx.id);
   if (!tx || tx.clearedStatus === "RECONCILED") return;
   await prisma.transaction.update({ where: { id }, data: { clearedStatus: want ? "CLEARED" : "UNCLEARED" } });
   revalidatePath("/accounts", "layout");
@@ -349,6 +360,7 @@ export async function updateTransactionAction(_prev: ActionResult | undefined, f
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
   const d = parsed.data;
   const tx = await prisma.transaction.findUnique({ where: { id: d.transactionId }, include: { _count: { select: { splits: true } } } });
+  if (tx) await assertWorkspaceAccess(tx.workspaceId);
   if (!tx) return { ok: false, error: "Transaction not found." };
 
   const status = d.cleared === "on" ? (tx.clearedStatus === "RECONCILED" ? "RECONCILED" : "CLEARED") : tx.clearedStatus === "RECONCILED" ? "RECONCILED" : "UNCLEARED";

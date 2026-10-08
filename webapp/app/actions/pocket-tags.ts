@@ -6,12 +6,14 @@ import { assertAuthed } from "@/lib/auth";
 import { SUGGESTED_TAGS, cleanTagName, normalizeColor } from "@/lib/budget/tags";
 import { replacePocketTags } from "@/lib/budget/tags-state";
 import type { ActionResult } from "./types";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 
 const done = () => revalidatePath("/budget");
 const NEEDS_TABLE = "Tags need their new database table first. Run the pocket_tags SQL in Supabase, then try again.";
 
 export async function createTagAction(workspaceId: string, name: string, color: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const n = cleanTagName(name), c = normalizeColor(color);
   if (!n) return { ok: false, error: "Give the tag a short name (up to 24 characters)." };
   if (!c) return { ok: false, error: "Pick a colour." };
@@ -26,6 +28,7 @@ export async function createTagAction(workspaceId: string, name: string, color: 
 
 export async function updateTagAction(workspaceId: string, id: string, name: string, color: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const n = cleanTagName(name), c = normalizeColor(color);
   if (!n) return { ok: false, error: "Give the tag a short name (up to 24 characters)." };
   if (!c) return { ok: false, error: "Pick a colour." };
@@ -43,6 +46,7 @@ export async function updateTagAction(workspaceId: string, id: string, name: str
 /** Deleting a tag only removes the label from pockets; nothing else changes. */
 export async function deleteTagAction(workspaceId: string, id: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   try { await prisma.pocketTag.deleteMany({ where: { id, workspaceId } }); } catch { return { ok: false, error: "Could not delete that tag." }; }
   done();
   return { ok: true };
@@ -51,6 +55,7 @@ export async function deleteTagAction(workspaceId: string, id: string): Promise<
 /** One tap to add Fixed, Variable, Loan and Payroll (skips any you already have). */
 export async function addSuggestedTagsAction(workspaceId: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   try {
     const have = new Set((await prisma.pocketTag.findMany({ where: { workspaceId }, select: { name: true } })).map((t) => t.name.toLowerCase()));
     const top = await prisma.pocketTag.aggregate({ where: { workspaceId }, _max: { sortOrder: true } });
@@ -64,6 +69,7 @@ export async function addSuggestedTagsAction(workspaceId: string): Promise<Actio
 
 export async function setPocketTagsAction(workspaceId: string, categoryId: string, tagIds: string[]): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   try { await replacePocketTags(workspaceId, categoryId, tagIds); } catch { return { ok: false, error: "Could not save the tags." }; }
   done();
   return { ok: true };

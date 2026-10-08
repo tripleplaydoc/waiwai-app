@@ -10,6 +10,7 @@ import { getBudgetSummary } from "@/lib/budget/summary";
 import { loadPersonalFlow } from "@/lib/budget/personal-flow-state";
 import { planPersonalAssign } from "@/lib/budget/personal-flow";
 import type { ActionResult } from "./types";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 
 const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
 const monthDate = (m: string) => new Date(`${m}-01T00:00:00.000Z`);
@@ -22,6 +23,7 @@ async function personalWorkspace(workspaceId: string) {
 /** Creates (or re-uses) the Give / Save / Live categories and switches the personal flow on. Safe to run again. */
 export async function setupPersonalFlowAction(workspaceId: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   if (!(await personalWorkspace(workspaceId))) return { ok: false, error: "The Give / Save / Live flow is for the Personal workspace." };
   const existing = await prisma.personalFlowConfig.findUnique({ where: { workspaceId } });
   let order = ((await prisma.categoryGroup.aggregate({ where: { workspaceId }, _max: { sortOrder: true } }))._max.sortOrder ?? 0) + 1;
@@ -69,6 +71,7 @@ export async function savePersonalFlowSettingsAction(input: z.input<typeof setti
   const p = settingsSchema.safeParse(input);
   if (!p.success) return { ok: false, error: "Check the numbers — percentages are 0–100." };
   const d = p.data;
+  await assertWorkspaceAccess(d.workspaceId);
   if (!(await personalWorkspace(d.workspaceId))) return { ok: false, error: "The Give / Save / Live flow is for the Personal workspace." };
   const cfg = await prisma.personalFlowConfig.findUnique({ where: { workspaceId: d.workspaceId } });
   if (!cfg) return { ok: false, error: "Set up Give / Save / Live first." };
@@ -94,6 +97,7 @@ export async function savePersonalFlowSettingsAction(input: z.input<typeof setti
 /** The one Assign button on the Personal side: Ready to assign → Give / Save / Live. */
 export async function assignPersonalFlowAction(workspaceId: string, month: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
   if (!(await personalWorkspace(workspaceId))) return { ok: false, error: "The Give / Save / Live flow is for the Personal workspace." };

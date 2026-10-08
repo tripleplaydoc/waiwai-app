@@ -1511,3 +1511,13 @@ model PushPref {
 
   @@map("push_prefs")
 }
+
+/// Failed sign-in counter per email (or "setup"), used to lock out password guessing.
+model LoginAttempt {
+  key         String   @id
+  failures    Int      @default(0)
+  lockedUntil DateTime?
+  updatedAt   DateTime @updatedAt
+
+  @@map("login_attempts")
+}

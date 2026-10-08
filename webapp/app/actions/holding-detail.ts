@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertPositionAccess, assertPositionActivityAccess } from "@/lib/access";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
@@ -42,6 +44,7 @@ async function manualAccount(id: unknown) {
   const parsed = z.string().min(1).safeParse(id);
   if (!parsed.success) return null;
   const a = await prisma.account.findUnique({ where: { id: parsed.data } });
+  if (a) await assertWorkspaceAccess(a.workspaceId);
   return a && !a.isArchived && a.balanceMode === "MANUAL" ? a : null;
 }
 
@@ -49,6 +52,7 @@ async function manualAccount(id: unknown) {
 /** Pulls fresh prices. `maxAgeMinutes` > 0 skips anything refreshed recently (used by the automatic refresh). */
 export async function refreshPricesAction(workspaceId: string | undefined, maxAgeMinutes = 0): Promise<ActionResult> {
   await assertAuthed();
+  if (workspaceId) await assertWorkspaceAccess(workspaceId);
   const s = await refreshPrices({ workspaceIds: workspaceId ? [workspaceId] : undefined, maxAgeMs: maxAgeMinutes > 0 ? maxAgeMinutes * 60_000 : undefined });
   if (s.updated > 0 || s.failed.length > 0) done();
   if (s.updated === 0 && s.failed.length === 0) return { ok: true, message: "Prices are up to date." };
@@ -98,6 +102,7 @@ export async function savePositionAction(_prev: ActionResult | undefined, formDa
 
 export async function removePositionAction(positionId: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertPositionAccess(positionId);
   const p = await prisma.holdingPosition.findUnique({ where: { id: positionId } });
   if (!p) return { ok: false, error: "Not found." };
   await prisma.holdingPosition.delete({ where: { id: p.id } });
@@ -115,6 +120,7 @@ export async function removePositionAction(positionId: string): Promise<ActionRe
 export async function addToPositionAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
   await assertAuthed();
   const pos = await prisma.holdingPosition.findUnique({ where: { id: String(formData.get("positionId") ?? "") }, include: { account: true } });
+  if (pos) await assertWorkspaceAccess(pos.account.workspaceId);
   if (!pos || pos.account.isArchived) return { ok: false, error: "Not found." };
   const kind = formData.get("kind") === "BOUGHT" ? "BOUGHT" : "REINVESTED";
   const shares = cleanDecimal(String(formData.get("shares") ?? ""));
@@ -137,6 +143,7 @@ export async function addToPositionAction(_prev: ActionResult | undefined, formD
 /** Undoes one addition: takes the shares (and dollars) back off the position. */
 export async function removeActivityAction(activityId: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertPositionActivityAccess(activityId);
   const a = await prisma.positionActivity.findUnique({ where: { id: activityId }, include: { position: true } });
   if (!a) return { ok: false, error: "Not found." };
   const p = a.position;

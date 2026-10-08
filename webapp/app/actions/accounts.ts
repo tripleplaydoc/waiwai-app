@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
@@ -35,6 +36,7 @@ export async function createAccountAction(_prev: ActionResult | undefined, formD
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
   const d = parsed.data;
+  await assertWorkspaceAccess(d.workspaceId);
 
   let opening = 0;
   if (d.opening && d.opening.trim() !== "") {
@@ -81,6 +83,7 @@ export async function updateAccountAction(_prev: ActionResult | undefined, formD
   const d = parsed.data;
   const account = await prisma.account.findUnique({ where: { id: d.accountId } });
   if (!account) return { ok: false, error: "Account not found." };
+  await assertWorkspaceAccess(account.workspaceId);
 
   let opening = account.openingBalanceCents;
   if (d.opening !== undefined) {
@@ -148,6 +151,7 @@ export async function createHoldingAction(_prev: ActionResult | undefined, formD
   const p = holdingSchema.safeParse(Object.fromEntries(formData));
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Check the form." };
   const d = p.data;
+  await assertWorkspaceAccess(d.workspaceId);
   const cls = d.cls as HoldingKey;
   const value = parseMoney(d.value, "Value"), monthly = parseMoney(d.monthly, "Monthly amount");
   if ("error" in value) return { ok: false, error: value.error };
@@ -186,6 +190,7 @@ export async function updateHoldingAction(_prev: ActionResult | undefined, formD
   if ("error" in monthly) return { ok: false, error: monthly.error };
   const acct = await prisma.account.findUnique({ where: { id: id.data } });
   if (!acct) return { ok: false, error: "Not found." };
+  await assertWorkspaceAccess(acct.workspaceId);
   const def = HOLDING_DEFS.find((h) => h.key === cls)!;
 
   const ops = [
@@ -207,6 +212,7 @@ export async function updateHoldingAction(_prev: ActionResult | undefined, formD
 export async function archiveHoldingAction(accountId: string): Promise<ActionResult> {
   await assertAuthed();
   const a = await prisma.account.findUnique({ where: { id: accountId } });
+  if (a) await assertWorkspaceAccess(a.workspaceId);
   if (!a || a.balanceMode !== "MANUAL") return { ok: false, error: "Only hand-valued assets and liabilities can be removed here." };
   await prisma.account.update({ where: { id: a.id }, data: { isArchived: true } });
   revalidatePath("/holdings");
@@ -222,6 +228,8 @@ export async function moveHoldingAction(accountId: string, toWorkspaceId: string
     prisma.account.findUnique({ where: { id: accountId }, include: { workspace: true } }),
     prisma.workspace.findUnique({ where: { id: toWorkspaceId } }),
   ]);
+  if (acct) await assertWorkspaceAccess(acct.workspaceId);
+  if (dest) await assertWorkspaceAccess(dest.id);
   if (!acct || acct.isArchived) return { ok: false, error: "Not found." };
   if (!dest) return { ok: false, error: "That workspace wasn't found." };
   if (acct.workspaceId === dest.id) return { ok: false, error: `It's already in ${dest.name}.` };

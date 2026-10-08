@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertTransactionAccess } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import type { ActionResult } from "./types";
@@ -18,6 +19,7 @@ export async function saveExpenseReviewAction(transactionId: string, input: z.in
   await assertAuthed();
   const p = schema.safeParse(input);
   if (!p.success) return { ok: false, error: "Those answers weren't valid." };
+  await assertTransactionAccess(transactionId);
   const tx = await prisma.transaction.findUnique({ where: { id: transactionId }, select: { id: true, workspaceId: true } });
   if (!tx) return { ok: false, error: "Transaction not found." };
   const me = await getCurrentUser();

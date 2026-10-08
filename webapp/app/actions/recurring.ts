@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertRecurringAccess } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
@@ -9,6 +10,7 @@ import { isoToDate } from "@/lib/utils/dates";
 import { isFrequency } from "@/lib/recurring-math";
 import { postDue, skipDue } from "@/lib/recurring";
 import type { ActionResult } from "./types";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 
 const refresh = () => { revalidatePath("/recurring"); revalidatePath("/budget"); revalidatePath("/accounts", "layout"); revalidatePath("/reports"); };
 
@@ -37,6 +39,7 @@ export async function saveRecurringAction(_prev: ActionResult | undefined, formD
   const cents = parseToCents(d.amount);
   if (cents === null || cents <= 0) return { ok: false, error: "Enter an amount like 15.49." };
   const account = await prisma.account.findUnique({ where: { id: d.accountId } });
+  if (account) await assertWorkspaceAccess(account.workspaceId);
   if (!account || account.isArchived || account.balanceMode === "MANUAL") return { ok: false, error: "Pick an account that takes transactions." };
   let categoryId: string | null = null;
   if (d.categoryId) {
@@ -54,6 +57,7 @@ export async function saveRecurringAction(_prev: ActionResult | undefined, formD
     if (d.id) {
       const have = await prisma.recurringItem.findUnique({ where: { id: d.id } });
       if (!have) return { ok: false, error: "That item was not found." };
+      await assertWorkspaceAccess(have.workspaceId);
       await prisma.recurringItem.update({ where: { id: d.id }, data: { ...data, workspaceId: have.workspaceId } });
     } else await prisma.recurringItem.create({ data });
   } catch { return { ok: false, error: "Recurring items aren't set up yet. Run the latest SQL first." }; }
@@ -62,8 +66,7 @@ export async function saveRecurringAction(_prev: ActionResult | undefined, formD
 }
 
 async function ws(id: string) {
-  const it = await prisma.recurringItem.findUnique({ where: { id }, select: { workspaceId: true } });
-  return it?.workspaceId ?? null;
+  return assertRecurringAccess(id);
 }
 
 /** Posts everything due for one item (after the person checked it). */
@@ -79,6 +82,7 @@ export async function postRecurringAction(id: string): Promise<ActionResult> {
 /** Posts everything due in a workspace. */
 export async function postAllRecurringAction(workspaceId: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const n = await postDue(workspaceId, { personId: (await getCurrentUser())?.id ?? null });
   refresh();
   return { ok: true, message: `Posted ${n}.` };
@@ -96,6 +100,7 @@ export async function skipRecurringAction(id: string): Promise<ActionResult> {
 
 export async function setRecurringActiveAction(id: string, active: boolean): Promise<ActionResult> {
   await assertAuthed();
+  await assertRecurringAccess(id);
   try { await prisma.recurringItem.update({ where: { id }, data: { isActive: active } }); } catch { return { ok: false, error: "Not found." }; }
   refresh();
   return { ok: true };
@@ -103,6 +108,7 @@ export async function setRecurringActiveAction(id: string, active: boolean): Pro
 
 export async function deleteRecurringAction(id: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertRecurringAccess(id);
   try { await prisma.recurringItem.delete({ where: { id } }); } catch { return { ok: false, error: "Not found." }; }
   refresh();
   return { ok: true };

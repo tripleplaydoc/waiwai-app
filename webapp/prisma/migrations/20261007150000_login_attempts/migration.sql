@@ -1,0 +1,7 @@
+CREATE TABLE login_attempts (
+  "key" TEXT PRIMARY KEY,
+  failures INTEGER NOT NULL DEFAULT 0,
+  "lockedUntil" TIMESTAMPTZ(3),
+  "updatedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT now()
+);
+ALTER TABLE login_attempts ENABLE ROW LEVEL SECURITY;

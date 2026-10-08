@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
@@ -31,6 +32,7 @@ export async function checkBalanceAction(input: { accountId: string; date: strin
   if (typed === null) return { ok: false, error: "Type the balance as a number, like 1,234.56." };
   const account = await prisma.account.findUnique({ where: { id: d.data.accountId } });
   if (!account) return { ok: false, error: "Account not found." };
+  await assertWorkspaceAccess(account.workspaceId);
   if (account.balanceMode !== "TRANSACTION_DERIVED") return { ok: false, error: "This account's balance is entered by hand, so there is nothing to compare." };
   // Cards and loans: people read "amount owed" off the bank, which the app stores as a negative balance.
   const bankCents = LIABILITY.has(account.type) ? -typed : typed;
@@ -72,6 +74,7 @@ export async function parkUnaccountedAction(checkpointId: string): Promise<{ ok:
   await assertAuthed();
   const cp = await prisma.balanceCheckpoint.findUnique({ where: { id: checkpointId }, include: { account: true } });
   if (!cp) return { ok: false, error: "That check was not found." };
+  await assertWorkspaceAccess(cp.workspaceId);
   const gap = cp.gapCents - cp.adjustedCents;
   if (gap === 0) return { ok: true, message: "Nothing to park." };
   const onBudget = cp.account.onBudget;

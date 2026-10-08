@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertAccountAccess } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { formatCents, parseToCents } from "@/lib/utils/currency";
@@ -31,6 +32,7 @@ const refresh = () => {
 export async function transferAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
   await assertAuthed();
   const get = (k: string) => String(formData.get(k) ?? "").trim();
+  await Promise.all([assertAccountAccess(get("fromId")), assertAccountAccess(get("toId"))]);
   const [from, to] = await Promise.all([
     prisma.account.findUnique({ where: { id: get("fromId") } }),
     prisma.account.findUnique({ where: { id: get("toId") } }),

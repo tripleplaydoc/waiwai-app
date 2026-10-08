@@ -15,6 +15,7 @@ import { bpsProblem, planAllocation, type AllocGroup } from "@/lib/budget/alloca
 import { customKey, isCustomKey, isTypeKey, typesFor } from "@/lib/budget/expense-types";
 import { holdingOf, holdingSide } from "@/lib/holdings";
 import type { ActionResult } from "./types";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 
 const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
 const idSchema = z.string().min(1).max(64);
@@ -49,6 +50,7 @@ export async function savePocketAction(_prev: ActionResult | undefined, formData
   const parsed = pocketSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
   const d = parsed.data;
+  await assertWorkspaceAccess(d.workspaceId);
 
   const workspace = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
   if (!workspace) return { ok: false, error: "Workspace not found." };
@@ -205,6 +207,7 @@ export async function saveGroupAction(_prev: ActionResult | undefined, formData:
   const parsed = z.object({ workspaceId: idSchema, id: z.string().optional(), name: z.string().trim().min(1, "Name is required").max(80) }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
   const { workspaceId, id, name } = parsed.data;
+  await assertWorkspaceAccess(workspaceId);
   if (id) {
     const g = await prisma.categoryGroup.findFirst({ where: { id, workspaceId } });
     if (!g) return { ok: false, error: "Category not found." };
@@ -269,6 +272,7 @@ async function unlinkFlows(workspaceId: string, groupIds: string[], pocketIds: s
 /** Deletes a category together with every pocket in it. Money in those pockets returns to Ready to assign. */
 export async function archiveGroupAction(workspaceId: string, id: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
   const g = ws && (await prisma.categoryGroup.findFirst({ where: { id, workspaceId, isArchived: false } }));
   if (!ws || !g) return { ok: false, error: "Category not found." };
@@ -286,6 +290,7 @@ export async function archiveGroupAction(workspaceId: string, id: string): Promi
 /** Deletes a pocket (history keeps its reference). Money in it returns to Ready to assign. */
 export async function archivePocketAction(workspaceId: string, id: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
   const c = ws && (await prisma.category.findFirst({ where: { id, workspaceId, isArchived: false } }));
   if (!ws || !c) return { ok: false, error: "Pocket not found." };
@@ -305,6 +310,7 @@ const reorderSchema = z.object({
 /** Saves drag-and-drop order: category order, pocket order, and which category each pocket sits in. */
 export async function reorderAction(workspaceId: string, payload: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   let json: unknown;
   try { json = JSON.parse(payload); } catch { return { ok: false, error: "Bad request." }; }
   const parsed = reorderSchema.safeParse(json);
@@ -340,6 +346,7 @@ const allocSchema = z.object({
 /** Saves the percentage split (null = not part of the split). */
 export async function saveAllocationAction(workspaceId: string, payload: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   let json: unknown;
   try { json = JSON.parse(payload); } catch { return { ok: false, error: "Bad request." }; }
   const parsed = allocSchema.safeParse(json);
@@ -392,6 +399,7 @@ export type AllocationPreview =
 /** Shows what "assign by percentages" would do, without writing anything. */
 export async function previewAllocationAction(workspaceId: string, month: string, amount: string): Promise<AllocationPreview> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
   const monthDate = new Date(`${m.data}-01T00:00:00.000Z`);
@@ -414,6 +422,7 @@ export async function previewAllocationAction(workspaceId: string, month: string
 /** Adds the percentage split to this month's assignments. */
 export async function applyAllocationAction(workspaceId: string, month: string, amount: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const preview = await previewAllocationAction(workspaceId, month, amount);
   if (!preview.ok) return preview;
   if (preview.lines.length === 0) return { ok: false, error: "Nothing to assign yet. Set percentages first." };
@@ -430,6 +439,7 @@ const nameSchema = z.string().trim().min(1, "Name can't be empty").max(80);
 /** Click-to-rename for a pocket. */
 export async function renamePocketAction(workspaceId: string, id: string, name: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const n = nameSchema.safeParse(name);
   if (!n.success) return { ok: false, error: n.error.issues[0]?.message ?? "Bad name." };
   const c = await prisma.category.findFirst({ where: { id, workspaceId } });
@@ -444,6 +454,7 @@ export async function renamePocketAction(workspaceId: string, id: string, name: 
 /** Click-to-rename for a category. */
 export async function renameGroupAction(workspaceId: string, id: string, name: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const n = nameSchema.safeParse(name);
   if (!n.success) return { ok: false, error: n.error.issues[0]?.message ?? "Bad name." };
   const g = await prisma.categoryGroup.findFirst({ where: { id, workspaceId } });
@@ -457,6 +468,7 @@ export async function renameGroupAction(workspaceId: string, id: string, name: s
 /** Marks (or un-marks) a pocket's bill as paid for one month. */
 export async function setPaidAction(workspaceId: string, categoryId: string, month: string, paid: boolean): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
   const c = await prisma.category.findFirst({ where: { id: categoryId, workspaceId, isArchived: false } });
@@ -479,6 +491,7 @@ export async function setPaidAction(workspaceId: string, categoryId: string, mon
 /** Adds money to a pocket from Ready to Assign (on top of what's already there). */
 export async function assignMoreAction(workspaceId: string, categoryId: string, month: string, amount: string, fromAccountId?: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
   const cents = parseToCents(amount);
@@ -512,6 +525,7 @@ export async function assignMoreAction(workspaceId: string, categoryId: string, 
  */
 export async function moveMoneyAction(workspaceId: string, fromId: string, toId: string, month: string, amount: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
   if (!fromId || !toId) return { ok: false, error: "Pick both pockets." };
@@ -542,6 +556,7 @@ export async function moveMoneyAction(workspaceId: string, fromId: string, toId:
 /** Takes money out of a pocket and puts it back in Ready to assign (the account tags go back with it). */
 export async function releaseToReadyAction(workspaceId: string, fromId: string, month: string, amount: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
   const cents = parseToCents(amount);
@@ -565,6 +580,7 @@ export async function releaseToReadyAction(workspaceId: string, fromId: string, 
 /** One-tap fix from the "Deductions to check" panel: count this business pocket's spending as tax-deductible. */
 export async function markPocketDeductibleAction(workspaceId: string, id: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const c = await prisma.category.findFirst({ where: { id, workspaceId, isArchived: false, type: "EXPENSE", isSystemManaged: false }, include: { workspace: { select: { type: true } } } });
   if (!c || c.workspace.type !== "BUSINESS") return { ok: false, error: "Pocket not found." };
   await prisma.category.update({ where: { id: c.id }, data: { isTaxDeductible: true } });

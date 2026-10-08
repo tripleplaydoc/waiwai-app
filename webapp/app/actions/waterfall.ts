@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed } from "@/lib/auth";
 import { runWaterfallAutoAssign, type WaterfallRunResult } from "@/lib/budget/waterfall";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 
 /**
  * Server action: triggers one priority-waterfall auto-assign pass for a
@@ -14,6 +15,7 @@ export async function runWaterfallAutoAssignAction(
   monthIso: string
 ): Promise<WaterfallRunResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const month = new Date(monthIso);
   if (Number.isNaN(month.getTime())) {
     throw new Error(`Invalid month value: "${monthIso}"`);

@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertAccountAccess } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
@@ -11,6 +12,7 @@ import { cutoffsFor, getGoLive, getSealedThrough } from "@/lib/history";
 import { classifyHistoryRow, isDeductibleType, kindFor } from "@/lib/history-math";
 import { isTypeKey } from "@/lib/budget/expense-types";
 import type { ActionResult } from "./types";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const sealMsg = (y: number) => `${y} is sealed. Unseal it on the History page to change it.`;
@@ -24,6 +26,7 @@ const done = () => { revalidatePath("/history"); revalidatePath("/reports"); };
 /** The day the live budget began. History must end before it; no history row may sit on or after it. */
 export async function setGoLiveAction(workspaceId: string, iso: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   if (!ISO.test(iso)) return { ok: false, error: "Pick a date." };
   const ws = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } });
   if (!ws) return { ok: false, error: "Workspace not found." };
@@ -37,6 +40,7 @@ export async function setGoLiveAction(workspaceId: string, iso: string): Promise
 /** What the account held when its history begins, so the history can be proven against its opening balance. */
 export async function setHistoryStartAction(accountId: string, dateIso: string, balance: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertAccountAccess(accountId);
   const acct = await prisma.account.findUnique({ where: { id: accountId }, select: { id: true, workspaceId: true } });
   if (!acct) return { ok: false, error: "Account not found." };
   const cents = balance.trim() === "" ? 0 : parseToCents(balance);
@@ -77,6 +81,7 @@ export async function importHistoryAction(input: unknown): Promise<HistoryImport
   const parsed = importSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid import." };
   const { accountId, fileName, rows } = parsed.data;
+  await assertAccountAccess(accountId);
   const account = await prisma.account.findUnique({ where: { id: accountId } });
   if (!account) return { ok: false, error: "Account not found." };
   const goLive = await getGoLive(account.workspaceId);
@@ -116,6 +121,7 @@ export async function importHistoryAction(input: unknown): Promise<HistoryImport
 /** Give every unclassified row from one payee a type (or mark them transfers, or clear back to unclassified). */
 export async function classifyPayeeAction(workspaceId: string, payee: string, choice: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const ws = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { type: true } });
   if (!ws) return { ok: false, error: "Workspace not found." };
   const biz = ws.type === "BUSINESS";
@@ -134,6 +140,7 @@ export async function classifyPayeeAction(workspaceId: string, payee: string, ch
 /** Remove one imported year (or all) for an account so it can be imported again. */
 export async function clearHistoryAction(accountId: string, year: number | null): Promise<ActionResult> {
   await assertAuthed();
+  await assertAccountAccess(accountId);
   const acct = await prisma.account.findUnique({ where: { id: accountId }, select: { id: true } });
   if (!acct) return { ok: false, error: "Account not found." };
   const ws = await prisma.account.findUnique({ where: { id: accountId }, select: { workspaceId: true } });
@@ -148,6 +155,7 @@ export async function clearHistoryAction(accountId: string, year: number | null)
 /** Seal every year up to and including `year` (null unseals everything). */
 export async function setSealAction(workspaceId: string, year: number | null): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   if (year !== null && (!Number.isInteger(year) || year < 1990 || year > 2100)) return { ok: false, error: "Pick a year." };
   const s = await prisma.historySettings.findUnique({ where: { workspaceId } });
   if (!s) return { ok: false, error: "Set your go-live day first." };
@@ -159,6 +167,7 @@ export async function setSealAction(workspaceId: string, year: number | null): P
 /** A bank account that no longer exists, so its old transactions have somewhere to live. It never touches the live budget. */
 export async function addClosedAccountAction(workspaceId: string, name: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const n = name.trim().slice(0, 80);
   if (!n) return { ok: false, error: "Give the account a name." };
   const ws = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } });
@@ -171,6 +180,7 @@ export async function addClosedAccountAction(workspaceId: string, name: string):
 /** Replace one year's typed-in totals (from a tax return). Blank or zero removes that line. */
 export async function saveYearTotalsAction(workspaceId: string, year: number, lines: { typeKey: string; amount: string }[]): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   if (!Number.isInteger(year) || year < 1990 || year > 2100) return { ok: false, error: "Pick a year." };
   const sealed = await sealedError(workspaceId, year);
   if (sealed) return { ok: false, error: sealed };
@@ -218,6 +228,7 @@ async function rowFields(workspaceId: string, d: z.infer<typeof rowSchema>): Pro
 /** Add one history row by hand. */
 export async function addHistoryRowAction(workspaceId: string, input: unknown): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const p = rowSchema.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Check the form." };
   const d = p.data;
@@ -243,6 +254,7 @@ export async function addHistoryRowAction(workspaceId: string, input: unknown): 
 /** Edit one history row (date, payee, memo, amount, type). */
 export async function updateHistoryRowAction(workspaceId: string, id: string, input: unknown): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const p = rowSchema.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Check the form." };
   const d = p.data;
@@ -261,6 +273,7 @@ export async function updateHistoryRowAction(workspaceId: string, id: string, in
 
 export async function deleteHistoryRowAction(workspaceId: string, id: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const row = await prisma.historicalTransaction.findFirst({ where: { id, workspaceId } });
   if (!row) return { ok: false, error: "Row not found." };
   const e = await sealedError(workspaceId, row.date.getUTCFullYear());
@@ -275,6 +288,7 @@ export type PayeeRowsResult = { ok: true; total: number; rows: { id: string; dat
 /** The newest rows behind one "biggest unknown" payee, so you can see what it is before naming it. Read only. */
 export async function payeeRowsAction(workspaceId: string, payee: string): Promise<PayeeRowsResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const where = { workspaceId, payee, typeKey: null, kind: { not: "TRANSFER" } } as const;
   try {
     const [total, rows] = await Promise.all([
@@ -303,6 +317,7 @@ function reviewData(choice: string, r: { payee: string; memo: string; amountCent
 /** Year review: set the type for every row of one payee and direction in one year. Transfers and typed rows included, because you chose it. */
 export async function setReviewGroupAction(workspaceId: string, year: number, payee: string, dir: "in" | "out", choice: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const sealed = await sealedError(workspaceId, year);
   if (sealed) return { ok: false, error: sealed };
   const ws = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { type: true } });
@@ -323,6 +338,7 @@ export async function setReviewGroupAction(workspaceId: string, year: number, pa
 /** Year review: set the type of a single row. */
 export async function setReviewRowAction(workspaceId: string, id: string, choice: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const row = await prisma.historicalTransaction.findFirst({ where: { id, workspaceId } });
   if (!row) return { ok: false, error: "Row not found." };
   const sealed = await sealedError(workspaceId, row.date.getUTCFullYear());
@@ -338,6 +354,7 @@ export async function setReviewRowAction(workspaceId: string, id: string, choice
 /** Mark a year as gone through (or not). Stored in its own small table. */
 export async function markYearReviewedAction(workspaceId: string, year: number, reviewed: boolean): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   try {
     if (reviewed) await prisma.historyReview.upsert({ where: { workspaceId_year: { workspaceId, year } }, create: { workspaceId, year }, update: { reviewedAt: new Date() } });
     else await prisma.historyReview.deleteMany({ where: { workspaceId, year } });
@@ -349,6 +366,7 @@ export async function markYearReviewedAction(workspaceId: string, year: number, 
 /** Year review: set one type on many payee groups and single rows at once (for example, exclude a pile of personal charges). */
 export async function setReviewBulkAction(workspaceId: string, year: number, groups: { payee: string; dir: "in" | "out" }[], rowIds: string[], choice: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   if (groups.length + rowIds.length === 0) return { ok: false, error: "Select something first." };
   if (groups.length > 500 || rowIds.length > 2000) return { ok: false, error: "That is a lot at once. Select fewer." };
   const sealed = await sealedError(workspaceId, year);

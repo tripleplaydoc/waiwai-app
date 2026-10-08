@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
@@ -27,6 +28,7 @@ export async function setAssignedAction(formData: FormData): Promise<ActionResul
   if (cents < 0) return { ok: false, error: "Assigned amount can't be negative." };
 
   const category = await prisma.category.findUnique({ where: { id: categoryId.data } });
+  if (category) await assertWorkspaceAccess(category.workspaceId);
   if (!category || category.isArchived) return { ok: false, error: "Category not found." };
   if (category.type === "INCOME") return { ok: false, error: "Income categories don't get assignments." };
 
@@ -49,6 +51,7 @@ export async function autoAssignAction(formData: FormData): Promise<ActionResult
   const workspaceId = z.string().min(1).safeParse(formData.get("workspaceId"));
   const month = monthSchema.safeParse(formData.get("month"));
   if (!workspaceId.success || !month.success) return { ok: false, error: "Bad request." };
+  await assertWorkspaceAccess(workspaceId.data);
   try {
     const result = await runWaterfallAutoAssign(prisma, workspaceId.data, new Date(`${month.data}-01T00:00:00.000Z`));
     revalidatePath("/budget");
@@ -64,6 +67,7 @@ export async function archiveCategoryAction(formData: FormData): Promise<void> {
   await assertAuthed();
   const id = z.string().min(1).parse(formData.get("categoryId"));
   const cat = await prisma.category.findUnique({ where: { id } });
+  if (cat) await assertWorkspaceAccess(cat.workspaceId);
   if (!cat || cat.isSystemManaged) return;
   await prisma.category.update({ where: { id }, data: { isArchived: true, assetAccountId: null, assetGoalCents: null } });
   revalidatePath("/budget");

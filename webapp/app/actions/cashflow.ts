@@ -12,6 +12,7 @@ import { getBudgetSummary } from "@/lib/budget/summary";
 import { loadFlow } from "@/lib/budget/waterfall-state";
 import { planAssign, planCover, type Bucket } from "@/lib/budget/cashflow-waterfall";
 import type { ActionResult } from "./types";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 
 const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
 const monthDate = (m: string) => new Date(`${m}-01T00:00:00.000Z`);
@@ -24,6 +25,7 @@ async function owns(workspaceId: string) {
 /** Creates (or re-uses) the pockets the waterfall needs and switches it on. Safe to run more than once. */
 export async function setupWaterfallAction(workspaceId: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const ws = await owns(workspaceId);
   if (!ws) return { ok: false, error: "Workspace not found." };
   const existing = await prisma.waterfallConfig.findUnique({ where: { workspaceId } });
@@ -89,6 +91,7 @@ export async function saveWaterfallSettingsAction(input: z.input<typeof settings
   const p = settingsSchema.safeParse(input);
   if (!p.success) return { ok: false, error: "Check the numbers — percentages are 0–100 and months are 0–120." };
   const d = p.data;
+  await assertWorkspaceAccess(d.workspaceId);
   const cfg = await prisma.waterfallConfig.findUnique({ where: { workspaceId: d.workspaceId } });
   if (!cfg) return { ok: false, error: "Set up the waterfall first." };
   const cashTotal = Math.round(d.cash.reduce((s, c) => s + c.pct, 0) * 100);
@@ -115,6 +118,7 @@ export async function saveWaterfallSettingsAction(input: z.input<typeof settings
 /** Adds a pocket to the Cash category so it can take a share of the cash. */
 export async function addCashPocketAction(workspaceId: string, name: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const n = name.trim();
   if (!n || n.length > 60) return { ok: false, error: "Give the pocket a short name." };
   const cfg = await prisma.waterfallConfig.findUnique({ where: { workspaceId } });
@@ -130,6 +134,7 @@ export async function addCashPocketAction(workspaceId: string, name: string): Pr
 /** The one Assign button: sends Ready to assign down the waterfall. */
 export async function assignWaterfallAction(workspaceId: string, month: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
   const md = monthDate(m.data);
@@ -169,6 +174,7 @@ export async function assignWaterfallAction(workspaceId: string, month: string):
 /** Covers overspent OPEX pockets from Taxes + Reservoir 1 (50/50), then Reservoir 2. The inflow later pays it back first. */
 export async function coverShortfallAction(workspaceId: string, month: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
   const md = monthDate(m.data);
@@ -206,6 +212,7 @@ export async function coverShortfallAction(workspaceId: string, month: string): 
 /** Sets Months ahead on every monthly-cost pocket in the OPEX category at once (0 = this month only). */
 export async function setOpexMonthsAheadAction(workspaceId: string, months: number): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   if (!Number.isInteger(months) || months < 0 || months > 6) return { ok: false, error: "Pick 0 to 6 months." };
   const cfg = await prisma.waterfallConfig.findUnique({ where: { workspaceId } });
   if (!cfg?.opexGroupId) return { ok: false, error: "Choose your OPEX category in the waterfall settings first." };
@@ -221,6 +228,7 @@ export async function setOpexMonthsAheadAction(workspaceId: string, months: numb
 /** Gives each cash account its own tax reserve pocket, and moves the existing reserve across by the account each dollar sits in. */
 export async function splitTaxReserveAction(workspaceId: string, month: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
   const md = monthDate(m.data);
@@ -263,6 +271,7 @@ export async function splitTaxReserveAction(workspaceId: string, month: string):
 /** Puts the per-account tax reserves back into the one shared reserve and retires the extra pockets. */
 export async function combineTaxReserveAction(workspaceId: string, month: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
   if (!m.success) return { ok: false, error: "Bad request." };
   const md = monthDate(m.data);

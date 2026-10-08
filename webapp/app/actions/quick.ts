@@ -2,6 +2,7 @@
 
 import { matchExisting } from "@/lib/import-match";
 import { accountKind } from "@/lib/account-kind";
+import { assertAccountAccess } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
@@ -75,6 +76,7 @@ export interface ImportSuggestData { suggestions: (ImportSuggestion | null)[]; t
 /** Top suggestion for each statement row (money out only), from this workspace's history and the built-in vendor rules. */
 export async function suggestForImportAction(accountId: string, rows: { payee: string; memo: string; amountCents: number }[]): Promise<ImportSuggestData> {
   await assertAuthed();
+  await assertAccountAccess(accountId);
   const acct = await prisma.account.findUnique({ where: { id: accountId }, select: { workspaceId: true } });
   if (!acct) return { suggestions: rows.map(() => null), taxBps: 3000, isBusiness: false };
   const [ws, cats, cfg, profile] = await Promise.all([
@@ -129,6 +131,7 @@ export async function suggestPocketsAction(wsParam: string, text: string): Promi
 /** For a statement preview: which rows look like transactions that are already in this account (typed in by hand earlier). */
 export async function matchExistingAction(accountId: string, rows: { date: string; amountCents: number }[]): Promise<boolean[]> {
   await assertAuthed();
+  await assertAccountAccess(accountId);
   if (rows.length === 0 || rows.length > 5000) return rows.map(() => false);
   const dates = rows.map((r) => r.date).sort();
   const from = new Date(`${dates[0]}T00:00:00.000Z`), to = new Date(`${dates[dates.length - 1]}T00:00:00.000Z`);

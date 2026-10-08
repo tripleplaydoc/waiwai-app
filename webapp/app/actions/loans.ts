@@ -9,6 +9,7 @@ import { isoToDate, todayIso } from "@/lib/utils/dates";
 import { balanceAfter, loanStatus, paymentsFor, suggestPayment } from "@/lib/loans";
 import { holdingOf, holdingSide } from "@/lib/holdings";
 import type { ActionResult } from "./types";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 
 const schema = z.object({
   workspaceId: z.string().min(1),
@@ -34,6 +35,7 @@ export async function saveLoanAction(_prev: ActionResult | undefined, formData: 
   const p = schema.safeParse(Object.fromEntries(formData));
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Check the form." };
   const d = p.data;
+  await assertWorkspaceAccess(d.workspaceId);
   const now = d.mode === "now";
   const rateText = (d.rate ?? "").replace(/%/g, "").trim();
   if (rateText !== "" && !(/^\d{1,3}(\.\d{1,2})?$/.test(rateText) && Number(rateText) <= 100)) return { ok: false, error: "Interest rate should look like 6.25 (a yearly percentage). Use 0 for none." };
@@ -174,6 +176,7 @@ export async function saveLoanAction(_prev: ActionResult | undefined, formData: 
 /** Takes a loan's payment off the budget (the loan itself and its terms stay in net worth). */
 export async function removeLoanFromBudgetAction(workspaceId: string, accountId: string): Promise<ActionResult> {
   await assertAuthed();
+  await assertWorkspaceAccess(workspaceId);
   const pocket = await prisma.category.findFirst({ where: { workspaceId, loanAccountId: accountId } });
   if (!pocket) return { ok: false, error: "That loan isn't on the budget." };
   await prisma.category.update({ where: { id: pocket.id }, data: { isArchived: true, loanAccountId: null } });
@@ -185,6 +188,7 @@ export async function removeLoanFromBudgetAction(workspaceId: string, accountId:
 export async function payLoanAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
   await assertAuthed();
   const loan = await prisma.account.findUnique({ where: { id: String(formData.get("loanId") ?? "") }, include: { loanPocket: true, holdingDetail: true } });
+  if (loan) await assertWorkspaceAccess(loan.workspaceId);
   if (!loan || loan.type !== "LOAN" || loan.isArchived) return { ok: false, error: "Loan not found." };
   const from = await prisma.account.findUnique({ where: { id: String(formData.get("fromAccountId") ?? "") } });
   if (!from || from.isArchived || from.workspaceId !== loan.workspaceId || from.balanceMode === "MANUAL") return { ok: false, error: "Pick the account you're paying from." };

@@ -5,21 +5,30 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE, setSessionCookie, setupCodeConfigured, setupCodeMatches } from "@/lib/auth";
+import { clearFailures, lockoutMinutes, recordFailure } from "@/lib/login-limit";
 import { hashPassword, passwordProblem, verifyPassword } from "@/lib/password";
 
 type FormState = { error?: string; email?: string; name?: string } | undefined;
 
+// A valid-format hash of a random password; only used to equalise login timing.
+const DUMMY_HASH = "scrypt$00000000000000000000000000000000$" + "00".repeat(64);
 const slow = () => new Promise((r) => setTimeout(r, 800)); // slows down guessing
 
 export async function loginAction(_prev: FormState, formData: FormData): Promise<NonNullable<FormState>> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
+  const key = `login:${email.slice(0, 120)}`;
+  const locked = email ? await lockoutMinutes(key) : 0;
+  if (locked > 0) return { error: `Too many tries. Please wait about ${locked} minute${locked === 1 ? "" : "s"} and try again.`, email };
   const user = email ? await prisma.user.findUnique({ where: { email } }) : null;
-  const ok = user ? await verifyPassword(password, user.passwordHash) : false;
+  // Always do the same work whether or not the email exists, so timing doesn't reveal which emails are real.
+  const ok = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !ok) {
+    if (email) await recordFailure(key);
     await slow();
     return { error: "That email and password don't match.", email };
   }
+  await clearFailures(key);
   await setSessionCookie(user);
   redirect("/home");
 }
@@ -49,7 +58,10 @@ export async function setupAction(_prev: FormState, formData: FormData): Promise
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form and try again.", ...keep };
   const { code, name, email, password, confirm } = parsed.data;
 
+  const setupLocked = await lockoutMinutes("setup");
+  if (setupLocked > 0) return { error: `Too many tries. Please wait about ${setupLocked} minute${setupLocked === 1 ? "" : "s"}.`, ...keep };
   if (!setupCodeMatches(code)) {
+    await recordFailure("setup");
     await slow();
     return { error: "That setup code isn't right.", ...keep };
   }

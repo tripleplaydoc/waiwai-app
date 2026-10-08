@@ -3,6 +3,7 @@
 import { endOfMonth, fundRows, moveRows } from "@/lib/budget/funding";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { assertWorkspaceAccess } from "@/lib/workspace";
 import { prisma } from "@/lib/prisma";
 import { assertAuthed, getCurrentUser } from "@/lib/auth";
 import { parseToCents } from "@/lib/utils/currency";
@@ -24,6 +25,7 @@ const blank = (v: FormDataEntryValue | null) => (typeof v === "string" && v.trim
 
 async function getCard(id: unknown) {
   const c = typeof id === "string" ? await prisma.account.findUnique({ where: { id } }) : null;
+  if (c) await assertWorkspaceAccess(c.workspaceId);
   return c && c.type === "CREDIT_CARD" && !c.isArchived ? c : null;
 }
 
