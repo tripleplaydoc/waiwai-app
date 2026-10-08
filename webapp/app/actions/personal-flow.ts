@@ -81,10 +81,12 @@ export async function savePersonalFlowSettingsAction(input: z.input<typeof setti
     const found = await prisma.categoryGroup.count({ where: { id: { in: gids }, workspaceId: d.workspaceId } });
     if (found !== gids.length) return { ok: false, error: "One of those categories wasn't found." };
   }
-  await prisma.$transaction([
-    prisma.personalFlowConfig.update({ where: { workspaceId: d.workspaceId }, data: { giveBps: give, saveBps: save, liveBps: live, reserveBps: reserve, reserveGroupIds: d.reserveGroupIds, giveGroupIds: d.giveGroupIds, saveGroupIds: d.saveGroupIds, liveGroupIds: d.liveGroupIds } }),
-    ...d.shares.map((s) => prisma.category.updateMany({ where: { id: s.id, workspaceId: d.workspaceId }, data: { flowShareBps: Math.round(s.pct * 100) } })),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.personalFlowConfig.update({ where: { workspaceId: d.workspaceId }, data: { giveBps: give, saveBps: save, liveBps: live, reserveBps: reserve, reserveGroupIds: d.reserveGroupIds, giveGroupIds: d.giveGroupIds, saveGroupIds: d.saveGroupIds, liveGroupIds: d.liveGroupIds } }),
+      ...d.shares.map((s) => prisma.category.updateMany({ where: { id: s.id, workspaceId: d.workspaceId }, data: { flowShareBps: Math.round(s.pct * 100) } })),
+    ]);
+  } catch { return { ok: false, error: "Couldn't save. Please try again." }; }
   revalidatePath("/budget");
   return { ok: true, message: "Saved." };
 }
