@@ -27,8 +27,11 @@ export function MoveMoneyHost({ workspaceId, month, pockets, readyToAssignCents,
   // Start on one of your own accounts that has cash, so the money is credited to you; "Any account" otherwise.
   const myAccount = cash.accounts.filter((a) => a.stewardId === meId && a.readyCents > 0).sort((x, y) => y.readyCents - x.readyCents)[0]?.id ?? null;
   const thisPocket = open?.fromId ? pockets.find((p) => p.id === open.fromId) : undefined;
-  // A pocket that has its own "Paid from" account always starts there, so the money comes from the account you chose for it.
-  const startAccount = thisPocket?.paidFromId && cash.accounts.some((a) => a.id === thisPocket.paidFromId) ? thisPocket.paidFromId : myAccount;
+  // Start where the pocket belongs: its own "Paid from" account, else the account it has been funded from most, else your biggest account.
+  const homeId = thisPocket?.paidFromId ?? null;
+  const usualId = thisPocket ? Object.entries(cash.byPocket[thisPocket.id] ?? {}).sort((x, y) => y[1] - x[1]).map(([k]) => k)[0] ?? null : null;
+  const hasCash = (id: string | null) => !!id && cash.accounts.some((a) => a.id === id && a.readyCents > 0);
+  const startAccount = hasCash(homeId) ? homeId : hasCash(usualId) ? usualId : myAccount;
   const funded = thisPocket && hasSeveralStewards(cash) ? pocketBySteward(cash, thisPocket.id) : [];
   const done = () => { setOpen(null); router.refresh(); };
   const tabCls = (on: boolean) => `min-h-11 flex-1 rounded-lg text-sm font-semibold ${on ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white" : "text-slate-600 dark:text-slate-300"}`;
