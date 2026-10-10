@@ -10,7 +10,9 @@ import { startOfMonthUTC } from "@/lib/budget/dates";
 import { isoToDate } from "@/lib/utils/dates";
 import { inDays } from "@/lib/cycle";
 import { AddAccountButton } from "./add-account";
-import { TransferButton } from "@/components/transfer-button";
+import { TransferButton, type TransferPocket } from "@/components/transfer-button";
+import { HeldInButton } from "@/components/held-in-button";
+import { loadAllPocketBalances } from "@/lib/budget/funding";
 import { EditAccountButton } from "./edit-account";
 import { dateToIso } from "@/lib/utils/dates";
 import { loadMembers, type Member } from "@/lib/household";
@@ -37,6 +39,25 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const members = await loadMembers();
   const me = await getCurrentUser();
   const wsQ = wsKey === "business" ? "?ws=business" : "";
+  // Which pockets hold cash in which account, so a transfer can say whose money it is.
+  const pockets: TransferPocket[] = [];
+  try {
+    const month = startOfMonthUTC(isoToDate(todayIso()));
+    const [cats, balances] = await Promise.all([
+      prisma.category.findMany({
+        where: { workspaceId: workspace.id, isArchived: false, isSystemManaged: false, type: { not: "INCOME" } },
+        select: { id: true, name: true, sortOrder: true, categoryGroup: { select: { name: true, sortOrder: true } } },
+      }),
+      loadAllPocketBalances(prisma, workspace.id, month),
+    ]);
+    cats.sort((a, b) => (a.categoryGroup?.sortOrder ?? 999) - (b.categoryGroup?.sortOrder ?? 999) || a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+    for (const c of cats) {
+      const held: Record<string, number> = {};
+      for (const [k, n] of balances.get(c.id) ?? []) if (k && n > 0) held[k] = n;
+      if (Object.keys(held).length > 0) pockets.push({ id: c.id, name: c.name, group: c.categoryGroup?.name ?? "Other", held });
+    }
+  } catch { /* the transfer still works without the pocket picker */ }
+  const transferAccounts = accounts.filter((a) => a.onBudget && a.type !== "CREDIT_CARD" && a.balanceMode !== "MANUAL").map((a) => ({ id: a.id, name: a.name, kind: accountKind(a.type) }));
   const latest = new Map<string, { date: string; gapCents: number; adjustedCents: number }>();
   try {
     const cps = await prisma.balanceCheckpoint.findMany({ where: { workspaceId: workspace.id }, orderBy: { createdAt: "desc" }, take: 500 });
@@ -59,7 +80,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{workspace.name} accounts</h1>
-        <div className="ml-auto flex items-center gap-2"><TransferButton accounts={accounts.filter((a) => a.onBudget && a.type !== "CREDIT_CARD" && a.balanceMode !== "MANUAL").map((a) => ({ id: a.id, name: a.name, kind: accountKind(a.type) }))} today={todayIso()} /><AddAccountButton workspaceId={workspace.id} today={todayIso()} members={members} meId={me?.id} /></div>
+        <div className="ml-auto flex items-center gap-2"><TransferButton accounts={transferAccounts} today={todayIso()} pockets={pockets} /><HeldInButton accounts={transferAccounts} pockets={pockets} /><AddAccountButton workspaceId={workspace.id} today={todayIso()} members={members} meId={me?.id} /></div>
       </div>
       <div className="flex flex-wrap gap-2 text-sm font-semibold" role="tablist" aria-label="Accounts view">
         <span role="tab" aria-selected className="rounded-full bg-navy px-4 py-2 text-white">Accounts</span>
