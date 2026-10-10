@@ -34,7 +34,6 @@ export function HeldInButton({ accounts, pockets, className = "btn btn-sm" }: { 
   const done = state?.ok ? state.message : undefined;
   const nameOf = (id: string) => accounts.find((a) => a.id === id)?.name ?? "account";
   const all = rows.flatMap(([, list]) => list);
-  const reset = (to: "a" | "b") => setVals(Object.fromEntries(all.map((p) => [p.id, to === "a" ? "0.00" : centsToInput((p.held[aId] ?? 0) + (p.held[bId] ?? 0))])));
   const fresh = () => { setBaseline(latest); setVals({}); setAId(accounts[0]?.id ?? ""); setBId(accounts[1]?.id ?? ""); setOpen(true); };
 
   return (
@@ -69,10 +68,6 @@ export function HeldInButton({ accounts, pockets, className = "btn btn-sm" }: { 
             ) : (
               <>
                 <p className="text-xs text-slate-500">The box on each row is how much of that pocket is held in <strong>{nameOf(bId)}</strong>. The rest stays in {nameOf(aId)}.</p>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" className="btn btn-sm" onClick={() => reset("a")}>Hold everything in {nameOf(aId)}</button>
-                  <button type="button" className="btn btn-sm" onClick={() => reset("b")}>Hold everything in {nameOf(bId)}</button>
-                </div>
                 {rows.map(([group, list]) => (
                   <fieldset key={group} className="space-y-1.5">
                     <legend className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{group}</legend>
