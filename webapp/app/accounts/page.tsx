@@ -13,6 +13,8 @@ import { AddAccountButton } from "./add-account";
 import { TransferButton, type TransferPocket } from "@/components/transfer-button";
 import { HeldInButton } from "@/components/held-in-button";
 import { loadAllPocketBalances } from "@/lib/budget/funding";
+import { loadMoveLog } from "@/lib/budget/moves";
+import { UndoMoveButton } from "@/components/undo-move-button";
 import { EditAccountButton } from "./edit-account";
 import { dateToIso } from "@/lib/utils/dates";
 import { loadMembers, type Member } from "@/lib/household";
@@ -57,6 +59,9 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
       if (Object.keys(held).length > 0) pockets.push({ id: c.id, name: c.name, group: c.categoryGroup?.name ?? "Other", held });
     }
   } catch { /* the transfer still works without the pocket picker */ }
+  // The newest move that can still be undone, for the quick Undo card.
+  let lastMove: Awaited<ReturnType<typeof loadMoveLog>>[number] | undefined;
+  try { lastMove = (await loadMoveLog(prisma, workspace.id, 30)).find((e) => e.canUndo); } catch { /* the log page explains if it cannot load */ }
   const transferAccounts = accounts.filter((a) => a.onBudget && a.type !== "CREDIT_CARD" && a.balanceMode !== "MANUAL").map((a) => ({ id: a.id, name: a.name, kind: accountKind(a.type) }));
   const latest = new Map<string, { date: string; gapCents: number; adjustedCents: number }>();
   try {
@@ -95,6 +100,17 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
           <span className="shrink-0 font-semibold text-[#2E6BE6] dark:text-indigo-300">Check balances</span>
         </Link>
       )}
+
+      <section className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm" aria-label="Money moves">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Latest money move</p>
+          <p className="truncate font-medium">{lastMove ? lastMove.title : "No moves yet"}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {lastMove && <UndoMoveButton workspaceId={workspace.id} moveKey={lastMove.key} summary={lastMove.title} />}
+          <Link href={`/accounts/moves${wsQ}`} className="btn btn-sm">See all moves</Link>
+        </div>
+      </section>
 
       {accounts.length === 0 && (
         <div className="card p-5 text-sm">No accounts yet. Add your checking account first, with today’s balance as the opening balance.</div>
