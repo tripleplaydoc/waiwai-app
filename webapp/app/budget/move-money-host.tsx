@@ -52,7 +52,7 @@ export function MoveMoneyHost({ workspaceId, month, pockets, readyToAssignCents,
           )}
           {open.tab === "add" || thisPocket?.system
             ? <AddForm workspaceId={workspaceId} month={month} pockets={pockets} readyToAssignCents={readyToAssignCents} initialId={open.fromId} accounts={accountList} initialAccountId={startAccount} onCancel={() => setOpen(null)} onDone={done} />
-            : <MoveForm workspaceId={workspaceId} month={month} pockets={pockets} initialFromId={open.fromId} onCancel={() => setOpen(null)} onDone={done} />}
+            : <MoveForm workspaceId={workspaceId} month={month} pockets={pockets} initialFromId={open.fromId} held={cash.byPocket} accountNames={Object.fromEntries(cash.accounts.map((a) => [a.id, a.name]))} onCancel={() => setOpen(null)} onDone={done} />}
         </Modal>
       )}
     </>

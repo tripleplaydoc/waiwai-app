@@ -115,14 +115,14 @@ export async function takeFromPocket(db: Db, workspaceId: string, categoryId: st
 }
 
 /** Rows that release `cents` from a pocket back to Ready to assign, each carrying its account tag. */
-export async function releaseRows(db: Db, a: { workspaceId: string; categoryId: string; month: Date; cents: number; source: AssignmentSource; note?: string }): Promise<NewRow[]> {
-  const parts = await takeFromPocket(db, a.workspaceId, a.categoryId, a.month, a.cents);
+export async function releaseRows(db: Db, a: { workspaceId: string; categoryId: string; month: Date; cents: number; source: AssignmentSource; note?: string; /** Take exactly this from these accounts instead of spreading it. */ parts?: Parts }): Promise<NewRow[]> {
+  const parts = a.parts ?? await takeFromPocket(db, a.workspaceId, a.categoryId, a.month, a.cents);
   return parts.map(([k, n]) => ({ categoryId: a.categoryId, month: a.month, amountCents: -n, source: a.source, note: a.note, fundingAccountId: k }));
 }
 
 /** Rows that move `cents` from one pocket to another; the account tags travel with the money. */
-export async function moveRows(db: Db, a: { workspaceId: string; fromId: string; toId: string; month: Date; cents: number; source: AssignmentSource; noteFrom?: string; noteTo?: string }): Promise<NewRow[]> {
-  const parts = await takeFromPocket(db, a.workspaceId, a.fromId, a.month, a.cents);
+export async function moveRows(db: Db, a: { workspaceId: string; fromId: string; toId: string; month: Date; cents: number; source: AssignmentSource; noteFrom?: string; noteTo?: string; /** Take exactly this from these accounts instead of spreading it. */ parts?: Parts }): Promise<NewRow[]> {
+  const parts = a.parts ?? await takeFromPocket(db, a.workspaceId, a.fromId, a.month, a.cents);
   return parts.flatMap(([k, n]): NewRow[] => [
     { categoryId: a.fromId, month: a.month, amountCents: -n, source: a.source, note: a.noteFrom, fundingAccountId: k },
     { categoryId: a.toId, month: a.month, amountCents: n, source: a.source, note: a.noteTo, fundingAccountId: k },

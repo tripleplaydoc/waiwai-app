@@ -43,3 +43,30 @@ export function planHeldEdit(rows: readonly HeldRow[]): HeldMove[] {
   }
   return out;
 }
+
+/** What the person typed for "take it from": account id (or "none" for money not tagged to an account) and cents. */
+export type TakeFrom = [string, number];
+
+/**
+ * Checks a chosen split of a pocket move: the amounts must add up to what is being moved, and no account may give
+ * more than the pocket holds in it. Zero and negative entries are ignored and repeats are added together.
+ * Returns the parts (account id or null for "none", cents) the money is taken from, or a plain-language problem.
+ */
+export function resolveTakeFrom(
+  takeFrom: readonly TakeFrom[],
+  cents: number,
+  held: ReadonlyMap<string, number>,
+  names: ReadonlyMap<string, string>,
+  pocketName: string,
+): { ok: true; parts: [string | null, number][] } | { ok: false; error: string } {
+  const sums = new Map<string, number>();
+  for (const [k, n] of takeFrom) { const c = Math.floor(n); if (c > 0) sums.set(k, (sums.get(k) ?? 0) + c); }
+  const total = [...sums.values()].reduce((s, n) => s + n, 0);
+  const money = (n: number) => `$${(n / 100).toFixed(2)}`;
+  if (total !== cents) return { ok: false, error: `The amounts you chose add up to ${money(total)}, but you are moving ${money(cents)}.` };
+  for (const [k, n] of sums) {
+    const have = held.get(k) ?? 0;
+    if (n > have) return { ok: false, error: `${pocketName} only holds ${money(have)} in ${k === "none" ? "no account" : names.get(k) ?? "that account"}, so it can't give ${money(n)}.` };
+  }
+  return { ok: true, parts: [...sums].map(([k, n]): [string | null, number] => [k === "none" ? null : k, n]) };
+}

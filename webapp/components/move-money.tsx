@@ -8,8 +8,10 @@ const READY = "__ready__";
 export interface MovePocket { id: string; name: string; group: string; availableCents: number; assignedCents?: number; /** What it still takes to cover this pocket (its target for the month, or an overspend). 0 = covered. */ needCents?: number; /** Bank account this pocket is usually paid from. */ paidFromId?: string | null; /** App-managed pocket (the tax reserve): money can be added to it but not moved out. */ system?: boolean }
 
 /** Shared "move money between pockets" form (used from the + button and the budget page). */
-export function MoveForm({ workspaceId, month, pockets: allPockets, initialFromId, onDone, onCancel }: {
+export function MoveForm({ workspaceId, month, pockets: allPockets, initialFromId, held = {}, accountNames = {}, onDone, onCancel }: {
   workspaceId: string; month: string; pockets: MovePocket[]; initialFromId?: string; onDone: () => void; onCancel: () => void;
+  /** pocket id -> account id (or "none") -> cents the pocket holds there, so the person can choose where the money is taken from. */
+  held?: Record<string, Record<string, number>>; accountNames?: Record<string, string>;
 }) {
   const pockets = allPockets.filter((p) => !p.system);
   const firstFrom = initialFromId && pockets.some((p) => p.id === initialFromId) ? initialFromId : pockets.find((p) => p.availableCents > 0)?.id ?? pockets[0]?.id ?? "";
@@ -18,8 +20,16 @@ export function MoveForm({ workspaceId, month, pockets: allPockets, initialFromI
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
+  const [take, setTake] = useState<Record<string, string>>({});
   const from = pockets.find((p) => p.id === fromId);
   const groups = [...new Set(pockets.map((p) => p.group))];
+  // Where the money in the pocket is held. Only worth asking when it sits in more than one place.
+  const sources = Object.entries(held[fromId] ?? {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  const askWhere = sources.length > 1;
+  const wanted = parseToCents(amount) ?? 0;
+  const chosenTotal = Object.values(take).reduce((t, v) => t + Math.max(0, parseToCents(v) ?? 0), 0);
+  const anyChosen = Object.values(take).some((v) => v.trim() !== "");
+  const nameOf = (k: string) => (k === "none" ? "Not tagged to an account" : accountNames[k] ?? "Account");
 
 
   const options = (skip?: string) => groups.map((g) => (
@@ -35,14 +45,15 @@ export function MoveForm({ workspaceId, month, pockets: allPockets, initialFromI
         e.preventDefault();
         setError(undefined);
         start(async () => {
-          const r = toId === READY ? await releaseToReadyAction(workspaceId, fromId, month, amount) : await moveMoneyAction(workspaceId, fromId, toId, month, amount);
+          const takeFrom = askWhere && anyChosen ? Object.entries(take).map(([k, v]): [string, number] => [k, Math.max(0, parseToCents(v) ?? 0)]).filter(([, n]) => n > 0) : undefined;
+          const r = toId === READY ? await releaseToReadyAction(workspaceId, fromId, month, amount, takeFrom) : await moveMoneyAction(workspaceId, fromId, toId, month, amount, takeFrom);
           if (r.ok) onDone(); else setError(r.error);
         });
       }}
     >
       <div>
         <label htmlFor="mv-from" className="label">Move from</label>
-        <select id="mv-from" data-autofocus className="input" value={fromId} onChange={(e) => { setFromId(e.target.value); if (e.target.value === toId) setToId(""); }}>{options()}</select>
+        <select id="mv-from" data-autofocus className="input" value={fromId} onChange={(e) => { setFromId(e.target.value); setTake({}); if (e.target.value === toId) setToId(""); }}>{options()}</select>
       </div>
       <div>
         <label htmlFor="mv-to" className="label">Move to</label>
@@ -59,6 +70,23 @@ export function MoveForm({ workspaceId, month, pockets: allPockets, initialFromI
         </div>
         {from && <p className="mt-1 text-xs text-slate-500">{from.name} has <span className="nums font-medium">{formatCents(from.availableCents)}</span> available.</p>}
       </div>
+      {askWhere && (
+        <fieldset className="space-y-2 rounded-xl border border-[#E2E8F0] px-3 py-3 dark:border-slate-700">
+          <legend className="px-1 text-sm font-semibold">Take it from <span className="font-normal text-slate-500">(optional)</span></legend>
+          <p className="text-xs text-slate-500">{from?.name} is held in more than one place. Say how much comes out of each, or leave these blank and the app spreads it across them.</p>
+          {sources.map(([k, n]) => (
+            <div key={k} className="flex items-center gap-2">
+              <label htmlFor={`mv-take-${k}`} className="min-w-0 flex-1 text-sm">
+                <span className="block truncate">{nameOf(k)}</span>
+                <span className="nums block text-xs text-slate-500">holds {formatCents(n)}</span>
+              </label>
+              <input id={`mv-take-${k}`} inputMode="decimal" placeholder="0.00" aria-label={`Take from ${nameOf(k)}`} className="input nums w-28 text-right" value={take[k] ?? ""} onChange={(e) => setTake((cur) => ({ ...cur, [k]: e.target.value }))} />
+              <button type="button" className="btn btn-sm shrink-0" disabled={wanted <= 0} aria-label={`Take ${formatCents(Math.min(wanted, n))} from ${nameOf(k)}`} title={wanted <= 0 ? "Enter the amount first" : `Take ${formatCents(Math.min(wanted, n))} from ${nameOf(k)}`} onClick={() => setTake({ [k]: centsToInput(Math.min(wanted, n)) })}>All of it</button>
+            </div>
+          ))}
+          {anyChosen && <p className={`nums text-xs font-medium ${wanted > 0 && chosenTotal !== wanted ? "text-warn" : "text-slate-600 dark:text-slate-300"}`} aria-live="polite">Chosen: {formatCents(chosenTotal)}{wanted > 0 ? ` of ${formatCents(wanted)}` : ""}{wanted > 0 && chosenTotal !== wanted ? " (these need to add up to the amount)" : ""}</p>}
+        </fieldset>
+      )}
       {error && <p role="alert" className="text-sm text-neg">{error}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" className="btn" onClick={onCancel}>Cancel <span className="kbd">Esc</span></button>

@@ -10,7 +10,8 @@ import { formatCents, parseToCents } from "@/lib/utils/currency";
 import { getReadyToAssign } from "@/lib/budget/ready-to-assign";
 import { addMonthsUTC, startOfMonthUTC } from "@/lib/budget/dates";
 import { getCategoryAvailableBalance } from "@/lib/budget/category-balance";
-import { endOfMonth, fundRows, loadPools, moveRows, releaseRows } from "@/lib/budget/funding";
+import { endOfMonth, fundRows, loadPocketBalances, loadPools, moveRows, releaseRows } from "@/lib/budget/funding";
+import { resolveTakeFrom, type TakeFrom } from "@/lib/budget/directed-math";
 import { bpsProblem, planAllocation, type AllocGroup } from "@/lib/budget/allocation";
 import { customKey, isCustomKey, isTypeKey, typesFor } from "@/lib/budget/expense-types";
 import { holdingOf, holdingSide } from "@/lib/holdings";
@@ -526,12 +527,34 @@ export async function assignMoreAction(workspaceId: string, categoryId: string, 
   return { ok: true };
 }
 
+const takeFromSchema = z.array(z.tuple([z.string().min(1).max(64), z.number().int().min(0).max(2_000_000_000)])).max(30);
+
+/**
+ * When the person chose which accounts the money is taken from ("held in"), turns that into the exact parts to take.
+ * Returns undefined when they chose nothing (the app then spreads it as before), or a plain-language problem.
+ */
+async function chosenParts(workspaceId: string, pocket: { id: string; name: string }, month: Date, cents: number, takeFrom: TakeFrom[] | undefined): Promise<{ parts?: [string | null, number][]; error?: string }> {
+  const parsed = takeFromSchema.safeParse(takeFrom ?? []);
+  if (!parsed.success) return { error: "Check the amounts you chose." };
+  if (parsed.data.every(([, n]) => n === 0)) return {};
+  const [balances, accounts] = await Promise.all([
+    loadPocketBalances(prisma, workspaceId, [pocket.id], month),
+    prisma.account.findMany({ where: { workspaceId }, select: { id: true, name: true } }),
+  ]);
+  const held = new Map<string, number>();
+  for (const [k, n] of balances.get(pocket.id) ?? []) if (n > 0) held.set(k ?? "none", n);
+  const ok = new Set(accounts.map((a) => a.id));
+  if (parsed.data.some(([k, n]) => n > 0 && k !== "none" && !ok.has(k))) return { error: "Pick one of your accounts." };
+  const r = resolveTakeFrom(parsed.data, cents, held, new Map(accounts.map((a) => [a.id, a.name])), pocket.name);
+  return r.ok ? { parts: r.parts } : { error: r.error };
+}
+
 /**
  * Moves already-assigned money from one pocket to another. The ledger is
  * append-only, so this writes two offsetting rows in one transaction (minus
  * from the source, plus to the destination); Ready to Assign is unchanged.
  */
-export async function moveMoneyAction(workspaceId: string, fromId: string, toId: string, month: string, amount: string): Promise<ActionResult> {
+export async function moveMoneyAction(workspaceId: string, fromId: string, toId: string, month: string, amount: string, takeFrom?: TakeFrom[]): Promise<ActionResult> {
   await assertAuthed();
   await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
@@ -554,7 +577,9 @@ export async function moveMoneyAction(workspaceId: string, fromId: string, toId:
   if (cents > available) {
     return { ok: false, error: `${from.name} only has ${(Math.max(0, available) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} available.` };
   }
-  const rows = await moveRows(prisma, { workspaceId, fromId: from.id, toId: to.id, month: monthDate, cents, source: "MANUAL", noteFrom: `Moved to ${to.name}`, noteTo: `Moved from ${from.name}` });
+  const chosen = await chosenParts(workspaceId, from, monthDate, cents, takeFrom);
+  if (chosen.error) return { ok: false, error: chosen.error };
+  const rows = await moveRows(prisma, { workspaceId, fromId: from.id, toId: to.id, month: monthDate, cents, source: "MANUAL", noteFrom: `Moved to ${to.name}`, noteTo: `Moved from ${from.name}`, parts: chosen.parts });
   await prisma.budgetAssignment.createMany({ data: rows });
   revalidatePath("/budget");
   revalidatePath("/reports");
@@ -562,7 +587,7 @@ export async function moveMoneyAction(workspaceId: string, fromId: string, toId:
 }
 
 /** Takes money out of a pocket and puts it back in Ready to assign (the account tags go back with it). */
-export async function releaseToReadyAction(workspaceId: string, fromId: string, month: string, amount: string): Promise<ActionResult> {
+export async function releaseToReadyAction(workspaceId: string, fromId: string, month: string, amount: string, takeFrom?: TakeFrom[]): Promise<ActionResult> {
   await assertAuthed();
   await assertWorkspaceAccess(workspaceId);
   const m = monthSchema.safeParse(month);
@@ -578,7 +603,9 @@ export async function releaseToReadyAction(workspaceId: string, fromId: string, 
   if (cents > available) {
     return { ok: false, error: `${from.name} only has ${(Math.max(0, available) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} available.` };
   }
-  const rows = await releaseRows(prisma, { workspaceId, categoryId: from.id, month: monthDate, cents, source: "MANUAL", note: "Moved back to the pool" });
+  const chosen = await chosenParts(workspaceId, from, monthDate, cents, takeFrom);
+  if (chosen.error) return { ok: false, error: chosen.error };
+  const rows = await releaseRows(prisma, { workspaceId, categoryId: from.id, month: monthDate, cents, source: "MANUAL", note: "Moved back to the pool", parts: chosen.parts });
   await prisma.budgetAssignment.createMany({ data: rows });
   revalidatePath("/budget");
   revalidatePath("/reports");

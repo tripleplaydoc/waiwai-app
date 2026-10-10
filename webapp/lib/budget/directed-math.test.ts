@@ -26,3 +26,18 @@ assert.deepEqual(moves, [{ pocketId: "tithe", from: "a", cents: 5000 }, { pocket
 assert.deepEqual(planHeldEdit([{ pocketId: "x", a: 100, b: 50, targetB: 99999 }]), [{ pocketId: "x", from: "a", cents: 100 }]);
 assert.deepEqual(planHeldEdit([{ pocketId: "x", a: 100, b: 50, targetB: -5 }]), [{ pocketId: "x", from: "b", cents: 50 }]);
 console.log("directed-math ok");
+
+// resolveTakeFrom: move $26.35 of Cash; it holds 200.00 in Reservoir and 40.00 in Venmo.
+import { resolveTakeFrom } from "./directed-math";
+const heldCash = new Map([["res", 20000], ["ven", 4000]]);
+const acctNames = new Map([["res", "Cash Reservoir"], ["ven", "Venmo"]]);
+assert.deepEqual(resolveTakeFrom([["ven", 2635]], 2635, heldCash, acctNames, "Cash"), { ok: true, parts: [["ven", 2635]] });
+assert.deepEqual(resolveTakeFrom([["ven", 1000], ["res", 1635], ["res", 0], ["x", -5]], 2635, heldCash, acctNames, "Cash"), { ok: true, parts: [["ven", 1000], ["res", 1635]] });
+assert.deepEqual(resolveTakeFrom([["none", 500]], 500, new Map([["none", 500]]), acctNames, "Cash"), { ok: true, parts: [[null, 500]] });
+const short = resolveTakeFrom([["ven", 2635]], 2635, new Map([["ven", 1000]]), acctNames, "Cash");
+assert.equal(short.ok, false);
+assert.match(!short.ok ? short.error : "", /Cash only holds \$10\.00 in Venmo, so it can't give \$26\.35/);
+const off = resolveTakeFrom([["ven", 2000]], 2635, heldCash, acctNames, "Cash");
+assert.match(!off.ok ? off.error : "", /add up to \$20\.00, but you are moving \$26\.35/);
+assert.equal(resolveTakeFrom([], 2635, heldCash, acctNames, "Cash").ok, false);
+console.log("take-from ok");
